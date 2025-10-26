@@ -120,3 +120,14 @@
     font-family: var(--font-be-vietnam-pro), system-ui, sans-serif;
   }
 }
+
+/* Piano Loading Animation */
+@keyframes piano-key-press {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.7);
+  }
+}
