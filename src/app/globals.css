@@ -1,50 +1,122 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* Piano Theme - Tone Vàng Kem */
-@theme {
-  /* Colors - Background & Foreground */
-  --color-background: #fefcf0;
-  --color-foreground: #2c3e50;
+@custom-variant dark (&:is(.dark *));
 
-  /* Colors - Primary (Vàng tươi) */
-  --color-primary: #e6a85c;
-  --color-primary-foreground: #ffffff;
+/* 
+  ================================================================================
+  PIANO THEME - HOA HUONG DUONG (Corrected Final)
+  ================================================================================
+  - Cấu hình màu sắc cho Light & Dark theme.
+*/
 
-  /* Colors - Secondary (Vàng kem) */
-  --color-secondary: #f7e7b5;
-  --color-secondary-foreground: #2c3e50;
+:root {
+  /* Layout */
+  --radius: 0.5rem;
 
-  /* Colors - Accent (Kem nhạt) */
-  --color-accent: #fefcf0;
-  --color-accent-foreground: #2c3e50;
+  /* Light Theme - Vàng Kem */
+  --background: #fefcf0;
+  --foreground: #2c3e50;
 
-  /* Colors - Muted (Xám nhạt) */
-  --color-muted: rgb(245 247 248);
-  --color-muted-foreground: rgb(90 108 125);
+  --card: #ffffff;
+  --card-foreground: #2c3e50;
 
-  /* Colors - Card */
-  --color-card: #ffffff;
-  --color-card-foreground: #2c3e50;
+  --popover: #ffffff;
+  --popover-foreground: #2c3e50;
 
-  /* Colors - Status */
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
+  /* Primary (Vàng tươi) */
+  --primary: #e6a85c;
+  --primary-foreground: #ffffff;
 
-  /* Colors - Border */
-  --color-border: #f7e7b5;
+  /* Secondary (Vàng kem) */
+  --secondary: #f7e7b5;
+  --secondary-foreground: #2c3e50;
 
-  /* Border Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  /* Muted */
+  --muted: #f5f7f8;
+  --muted-foreground: #5a6c7d;
 
-  /* Font - Poppins */
-  --font-sans: var(--font-poppins);
+  /* Accent for hover states */
+  --accent: #fdf4e3; /* Màu kem đậm hơn một chút cho hover */
+  --accent-foreground: #2c3e50;
+
+  /* Destructive (Màu lỗi/xóa) */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Other elements */
+  --border: #f7e7b5;
+  --input: #f0e6d2; /* Viền input, đậm hơn để dễ phân biệt */
+  --ring: #e6a85c; /* Màu focus */
 }
 
-body {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+.dark {
+  /* Dark Theme (Placeholder, can be customized later) */
+  --background: #2c3e50;
+  --foreground: #fefcf0;
+
+  --card: #34495e;
+  --card-foreground: #fefcf0;
+
+  --popover: #34495e;
+  --popover-foreground: #fefcf0;
+
+  --primary: #e6a85c;
+  --primary-foreground: #2c3e50;
+
+  --secondary: #4a6572;
+  --secondary-foreground: #fefcf0;
+
+  --muted: #4a6572;
+  --muted-foreground: #a0b3c1;
+
+  --accent: #5b7c8d;
+  --accent-foreground: #fefcf0;
+
+  --destructive: #c82333;
+  --destructive-foreground: #ffffff;
+
+  --border: #4a6572;
+  --input: #5b7c8d;
+  --ring: #e6a85c;
+}
+
+/* 
+  ================================================================================
+  TAILWIND & SHADCN CONFIG - DO NOT EDIT BELOW
+  ================================================================================
+*/
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-be-vietnam-pro), system-ui, sans-serif;
+  }
 }
