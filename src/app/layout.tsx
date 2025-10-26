@@ -9,8 +9,11 @@ const beVietnamPro = Be_Vietnam_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "Piano Management System",
-  description: "Hệ thống quản lý trung tâm piano",
+  title: "Hoa Hướng Dương - Art Center",
+  description: "Hệ thống quản lý trung tâm nghệ thuật Hoa Hướng Dương",
+  icons: {
+    icon: "/assets/images/logo.png",
+  },
 };
 
 export default function RootLayout({
