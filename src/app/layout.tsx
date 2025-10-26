@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/sonner";
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./styles/globals.css";
@@ -23,7 +24,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi" className="h-full">
-      <body className={`${beVietnamPro.variable} antialiased`}>{children}</body>
+      <body className={`${beVietnamPro.variable} antialiased`}>
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }
