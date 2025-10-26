@@ -61,7 +61,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Define public and auth routes
-  const publicRoutes = ["/search", "/parent"];
+  const publicRoutes = ["/parent"];
   const authRoutes = ["/login"];
 
   // If user is not logged in and tries to access a protected route, redirect to login
