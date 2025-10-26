@@ -61,7 +61,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Define public and auth routes
-  const publicRoutes = ["/search"];
+  const publicRoutes = ["/search", "/parent"];
   const authRoutes = ["/login"];
 
   // If user is not logged in and tries to access a protected route, redirect to login
@@ -80,24 +80,33 @@ export async function proxy(request: NextRequest) {
     // Redirect away from login page if already logged in
     if (authRoutes.some((route) => pathname.startsWith(route))) {
       if (role === "admin") {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       } else if (role === "teacher") {
-        return NextResponse.redirect(new URL("/classes", request.url));
+        return NextResponse.redirect(new URL("/teacher/classes", request.url));
       }
       // Fallback for users with no/other roles
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL("/teacher/classes", request.url));
+    }
+
+    // Redirect from root path based on role
+    if (pathname === "/") {
+      if (role === "admin") {
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      } else if (role === "teacher") {
+        return NextResponse.redirect(new URL("/teacher/classes", request.url));
+      }
     }
 
     // Role-based access control
     // If a non-admin tries to access an admin route, redirect them
-    if (pathname.startsWith("/dashboard") && role !== "admin") {
-      return NextResponse.redirect(new URL("/classes", request.url));
+    if (pathname.startsWith("/admin/dashboard") && role !== "admin") {
+      return NextResponse.redirect(new URL("/teacher/classes", request.url));
     }
 
     // A teacher can ONLY access teacher routes (e.g., /classes)
-    const isTeacherRoute = pathname.startsWith("/classes");
-    if (role === "teacher" && !isTeacherRoute) {
-      return NextResponse.redirect(new URL("/classes", request.url));
+    const isTeacherRoute = pathname.startsWith("/teacher/classes");
+    if (role === "teacher" && !isTeacherRoute && pathname !== "/") {
+      return NextResponse.redirect(new URL("/teacher/classes", request.url));
     }
   }
 
@@ -108,10 +117,12 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
+     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - assets (static assets like images)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|assets).*)",
   ],
 };
