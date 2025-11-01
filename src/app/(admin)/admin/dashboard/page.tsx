@@ -105,7 +105,7 @@ export default async function DashboardPage() {
         </CardHeader>
 
         {/* Charts (responsive for all breakpoints) */}
-        <CardContent className="p-0">
+        <CardContent className="p-2 md:p-4">
           <ChartsSection
             studentsData={revenueData.map((r) => ({
               month: r.month,

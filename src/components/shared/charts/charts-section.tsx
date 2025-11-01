@@ -29,7 +29,7 @@ export default function ChartsSection({ studentsData, financeData }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
       <div className="border rounded-md p-3">
         <h3 className="mb-2 font-semibold">HV mới / HV nghỉ</h3>
         <BarChartStudents data={studentsData} />
