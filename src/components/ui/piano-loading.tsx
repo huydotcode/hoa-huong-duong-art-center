@@ -1,6 +1,10 @@
 "use client";
 
-export function PianoLoading() {
+export function PianoLoading({
+  message = "Đang tải...",
+}: {
+  message?: string;
+}) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-8">
@@ -15,7 +19,7 @@ export function PianoLoading() {
             />
           ))}
         </div>
-        <p className="text-muted-foreground text-sm">Đang tải...</p>
+        <p className="text-muted-foreground text-sm">{message}</p>
       </div>
     </div>
   );

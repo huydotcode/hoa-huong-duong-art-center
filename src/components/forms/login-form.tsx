@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { createClient } from "@/lib/supabase/client";
 import { loginSchema, type LoginSchema } from "@/lib/validations/auth";
 import { useState } from "react";
@@ -65,7 +66,11 @@ export default function LoginForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="space-y-4"
+        autoComplete="off"
+      >
         <FormField
           control={form.control}
           name="emailOrPhone"
@@ -73,10 +78,7 @@ export default function LoginForm() {
             <FormItem>
               <FormLabel>Email hoặc Số điện thoại</FormLabel>
               <FormControl>
-                <Input
-                  placeholder="name@example.com hoặc 0912345678"
-                  {...field}
-                />
+                <Input placeholder="Nhập email hoặc số điện thoại" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -89,7 +91,7 @@ export default function LoginForm() {
             <FormItem>
               <FormLabel>Mật khẩu</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="••••••••" {...field} />
+                <PasswordInput placeholder="Nhập mật khẩu" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
