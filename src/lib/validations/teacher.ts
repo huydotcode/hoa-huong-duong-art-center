@@ -7,10 +7,6 @@ export const createTeacherSchema = z.object({
     .length(10, "Số điện thoại phải có 10 số.")
     .regex(/^0\d{9,}$/, "Số điện thoại không hợp lệ."),
   password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự."),
-  salary_per_session: z
-    .number()
-    .min(0, "Lương/buổi phải lớn hơn 0.")
-    .positive("Lương/buổi phải là số dương."),
   notes: z.string().optional(),
 });
 
@@ -20,11 +16,6 @@ export const updateTeacherSchema = z.object({
     .string()
     .length(10, "Số điện thoại phải có 10 số.")
     .regex(/^0\d{9,}$/, "Số điện thoại không hợp lệ.")
-    .optional(),
-  salary_per_session: z
-    .number()
-    .min(0, "Lương/buổi phải lớn hơn 0.")
-    .positive("Lương/buổi phải là số dương.")
     .optional(),
   notes: z.string().optional(),
   is_active: z.boolean().optional(),

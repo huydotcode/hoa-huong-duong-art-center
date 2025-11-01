@@ -24,7 +24,6 @@ export interface Teacher {
   full_name: string;
   phone: string;
   notes: string | null;
-  salary_per_session: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -34,7 +33,6 @@ export interface CreateTeacherData {
   full_name: string;
   phone: string;
   password: string;
-  salary_per_session: number;
   notes?: string | null;
 }
 
@@ -42,7 +40,6 @@ export interface UpdateTeacherData {
   full_name?: string;
   phone?: string;
   notes?: string | null;
-  salary_per_session?: number;
   is_active?: boolean;
 }
 

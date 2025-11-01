@@ -60,7 +60,6 @@ export function UpdateTeacherForm({
     defaultValues: {
       full_name: teacher.full_name,
       phone: teacher.phone,
-      salary_per_session: teacher.salary_per_session,
       notes: teacher.notes || "",
       is_active: teacher.is_active,
     },
@@ -126,25 +125,6 @@ export function UpdateTeacherForm({
                   <FormLabel>Số điện thoại</FormLabel>
                   <FormControl>
                     <Input placeholder="Nhập số điện thoại" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="salary_per_session"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Lương/buổi</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Nhập lương/buổi"
-                      {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

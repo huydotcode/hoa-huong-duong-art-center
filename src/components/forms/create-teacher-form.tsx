@@ -47,7 +47,6 @@ export function CreateTeacherForm({ children }: CreateTeacherFormProps) {
       full_name: "",
       phone: "",
       password: "",
-      salary_per_session: 0,
       notes: "",
     },
   });
@@ -132,26 +131,6 @@ export function CreateTeacherForm({ children }: CreateTeacherFormProps) {
                   <FormLabel>Mật khẩu</FormLabel>
                   <FormControl>
                     <PasswordInput placeholder="Nhập mật khẩu" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="salary_per_session"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Lương/buổi</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Nhập lương/buổi"
-                      {...field}
-                      autoComplete="off"
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

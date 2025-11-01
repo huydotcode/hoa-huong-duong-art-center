@@ -89,7 +89,6 @@ export async function createTeacher(data: CreateTeacherData, path?: string) {
       id: userId,
       full_name: data.full_name,
       phone: data.phone,
-      salary_per_session: data.salary_per_session,
       notes: data.notes || null,
     });
 
@@ -134,8 +133,6 @@ export async function updateTeacher(
 
     if (data.full_name !== undefined) updateData.full_name = data.full_name;
     if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.salary_per_session !== undefined)
-      updateData.salary_per_session = data.salary_per_session;
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.is_active !== undefined) updateData.is_active = data.is_active;
 

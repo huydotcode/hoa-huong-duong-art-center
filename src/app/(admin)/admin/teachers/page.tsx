@@ -56,20 +56,14 @@ export default async function TeachersPage(props: SearchProps) {
                       </Badge>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Lương/buổi:</span>
-                      <span className="font-medium">
-                        {teacher.salary_per_session.toLocaleString("vi-VN")}đ
-                      </span>
-                    </div>
-                    {teacher.notes && (
+                  {teacher.notes && (
+                    <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Ghi chú:</span>
                         <span>{teacher.notes}</span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </UpdateTeacherForm>
@@ -84,7 +78,6 @@ export default async function TeachersPage(props: SearchProps) {
             <TableHeaderRow>
               <TableHead>Họ và tên</TableHead>
               <TableHead>Số điện thoại</TableHead>
-              <TableHead className="text-right">Lương/buổi</TableHead>
               <TableHead>Ghi chú</TableHead>
               <TableHead className="text-center">Trạng thái</TableHead>
               <TableHead className="text-right">Thao tác</TableHead>
@@ -94,7 +87,7 @@ export default async function TeachersPage(props: SearchProps) {
             {teachers.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={5}
                   className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Chưa có giáo viên nào
@@ -107,9 +100,6 @@ export default async function TeachersPage(props: SearchProps) {
                     {teacher.full_name}
                   </TableCell>
                   <TableCell>{teacher.phone}</TableCell>
-                  <TableCell className="text-right">
-                    {teacher.salary_per_session.toLocaleString("vi-VN")}đ
-                  </TableCell>
                   <TableCell>{teacher.notes || "-"}</TableCell>
                   <TableCell className="text-center">
                     <Badge
