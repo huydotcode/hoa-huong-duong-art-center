@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { DAYS_MAP, type DayOfWeek } from "@/lib/constants/schedule";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -45,19 +46,16 @@ export function toArray<T>(val: unknown): T[] {
 
 // Format days_of_week like: T2 08:00, T5 08:00
 export function formatScheduleDays(days: unknown): string {
-  const map: Record<number, string> = {
-    0: "CN",
-    1: "T2",
-    2: "T3",
-    3: "T4",
-    4: "T5",
-    5: "T6",
-    6: "T7",
-    7: "T7",
-  } as Record<number, string>;
   const arr = toArray<{ day: number; start_time: string }>(days);
   if (arr.length === 0) return "-";
-  return arr.map((d) => `${map[d.day] || d.day} ${d.start_time}`).join(", ");
+  return arr
+    .map((d) => {
+      const dayInfo = DAYS_MAP[d.day as DayOfWeek];
+      return dayInfo
+        ? `${dayInfo.short} ${d.start_time}`
+        : `${d.day} ${d.start_time}`;
+    })
+    .join(", ");
 }
 
 // Format date range like: 15/01/2024 → 15/06/2024
@@ -83,16 +81,43 @@ export function formatDateRange(startDate: string, endDate: string): string {
   }
 }
 
-// Format enrollment status: "active" -> "Đang học", "trial" -> "Thử học", "inactive" -> "Ngừng học"
+// Format enrollment status: "active" -> "Đang học", "trial" -> "Học thử", "inactive" -> "Ngừng học"
 export function formatEnrollmentStatus(
   status: "active" | "trial" | "inactive" | string
 ): string {
   const map: Record<string, string> = {
     active: "Đang học",
-    trial: "Thử học",
+    trial: "Học thử",
     inactive: "Ngừng học",
   };
   return map[status] || status;
+}
+
+// Format duration from minutes to hours: 90 -> "1.5 giờ", 120 -> "2 giờ"
+export function formatDurationHours(minutes: number): string {
+  if (minutes <= 0) return "0 giờ";
+  const hours = minutes / 60;
+  // If it's a whole number, show as integer, otherwise show one decimal
+  if (hours % 1 === 0) {
+    return `${hours} giờ`;
+  }
+  return `${hours.toFixed(1)} giờ`;
+}
+
+// Format currency with dots: 1500000 -> "1.500.000vnđ"
+export function formatCurrencyVNDots(value: number): string {
+  try {
+    return value
+      .toLocaleString("vi-VN", {
+        style: "currency",
+        currency: "VND",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })
+      .replace(/\s/g, "");
+  } catch {
+    return String(value) + "vnđ";
+  }
 }
 
 // Convenience alias

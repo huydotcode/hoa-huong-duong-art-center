@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -23,57 +24,95 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
-import { usePathname, useRouter } from "next/navigation";
-import { createClass } from "@/lib/services/admin-classes-service";
 import {
-  createClassSchema,
-  type CreateClassSchema,
-} from "@/lib/validations/class";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { updateClass } from "@/lib/services/admin-classes-service";
 import { formatCurrencyVNDots } from "@/lib/utils";
+import {
+  updateClassSchema,
+  type UpdateClassSchema,
+} from "@/lib/validations/class";
+import { type Class } from "@/types";
+import { usePathname, useRouter } from "next/navigation";
 
 interface Props {
+  classData: Class;
   children: React.ReactNode;
 }
 
-export function CreateClassForm({ children }: Props) {
+export function UpdateClassForm({ classData, children }: Props) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [durationMonths, setDurationMonths] = useState(3); // Local state for calculation only
   const router = useRouter();
   const path = usePathname();
 
-  const form = useForm<CreateClassSchema>({
-    resolver: zodResolver(createClassSchema),
+  // Calculate duration_months from start_date and end_date (local state only)
+  const calculateDurationMonths = (
+    startDate: string,
+    endDate: string
+  ): number => {
+    if (!startDate || !endDate) return 3;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const months =
+      (end.getFullYear() - start.getFullYear()) * 12 +
+      (end.getMonth() - start.getMonth());
+    return months > 0 ? months : 3;
+  };
+
+  const [durationMonths, setDurationMonths] = useState(
+    calculateDurationMonths(classData.start_date, classData.end_date)
+  );
+
+  const form = useForm<UpdateClassSchema>({
+    resolver: zodResolver(updateClassSchema),
     defaultValues: {
-      name: "",
-      days_of_week: [],
-      duration_minutes: 90,
-      monthly_fee: 0,
-      salary_per_session: 0,
-      start_date: "",
-      end_date: "",
-      is_active: true,
+      name: classData.name,
+      duration_minutes: classData.duration_minutes,
+      monthly_fee: classData.monthly_fee,
+      salary_per_session: classData.salary_per_session,
+      start_date: classData.start_date,
+      end_date: classData.end_date,
+      is_active: classData.is_active,
     },
   });
 
-  async function onSubmit(values: CreateClassSchema) {
+  // Reset form when dialog opens or classData changes
+  useEffect(() => {
+    if (open) {
+      const calculatedDuration = calculateDurationMonths(
+        classData.start_date,
+        classData.end_date
+      );
+      setDurationMonths(calculatedDuration);
+      form.reset({
+        name: classData.name,
+        duration_minutes: classData.duration_minutes,
+        monthly_fee: classData.monthly_fee,
+        salary_per_session: classData.salary_per_session,
+        start_date: classData.start_date,
+        end_date: classData.end_date,
+        is_active: classData.is_active,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, classData]);
+
+  async function onSubmit(values: UpdateClassSchema) {
     setIsLoading(true);
     try {
-      // Ensure days_of_week is always an array and is_active is always boolean
-      const classData = {
-        ...values,
-        days_of_week: values.days_of_week || [],
-        is_active: values.is_active ?? true,
-      };
-      await createClass(classData, { path });
-      toast.success("Tạo lớp học thành công!");
+      await updateClass(classData.id, values, path);
+      toast.success("Cập nhật lớp học thành công!");
       setOpen(false);
-      form.reset();
       router.refresh();
     } catch (error) {
-      console.error("Error creating class:", error);
-      toast.error("Tạo lớp học thất bại", {
+      console.error("Error updating class:", error);
+      toast.error("Cập nhật lớp học thất bại", {
         description:
           error instanceof Error ? error.message : "Vui lòng thử lại sau.",
       });
@@ -87,7 +126,7 @@ export function CreateClassForm({ children }: Props) {
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Thêm lớp học</DialogTitle>
+          <DialogTitle>Cập nhật thông tin lớp học</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -368,22 +407,42 @@ export function CreateClassForm({ children }: Props) {
               )}
             />
 
-            <DialogFooter className="flex-col sm:flex-row gap-2">
+            <FormField
+              control={form.control}
+              name="is_active"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Trạng thái</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === "true")}
+                    value={field.value ? "true" : "false"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="true">Hoạt động</SelectItem>
+                      <SelectItem value="false">Ngừng hoạt động</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
                 disabled={isLoading}
-                className="w-full sm:w-auto"
               >
                 Hủy
               </Button>
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full sm:w-auto"
-              >
-                {isLoading ? "Đang tạo..." : "Tạo lớp học"}
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? "Đang lưu..." : "Cập nhật"}
               </Button>
             </DialogFooter>
           </form>

@@ -71,6 +71,7 @@ export interface UpdateStudentData {
 export interface ClassSchedule {
   day: number; // 0 = CN, 1 = T2, ..., 6 = T7
   start_time: string; // "08:00"
+  end_time?: string; // "09:00" - optional, nếu không có thì tính từ duration_minutes
 }
 
 export interface Class {

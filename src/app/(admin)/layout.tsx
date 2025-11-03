@@ -21,7 +21,9 @@ export default function AdminLayout({
       {/* Sidebar và Main content */}
       <div className="flex flex-1">
         <AdminSidebar />
-        <main className="flex-1 bg-white p-4 sm:p-6">{children}</main>
+        <main className="flex-1 bg-white p-4 sm:p-6 w-screen lg:w-[calc(100vw-256px)] lg:max-w-[1500px] mx-auto">
+          {children}
+        </main>
       </div>
     </div>
   );

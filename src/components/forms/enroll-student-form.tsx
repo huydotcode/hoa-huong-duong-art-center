@@ -35,7 +35,7 @@ import { enrollStudents } from "@/lib/services/admin-classes-service";
 import { getStudents } from "@/lib/services/admin-students-service";
 import { type Student } from "@/types";
 import { z } from "zod";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 const enrollStudentSchema = z.object({
   student_ids: z
@@ -184,7 +184,7 @@ export function EnrollStudentForm({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Thêm học sinh vào lớp</DialogTitle>
         </DialogHeader>
@@ -265,11 +265,9 @@ export function EnrollStudentForm({
                               <Button
                                 type="button"
                                 variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
                                 onClick={() => handleRemoveStudent(student.id)}
                               >
-                                <span className="text-xs">×</span>
+                                <X className="size-4" />
                               </Button>
                             </div>
                           ))}
@@ -300,7 +298,7 @@ export function EnrollStudentForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="trial">Thử học</SelectItem>
+                      <SelectItem value="trial">Học thử</SelectItem>
                       <SelectItem value="active">Đang học</SelectItem>
                       <SelectItem value="inactive">Ngừng học</SelectItem>
                     </SelectContent>

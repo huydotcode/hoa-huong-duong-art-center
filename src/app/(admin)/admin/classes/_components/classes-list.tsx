@@ -1,12 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { type ClassListItem } from "@/lib/services/admin-classes-service";
 import {
-  formatCurrencyVN,
-  formatDateRange,
-  formatScheduleDays,
-} from "@/lib/utils";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { type ClassListItem } from "@/lib/services/admin-classes-service";
+import { formatCurrencyVN, formatDateRange } from "@/lib/utils";
 import Link from "next/link";
+import { WeeklyScheduleCalendar } from "../[classId]/_components/weekly-schedule-calendar";
+import { Calendar } from "lucide-react";
 
 export default function ClassesList({
   data,
@@ -15,6 +23,9 @@ export default function ClassesList({
   data: ClassListItem[];
   query: string;
 }) {
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const selectedClass = data.find((c) => c.id === selectedClassId);
+
   if (!data || data.length === 0) {
     return (
       <div className="px-3 pb-4 text-sm text-muted-foreground">
@@ -45,11 +56,24 @@ export default function ClassesList({
                 <div>
                   <div className="text-muted-foreground">Lịch học</div>
                   <div className="font-medium">
-                    {formatScheduleDays(c.days_of_week)}
+                    {(() => {
+                      try {
+                        const daysOfWeek =
+                          typeof c.days_of_week === "string"
+                            ? JSON.parse(c.days_of_week)
+                            : c.days_of_week;
+                        const count = Array.isArray(daysOfWeek)
+                          ? daysOfWeek.length
+                          : 0;
+                        return `${count} ca`;
+                      } catch {
+                        return "0 ca";
+                      }
+                    })()}
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Thời hạn</div>
+                  <div className="text-muted-foreground">Thời gian học</div>
                   <div className="font-medium">
                     {formatDateRange(c.start_date, c.end_date)}
                   </div>
@@ -67,17 +91,54 @@ export default function ClassesList({
                   </div>
                 </div>
               </div>
-              <div className="mt-2 pt-2 border-t text-sm">
-                <span className="text-muted-foreground">GV:</span>{" "}
-                {c.teachers_count}
-                <span className="mx-2">•</span>
-                <span className="text-muted-foreground">HS:</span>{" "}
-                {c.students_count}
+              <div className="mt-2 pt-2 border-t text-sm flex items-center justify-between">
+                <div>
+                  <span className="text-muted-foreground">GV:</span>{" "}
+                  {c.teachers_count}
+                  <span className="mx-2">•</span>
+                  <span className="text-muted-foreground">HS:</span>{" "}
+                  {c.students_count}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelectedClassId(c.id);
+                  }}
+                  className="h-7 text-xs"
+                >
+                  <Calendar className="h-3 w-3 mr-1" />
+                  Xem lịch
+                </Button>
               </div>
             </Card>
           </Link>
         ))}
       </div>
+
+      {selectedClass && (
+        <Dialog
+          open={selectedClassId !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedClassId(null);
+          }}
+        >
+          <DialogContent maxWidth="max-w-[1220px]">
+            <DialogHeader>
+              <DialogTitle>Lịch học - {selectedClass.name}</DialogTitle>
+            </DialogHeader>
+            <div className="mt-4 w-full overflow-auto py-[20px] max-h-[80vh]">
+              <WeeklyScheduleCalendar
+                daysOfWeek={selectedClass.days_of_week}
+                durationMinutes={selectedClass.duration_minutes}
+                classData={selectedClass}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

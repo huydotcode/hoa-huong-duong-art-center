@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Class, Teacher, Student } from "@/types";
+import { toArray } from "@/lib/utils";
 
 /*
 getClasses(query?, { is_active? }): trả về danh sách lớp có kèm đếm teachers_count, students_count dùng embed class_teachers(count), student_class_enrollments(count), sắp xếp theo tên.
@@ -135,22 +136,85 @@ export async function updateClass(
   if (path) revalidatePath(path);
 }
 
-export async function getClassTeachers(classId: string): Promise<Teacher[]> {
+export async function updateClassDaySchedule(
+  classId: string,
+  daySchedules: Array<{ day: number; start_time: string; end_time?: string }>,
+  path?: string,
+  day?: number // Optional day parameter for when daySchedules is empty
+): Promise<void> {
+  const supabase = await createClient();
+
+  // Get current class to merge with existing days_of_week
+  const { data: currentClass, error: fetchError } = await supabase
+    .from("classes")
+    .select("days_of_week")
+    .eq("id", classId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const existingDays = toArray<{
+    day: number;
+    start_time: string;
+    end_time?: string;
+  }>(currentClass?.days_of_week);
+
+  // Get the day to update - from daySchedules if available, otherwise from day parameter
+  const dayToUpdate =
+    daySchedules.length > 0 ? daySchedules[0].day : (day ?? null);
+
+  if (dayToUpdate === null) {
+    throw new Error("Không có ngày để cập nhật");
+  }
+
+  // Remove all schedules for the specific day
+  const filteredDays = existingDays.filter((item) => item.day !== dayToUpdate);
+
+  // Merge with new schedules (can be empty array to clear all schedules for the day)
+  const updatedDaysOfWeek = [...filteredDays, ...daySchedules];
+
+  const { error } = await supabase
+    .from("classes")
+    .update({ days_of_week: updatedDaysOfWeek })
+    .eq("id", classId);
+
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
+export interface ClassTeacherItem {
+  assignment_id: string;
+  start_date: string; // created_at của class_teachers, dùng làm ngày vào dạy
+  teacher: Teacher;
+}
+
+export async function getClassTeachers(
+  classId: string
+): Promise<ClassTeacherItem[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("class_teachers")
-    .select("teachers(*)")
-    .eq("class_id", classId);
+    .select("id,created_at,teachers(*)")
+    .eq("class_id", classId)
+    .order("created_at", { ascending: true });
   if (error) throw error;
   const teachersData = data as unknown as
-    | Array<{ teachers: Teacher | null }>
+    | Array<{
+        id: string;
+        created_at: string;
+        teachers: Teacher | null;
+      }>
     | null
     | undefined;
-  const teachers: Teacher[] =
+  const items: ClassTeacherItem[] =
     teachersData
-      ?.map((row) => row.teachers)
-      .filter((t): t is Teacher => Boolean(t)) || [];
-  return teachers;
+      ?.map((row) => ({
+        assignment_id: row.id,
+        start_date: row.created_at,
+        teacher: row.teachers,
+      }))
+      .filter((item): item is ClassTeacherItem => Boolean(item.teacher)) || [];
+  return items;
 }
 
 export async function setClassTeachers(
@@ -179,11 +243,60 @@ export async function setClassTeachers(
   if (path) revalidatePath(path);
 }
 
+export async function addClassTeachers(
+  classId: string,
+  teacherIds: string[],
+  path?: string
+): Promise<void> {
+  if (teacherIds.length === 0) return;
+
+  const supabase = await createClient();
+
+  // Check for existing assignments
+  const { data: existing } = await supabase
+    .from("class_teachers")
+    .select("teacher_id")
+    .eq("class_id", classId)
+    .in("teacher_id", teacherIds);
+
+  if (existing && existing.length > 0) {
+    const existingIds = existing.map((e) => e.teacher_id);
+    const duplicates = teacherIds.filter((id) => existingIds.includes(id));
+    throw new Error(
+      `Giáo viên đã có trong lớp: ${duplicates.length} giáo viên`
+    );
+  }
+
+  const rows = teacherIds.map((teacherId) => ({
+    class_id: classId,
+    teacher_id: teacherId,
+  }));
+
+  const { error } = await supabase.from("class_teachers").insert(rows);
+
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
+export async function removeClassTeacher(
+  assignmentId: string,
+  path?: string
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("class_teachers")
+    .delete()
+    .eq("id", assignmentId);
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
 export type EnrollmentStatus = "trial" | "active" | "inactive";
 
 export interface ClassStudentItem {
   enrollment_id: string;
   status: EnrollmentStatus;
+  enrollment_date: string;
   student: Student;
 }
 
@@ -194,7 +307,7 @@ export async function getClassStudents(
   const supabase = await createClient();
   let q = supabase
     .from("student_class_enrollments")
-    .select("id,status,students(*)")
+    .select("id,status,enrollment_date,students(*)")
     .eq("class_id", classId)
     .order("created_at", { ascending: true });
 
@@ -208,6 +321,7 @@ export async function getClassStudents(
     | Array<{
         id: string;
         status: EnrollmentStatus;
+        enrollment_date: string;
         students: Student;
       }>
     | null
@@ -216,6 +330,7 @@ export async function getClassStudents(
     rows?.map((row) => ({
       enrollment_id: row.id,
       status: row.status,
+      enrollment_date: row.enrollment_date,
       student: row.students,
     })) || [];
   return items;
@@ -294,6 +409,150 @@ export async function enrollStudents(
     .from("student_class_enrollments")
     .insert(rows);
 
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
+export async function removeClassEnrollments(
+  classId: string,
+  studentIds: string[],
+  path?: string
+): Promise<void> {
+  if (studentIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("student_class_enrollments")
+    .delete()
+    .eq("class_id", classId)
+    .in("student_id", studentIds);
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
+export async function copyStudentsToClass(
+  sourceClassId: string,
+  targetClassId: string,
+  studentIds: string[],
+  options?: {
+    enrollment_date?: string;
+    status?: EnrollmentStatus;
+    skipExisting?: boolean; // default true
+    updateIfExists?: boolean; // default false
+  },
+  path?: string
+): Promise<{ inserted: number; updated: number; skipped: number }> {
+  if (studentIds.length === 0) return { inserted: 0, updated: 0, skipped: 0 };
+  const supabase = await createClient();
+
+  // Find existing in target
+  const { data: existing } = await supabase
+    .from("student_class_enrollments")
+    .select("student_id, id")
+    .eq("class_id", targetClassId)
+    .in("student_id", studentIds);
+
+  const existingRows = (existing || []) as Array<{
+    student_id: string;
+    id: string;
+  }>;
+  const existingIds = new Set(existingRows.map((e) => e.student_id));
+  const toInsert = studentIds.filter((id) => !existingIds.has(id));
+  const toUpdate = existingRows.map((e) => e.id);
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = studentIds.length - toInsert.length;
+
+  // Insert new
+  if (toInsert.length > 0) {
+    const enrollmentDate =
+      options?.enrollment_date || new Date().toISOString().split("T")[0];
+    const status = options?.status || "trial";
+    const rows = toInsert.map((studentId) => ({
+      class_id: targetClassId,
+      student_id: studentId,
+      enrollment_date: enrollmentDate,
+      status,
+    }));
+    const { error: insErr } = await supabase
+      .from("student_class_enrollments")
+      .insert(rows);
+    if (insErr) throw insErr;
+    inserted = toInsert.length;
+  }
+
+  // Optionally update existing
+  if (options?.updateIfExists && toUpdate.length > 0) {
+    const patch: Partial<{
+      status: EnrollmentStatus;
+      enrollment_date: string;
+    }> = {};
+    if (options.status) patch.status = options.status;
+    if (options.enrollment_date)
+      patch.enrollment_date = options.enrollment_date;
+    if (Object.keys(patch).length > 0) {
+      const { error: updErr } = await supabase
+        .from("student_class_enrollments")
+        .update(patch)
+        .in("id", toUpdate);
+      if (updErr) throw updErr;
+      updated = toUpdate.length;
+      if (options?.skipExisting === false) skipped = 0; // treat as handled
+    }
+  }
+
+  if (path) revalidatePath(path);
+  return { inserted, updated, skipped };
+}
+
+export async function moveStudentsToClass(
+  sourceClassId: string,
+  targetClassId: string,
+  studentIds: string[],
+  options?: {
+    enrollment_date?: string;
+    status?: EnrollmentStatus;
+    skipExisting?: boolean; // default true
+    updateIfExists?: boolean; // default false
+  },
+  path?: string
+): Promise<{
+  inserted: number;
+  updated: number;
+  skipped: number;
+  removedFromSource: number;
+}> {
+  const { inserted, updated, skipped } = await copyStudentsToClass(
+    sourceClassId,
+    targetClassId,
+    studentIds,
+    options,
+    path
+  );
+
+  // Always remove from source regardless of duplicate state (policy for Cut)
+  await removeClassEnrollments(sourceClassId, studentIds, path);
+  return { inserted, updated, skipped, removedFromSource: studentIds.length };
+}
+
+export async function updateStudentEnrollment(
+  enrollmentId: string,
+  data: { status?: EnrollmentStatus; enrollment_date?: string },
+  path?: string
+): Promise<void> {
+  const supabase = await createClient();
+  const updateData: { status?: EnrollmentStatus; enrollment_date?: string } =
+    {};
+  if (data.status !== undefined) {
+    updateData.status = data.status;
+  }
+  if (data.enrollment_date !== undefined) {
+    updateData.enrollment_date = data.enrollment_date;
+  }
+  const { error } = await supabase
+    .from("student_class_enrollments")
+    .update(updateData)
+    .eq("id", enrollmentId);
   if (error) throw error;
   if (path) revalidatePath(path);
 }

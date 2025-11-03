@@ -14,9 +14,10 @@ export default async function OverviewPage({
   const { classId } = await params;
   const cls = await getClassById(classId);
   if (!cls) return notFound();
-  const [teachers, students] = await Promise.all([
+  const [teacherItems, students] = await Promise.all([
     getClassTeachers(classId),
     getClassStudents(classId),
   ]);
+  const teachers = teacherItems.map((t) => t.teacher);
   return <OverviewSection cls={cls} teachers={teachers} students={students} />;
 }
