@@ -79,6 +79,8 @@ export interface Class {
   name: string;
   days_of_week: ClassSchedule[];
   duration_minutes: number;
+  current_student_count: number;
+  max_student_count: number;
   monthly_fee: number;
   salary_per_session: number;
   start_date: string;
@@ -92,16 +94,19 @@ export interface CreateClassData {
   name: string;
   days_of_week: ClassSchedule[];
   duration_minutes: number;
+  max_student_count?: number;
   monthly_fee: number;
   salary_per_session: number;
   start_date: string;
   end_date: string;
+  is_active?: boolean;
 }
 
 export interface UpdateClassData {
   name?: string;
   days_of_week?: ClassSchedule[];
   duration_minutes?: number;
+  max_student_count?: number;
   monthly_fee?: number;
   salary_per_session?: number;
   start_date?: string;
@@ -239,6 +244,24 @@ export interface UpdateExpenseData {
 }
 
 // ========== RELATIONSHIP TYPES (JOIN RESULTS) ==========
+
+export interface ClassListItem extends Class {
+  teachers_count: number;
+  students_count: number;
+}
+
+export interface ClassTeacherItem {
+  assignment_id: string;
+  start_date: string; // created_at của class_teachers, dùng làm ngày vào dạy
+  teacher: Teacher;
+}
+
+export interface ClassStudentItem {
+  enrollment_id: string;
+  status: EnrollmentStatus;
+  enrollment_date: string;
+  student: Student;
+}
 
 export interface TeacherWithClasses extends Teacher {
   classes?: Class[];
