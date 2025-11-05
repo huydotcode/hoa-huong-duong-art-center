@@ -19,6 +19,11 @@ export const createClassSchema = z
       .number()
       .min(1, "Thời lượng phải lớn hơn 0.")
       .positive("Thời lượng phải là số dương."),
+    max_student_count: z
+      .number()
+      .min(1, "Sĩ số tối đa phải lớn hơn 0.")
+      .int("Sĩ số tối đa phải là số nguyên.")
+      .optional(),
     monthly_fee: z
       .number()
       .min(0, "Học phí phải lớn hơn hoặc bằng 0.")
@@ -71,6 +76,11 @@ export const updateClassSchema = z
       .number()
       .min(1, "Thời lượng phải lớn hơn 0.")
       .positive("Thời lượng phải là số dương.")
+      .optional(),
+    max_student_count: z
+      .number()
+      .min(1, "Sĩ số tối đa phải lớn hơn 0.")
+      .int("Sĩ số tối đa phải là số nguyên.")
       .optional(),
     monthly_fee: z
       .number()

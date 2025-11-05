@@ -2,8 +2,16 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
+import { SUBJECTS } from "@/lib/constants/subjects";
 
 export default function ClassesSearchBar() {
   const router = useRouter();
@@ -11,12 +19,17 @@ export default function ClassesSearchBar() {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [q, setQ] = useState<string>(searchParams.get("q") || "");
+  const [subject, setSubject] = useState<string>(
+    searchParams.get("subject") || ""
+  );
 
-  const submit = useCallback(
-    (nextQ: string) => {
+  const updateParams = useCallback(
+    (newQ: string, newSubject: string) => {
       const params = new URLSearchParams(searchParams?.toString());
-      if (nextQ) params.set("q", nextQ);
+      if (newQ) params.set("q", newQ);
       else params.delete("q");
+      if (newSubject) params.set("subject", newSubject);
+      else params.delete("subject");
       startTransition(() => {
         router.replace(
           `${pathname}${params.toString() ? `?${params.toString()}` : ""}`
@@ -26,11 +39,38 @@ export default function ClassesSearchBar() {
     [pathname, router, searchParams]
   );
 
+  const submit = useCallback(
+    (nextQ: string) => {
+      updateParams(nextQ, subject);
+    },
+    [subject, updateParams]
+  );
+
+  const handleSubjectChange = (value: string) => {
+    const newSubject = value === "all" ? "" : value;
+    setSubject(newSubject);
+    updateParams(q, newSubject);
+  };
+
   const hasQuery = (q ?? "").trim().length > 0;
+  const hasFilter = hasQuery || subject;
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:w-auto">
-      <div className="flex w-full gap-2 sm:w-80" aria-autocomplete="none">
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:w-auto">
+      <Select value={subject || "all"} onValueChange={handleSubjectChange}>
+        <SelectTrigger className="w-full md:w-[180px]">
+          <SelectValue placeholder="Chọn môn" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Tất cả môn</SelectItem>
+          {SUBJECTS.map((s) => (
+            <SelectItem key={s} value={s}>
+              {s}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex w-full gap-2 md:w-80" aria-autocomplete="none">
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -56,14 +96,16 @@ export default function ClassesSearchBar() {
           {isPending ? "Đang tìm..." : "Tìm kiếm"}
         </Button>
       </div>
-      {hasQuery && (
+
+      {hasFilter && (
         <Button
           type="button"
           variant="outline"
-          className="w-full whitespace-nowrap sm:w-auto"
+          className="w-full whitespace-nowrap md:w-auto"
           onClick={() => {
             setQ("");
-            submit("");
+            setSubject("");
+            updateParams("", "");
           }}
           disabled={isPending}
         >

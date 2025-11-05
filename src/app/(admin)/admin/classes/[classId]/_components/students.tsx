@@ -16,10 +16,10 @@ import {
 import { EnrollStudentForm } from "@/components/forms/enroll-student-form";
 import { UpdateEnrollmentForm } from "@/components/forms/update-enrollment-form";
 import {
-  ClassStudentItem,
   copyStudentsToClass,
   moveStudentsToClass,
 } from "@/lib/services/admin-classes-service";
+import { type ClassStudentItem } from "@/types";
 import { formatEnrollmentStatus } from "@/lib/utils";
 import { Plus, Pencil, Copy, Scissors } from "lucide-react";
 import { format } from "date-fns";

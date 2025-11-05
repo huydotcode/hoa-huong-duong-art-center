@@ -74,6 +74,7 @@ export function UpdateClassForm({ classData, children }: Props) {
     defaultValues: {
       name: classData.name,
       duration_minutes: classData.duration_minutes,
+      max_student_count: classData.max_student_count,
       monthly_fee: classData.monthly_fee,
       salary_per_session: classData.salary_per_session,
       start_date: classData.start_date,
@@ -93,6 +94,7 @@ export function UpdateClassForm({ classData, children }: Props) {
       form.reset({
         name: classData.name,
         duration_minutes: classData.duration_minutes,
+        max_student_count: classData.max_student_count,
         monthly_fee: classData.monthly_fee,
         salary_per_session: classData.salary_per_session,
         start_date: classData.start_date,
@@ -196,6 +198,37 @@ export function UpdateClassForm({ classData, children }: Props) {
                         phút
                       </span>
                     </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="max_student_count"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sĩ số tối đa</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Nhập sĩ số tối đa"
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/\D/g, "");
+                          if (rawValue === "") {
+                            field.onChange(undefined);
+                            return;
+                          }
+                          const numValue = Number(rawValue);
+                          if (!isNaN(numValue) && numValue > 0) {
+                            field.onChange(numValue);
+                          }
+                        }}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -406,6 +439,20 @@ export function UpdateClassForm({ classData, children }: Props) {
                 </FormItem>
               )}
             />
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <FormLabel>Đang ghi danh</FormLabel>
+                <Input
+                  value={String(classData.current_student_count)}
+                  disabled
+                />
+              </div>
+              <div>
+                <FormLabel>Tối đa</FormLabel>
+                <Input value={String(classData.max_student_count)} disabled />
+              </div>
+            </div>
 
             <FormField
               control={form.control}

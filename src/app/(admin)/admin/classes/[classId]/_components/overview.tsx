@@ -1,14 +1,13 @@
+import { UpdateClassForm } from "@/components/forms/update-class-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { type ClassStudentItem } from "@/lib/services/admin-classes-service";
 import {
+  formatCurrencyVNDots,
   formatDateRange,
   formatDurationHours,
-  formatCurrencyVNDots,
 } from "@/lib/utils";
-import { type Class, type Teacher } from "@/types";
-import { UpdateClassForm } from "@/components/forms/update-class-form";
+import { type Class, type ClassStudentItem, type Teacher } from "@/types";
 import { Pencil } from "lucide-react";
 import { WeeklyScheduleCalendar } from "./weekly-schedule-calendar";
 
@@ -67,10 +66,17 @@ export default function OverviewSection({
               </div>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t text-sm">
-            <span className="text-muted-foreground">GV:</span> {teachers.length}
-            <span className="mx-2">•</span>
-            <span className="text-muted-foreground">HS:</span> {students.length}
+          <div className="mt-3 pt-3 border-t text-sm flex items-center gap-2">
+            <div>
+              <span className="text-muted-foreground">GV:</span>{" "}
+              {teachers.length}
+              <span className="mx-2">•</span>
+              <span className="text-muted-foreground">HS:</span>{" "}
+              {cls.current_student_count}/{cls.max_student_count}
+            </div>
+            {cls.current_student_count >= cls.max_student_count && (
+              <Badge variant="destructive">Đã đầy</Badge>
+            )}
           </div>
         </Card>
       </div>

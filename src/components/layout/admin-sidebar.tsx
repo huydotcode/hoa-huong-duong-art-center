@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ADMIN_NAV_ITEMS } from "@/constants/navigation";
+import { ADMIN_NAV_ITEMS } from "@/lib/constants/navigation";
 import { Button } from "@/components/ui/button";
 
 interface NavContentProps {
@@ -33,7 +33,7 @@ function NavContent({ onLinkClick }: NavContentProps) {
 export function AdminSidebar() {
   return (
     // Desktop Sidebar only
-    <aside className="hidden w-64 flex-col border-r bg-background lg:flex">
+    <aside className="hidden w-64 flex-col border-r bg-background lg:flex fixed top-14 left-0 h-screen">
       <NavContent />
     </aside>
   );

@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-import { ADMIN_NAV_ITEMS, type NavItem } from "@/constants/navigation";
+import { ADMIN_NAV_ITEMS, type NavItem } from "@/lib/constants/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -31,7 +31,7 @@ export function Header({
   const pathname = usePathname();
 
   return (
-    <header className="border-b bg-secondary">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b bg-secondary w-screen">
       <div className="flex h-14 items-center px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">

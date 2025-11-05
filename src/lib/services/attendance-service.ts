@@ -1,0 +1,225 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import type { Attendance } from "@/types";
+
+export type AttendanceMap = Record<string, Record<string, boolean>>; // session_time -> (student_id -> is_present)
+export type TeacherAttendanceMap = Record<string, Record<string, boolean>>; // session_time -> (teacher_id -> is_present)
+
+export async function listAttendanceByClassDate(
+  classId: string,
+  date: string
+): Promise<AttendanceMap> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("student_id, session_time, is_present")
+    .eq("class_id", classId)
+    .eq("attendance_date", date)
+    .not("student_id", "is", null);
+  if (error) throw error;
+
+  const map: AttendanceMap = {};
+  for (const row of (data as Array<{
+    session_time: string | null;
+    student_id: string | null;
+    is_present: boolean;
+  }>) || []) {
+    const session = row.session_time;
+    const studentId = row.student_id;
+    const present = row.is_present;
+    if (!session || !studentId) continue;
+    if (!map[session]) map[session] = {};
+    map[session][studentId] = present;
+  }
+  return map;
+}
+
+export async function listTeacherAttendanceByClassDate(
+  classId: string,
+  date: string
+): Promise<TeacherAttendanceMap> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("teacher_id, session_time, is_present")
+    .eq("class_id", classId)
+    .eq("attendance_date", date)
+    .not("teacher_id", "is", null);
+  if (error) throw error;
+
+  const map: TeacherAttendanceMap = {};
+  for (const row of (data as Array<{
+    session_time: string | null;
+    teacher_id: string | null;
+    is_present: boolean;
+  }>) || []) {
+    const session = row.session_time;
+    const teacherId = row.teacher_id;
+    const present = row.is_present;
+    if (!session || !teacherId) continue;
+    if (!map[session]) map[session] = {};
+    map[session][teacherId] = present;
+  }
+  return map;
+}
+
+export async function getStudentAttendanceCell(params: {
+  classId: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  session_time: string; // HH:MM
+}): Promise<boolean | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("is_present")
+    .eq("class_id", params.classId)
+    .eq("student_id", params.studentId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { is_present: boolean } | null)?.is_present ?? null;
+}
+
+export async function getTeacherAttendanceCell(params: {
+  classId: string;
+  teacherId: string;
+  date: string; // YYYY-MM-DD
+  session_time: string; // HH:MM
+}): Promise<boolean | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("is_present")
+    .eq("class_id", params.classId)
+    .eq("teacher_id", params.teacherId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { is_present: boolean } | null)?.is_present ?? null;
+}
+
+export async function getAttendanceByClassDateSession(
+  classId: string,
+  date: string,
+  sessionTime: string
+): Promise<Attendance[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("*")
+    .eq("class_id", classId)
+    .eq("attendance_date", date)
+    .eq("session_time", sessionTime);
+  if (error) throw error;
+  return (data as Attendance[]) || [];
+}
+
+export async function upsertStudentAttendance(params: {
+  classId: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  session_time: string; // HH:MM
+  is_present: boolean;
+  marked_by: "teacher" | "admin";
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("attendance").upsert(
+    {
+      class_id: params.classId,
+      student_id: params.studentId,
+      attendance_date: params.date,
+      session_time: params.session_time,
+      is_present: params.is_present,
+      marked_by: params.marked_by,
+    },
+    {
+      onConflict: "class_id,student_id,attendance_date,session_time",
+      ignoreDuplicates: false,
+    }
+  );
+  if (error) throw error;
+}
+
+export async function removeStudentAttendance(params: {
+  classId: string;
+  studentId: string;
+  date: string;
+  session_time: string;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("attendance")
+    .delete()
+    .eq("class_id", params.classId)
+    .eq("student_id", params.studentId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time);
+  if (error) throw error;
+}
+
+export async function upsertTeacherAttendance(params: {
+  classId: string;
+  teacherId: string;
+  date: string; // YYYY-MM-DD
+  session_time: string; // HH:MM
+  is_present: boolean;
+  marked_by: "teacher" | "admin";
+}): Promise<void> {
+  const supabase = await createClient();
+
+  // Check if record exists
+  const { data: existing, error: checkError } = await supabase
+    .from("attendance")
+    .select("id")
+    .eq("class_id", params.classId)
+    .eq("teacher_id", params.teacherId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time)
+    .maybeSingle();
+
+  if (checkError) throw checkError;
+
+  if (existing) {
+    // Update existing record
+    const { error } = await supabase
+      .from("attendance")
+      .update({
+        is_present: params.is_present,
+        marked_by: params.marked_by,
+      })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    // Insert new record
+    const { error } = await supabase.from("attendance").insert({
+      class_id: params.classId,
+      teacher_id: params.teacherId,
+      attendance_date: params.date,
+      session_time: params.session_time,
+      is_present: params.is_present,
+      marked_by: params.marked_by,
+    });
+    if (error) throw error;
+  }
+}
+
+export async function removeTeacherAttendance(params: {
+  classId: string;
+  teacherId: string;
+  date: string;
+  session_time: string;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("attendance")
+    .delete()
+    .eq("class_id", params.classId)
+    .eq("teacher_id", params.teacherId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time);
+  if (error) throw error;
+}

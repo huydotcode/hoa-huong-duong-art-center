@@ -1,7 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { AddTeacherForm } from "@/components/forms/add-teacher-form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -13,26 +22,15 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Plus, Trash2 } from "lucide-react";
-import { AddTeacherForm } from "@/components/forms/add-teacher-form";
-import ClassTeachersSearchBar from "./class-teachers-search-bar";
-import {
-  ClassTeacherItem,
-  removeClassTeacher,
-} from "@/lib/services/admin-classes-service";
-import { toast } from "sonner";
+import { removeClassTeacher } from "@/lib/services/admin-classes-service";
+import { type ClassTeacherItem } from "@/types";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { Plus, Trash2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+import ClassTeachersSearchBar from "./class-teachers-search-bar";
 
 interface TeachersSectionProps {
   classId: string;

@@ -49,6 +49,7 @@ export function CreateClassForm({ children }: Props) {
       name: "",
       days_of_week: [],
       duration_minutes: 90,
+      max_student_count: 20,
       monthly_fee: 0,
       salary_per_session: 0,
       start_date: "",
@@ -157,6 +158,37 @@ export function CreateClassForm({ children }: Props) {
                         phút
                       </span>
                     </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="max_student_count"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sĩ số tối đa</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Nhập sĩ số tối đa"
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/\D/g, "");
+                          if (rawValue === "") {
+                            field.onChange(undefined);
+                            return;
+                          }
+                          const numValue = Number(rawValue);
+                          if (!isNaN(numValue) && numValue > 0) {
+                            field.onChange(numValue);
+                          }
+                        }}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

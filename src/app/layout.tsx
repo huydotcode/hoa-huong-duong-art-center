@@ -1,3 +1,4 @@
+import { QueryProvider } from "@/lib/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
@@ -25,8 +26,10 @@ export default function RootLayout({
   return (
     <html lang="vi" className="h-full">
       <body className={`${beVietnamPro.variable} antialiased`}>
-        {children}
-        <Toaster />
+        <QueryProvider>
+          {children}
+          <Toaster />
+        </QueryProvider>
       </body>
     </html>
   );

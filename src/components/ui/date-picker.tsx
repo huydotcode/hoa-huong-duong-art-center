@@ -18,6 +18,9 @@ interface DatePickerProps {
   onChange?: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  quickPreset?: "month" | "yd"; // month: current + next 2 months (default), yd: yesterday/today
+  contentClassName?: string;
+  triggerClassName?: string;
 }
 
 export function DatePicker({
@@ -25,6 +28,9 @@ export function DatePicker({
   onChange,
   placeholder = "Chọn ngày",
   disabled = false,
+  contentClassName = "w-full sm:w-auto",
+  triggerClassName = "w-full sm:w-auto",
+  quickPreset = "month",
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [month, setMonth] = React.useState<Date | undefined>(undefined);
@@ -42,31 +48,18 @@ export function DatePicker({
     }
   }, [open, value]);
 
-  // Generate quick select options: current month and next 2 months
-  const getQuickSelectMonths = () => {
-    const today = new Date();
-    const months = [];
-    for (let i = 0; i < 3; i++) {
-      const monthDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
-      months.push(monthDate);
-    }
-    return months;
-  };
-
-  const quickSelectMonths = getQuickSelectMonths();
-
-  const handleQuickSelect = (monthDate: Date, e: React.MouseEvent) => {
+  const handleQuickSelect = (selectedDate: Date, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const targetDate = startOfMonth(monthDate);
+    const targetDate = selectedDate;
     const year = targetDate.getFullYear();
     const monthNum = String(targetDate.getMonth() + 1).padStart(2, "0");
     const day = String(targetDate.getDate()).padStart(2, "0");
     const formattedDate = `${year}-${monthNum}-${day}`;
 
-    // Set month to the selected month so calendar shows the correct month
-    setMonth(targetDate);
+    // Set month so calendar shows the correct month
+    setMonth(startOfMonth(targetDate));
     onChange?.(formattedDate);
     setOpen(false); // Close popover after selection
   };
@@ -78,6 +71,7 @@ export function DatePicker({
           variant="outline"
           className={cn(
             "w-full justify-start text-left font-normal",
+            triggerClassName,
             !date && "text-muted-foreground"
           )}
           disabled={disabled}
@@ -90,22 +84,65 @@ export function DatePicker({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent
+        className={cn("w-auto p-0", contentClassName)}
+        align="start"
+      >
         <div className="p-3 border-b">
           <div className="text-xs text-muted-foreground mb-2">Chọn nhanh:</div>
           <div className="flex flex-wrap gap-2">
-            {quickSelectMonths.map((monthDate, index) => (
-              <Button
-                key={index}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-xs h-8"
-                onClick={(e) => handleQuickSelect(monthDate, e)}
-              >
-                {format(monthDate, "MM/yyyy", { locale: vi })}
-              </Button>
-            ))}
+            {quickPreset === "month" &&
+              (() => {
+                const today = new Date();
+                const months: Date[] = [];
+                for (let i = 0; i < 3; i++) {
+                  months.push(
+                    new Date(today.getFullYear(), today.getMonth() + i, 1)
+                  );
+                }
+                return months.map((monthDate, index) => (
+                  <Button
+                    key={index}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={(e) =>
+                      handleQuickSelect(startOfMonth(monthDate), e)
+                    }
+                  >
+                    {format(monthDate, "MM/yyyy", { locale: vi })}
+                  </Button>
+                ));
+              })()}
+            {quickPreset === "yd" &&
+              (() => {
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(today.getDate() - 1);
+                return (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      onClick={(e) => handleQuickSelect(yesterday, e)}
+                    >
+                      Hôm qua
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      onClick={(e) => handleQuickSelect(today, e)}
+                    >
+                      Hôm nay
+                    </Button>
+                  </>
+                );
+              })()}
           </div>
         </div>
         <Calendar

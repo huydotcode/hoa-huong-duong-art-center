@@ -2,7 +2,17 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { Class, Teacher, Student } from "@/types";
+import {
+  Class,
+  Teacher,
+  Student,
+  CreateClassData,
+  UpdateClassData,
+  EnrollmentStatus,
+  ClassListItem,
+  ClassTeacherItem,
+  ClassStudentItem,
+} from "@/types";
 import { toArray } from "@/lib/utils";
 
 /*
@@ -15,28 +25,32 @@ setClassTeachers(classId, teacherIds, path?): replace toàn bộ mapping cho l�
 getClassStudents(classId, { status? }): trả về danh sách enrollment dạng { enrollment_id, status, student } (join students(*)).
 */
 
-export type CreateClassData = Pick<
-  Class,
-  | "name"
-  | "days_of_week"
-  | "duration_minutes"
-  | "monthly_fee"
-  | "salary_per_session"
-  | "start_date"
-  | "end_date"
-  | "is_active"
->;
+export async function getClassesCount(
+  query: string = "",
+  opts?: { is_active?: boolean; subject?: string }
+): Promise<number> {
+  const supabase = await createClient();
+  let q = supabase.from("classes").select("*", { count: "exact", head: true });
 
-export type UpdateClassData = Partial<CreateClassData>;
+  const trimmed = query.trim();
+  if (trimmed) {
+    q = q.ilike("name", `%${trimmed}%`);
+  }
+  if (opts?.subject) {
+    q = q.ilike("name", `%${opts.subject}%`);
+  }
+  if (opts?.is_active !== undefined) {
+    q = q.eq("is_active", opts.is_active);
+  }
 
-export interface ClassListItem extends Class {
-  teachers_count: number;
-  students_count: number;
+  const { count, error } = await q;
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function getClasses(
   query: string = "",
-  opts?: { is_active?: boolean }
+  opts?: { is_active?: boolean; limit?: number; subject?: string }
 ): Promise<ClassListItem[]> {
   const supabase = await createClient();
 
@@ -52,8 +66,14 @@ export async function getClasses(
   if (trimmed) {
     q = q.ilike("name", `%${trimmed}%`);
   }
+  if (opts?.subject) {
+    q = q.ilike("name", `%${opts.subject}%`);
+  }
   if (opts?.is_active !== undefined) {
     q = q.eq("is_active", opts.is_active);
+  }
+  if (opts?.limit !== undefined) {
+    q = q.limit(opts.limit);
   }
 
   const { data, error } = await q;
@@ -95,10 +115,7 @@ export async function createClass(
   options?: { teacherIds?: string[]; path?: string }
 ): Promise<string> {
   const supabase = await createClient();
-  const payload: CreateClassData = {
-    ...data,
-    is_active: data.is_active ?? true,
-  };
+  const payload: CreateClassData = { ...data } as CreateClassData;
   const { data: inserted, error } = await supabase
     .from("classes")
     .insert(payload)
@@ -180,12 +197,6 @@ export async function updateClassDaySchedule(
 
   if (error) throw error;
   if (path) revalidatePath(path);
-}
-
-export interface ClassTeacherItem {
-  assignment_id: string;
-  start_date: string; // created_at của class_teachers, dùng làm ngày vào dạy
-  teacher: Teacher;
 }
 
 export async function getClassTeachers(
@@ -289,15 +300,6 @@ export async function removeClassTeacher(
     .eq("id", assignmentId);
   if (error) throw error;
   if (path) revalidatePath(path);
-}
-
-export type EnrollmentStatus = "trial" | "active" | "inactive";
-
-export interface ClassStudentItem {
-  enrollment_id: string;
-  status: EnrollmentStatus;
-  enrollment_date: string;
-  student: Student;
 }
 
 export async function getClassStudents(
