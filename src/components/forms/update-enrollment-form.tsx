@@ -2,11 +2,12 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -29,11 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import {
-  updateStudentEnrollment,
-  type ClassStudentItem,
-} from "@/lib/services/admin-classes-service";
+import { updateStudentEnrollment } from "@/lib/services/admin-classes-service";
+import { ClassStudentItem } from "@/types";
 import { z } from "zod";
 
 const updateEnrollmentSchema = z.object({

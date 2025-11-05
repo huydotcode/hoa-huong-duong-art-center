@@ -1,11 +1,11 @@
-import { notFound } from "next/navigation";
-import StudentsSection from "../_components/students";
 import {
   getClassById,
   getClassStudents,
   getClasses,
-  type ClassListItem,
 } from "@/lib/services/admin-classes-service";
+import { type ClassListItem } from "@/types";
+import { notFound } from "next/navigation";
+import StudentsSection from "../_components/students";
 
 export default async function StudentsPage({
   params,
