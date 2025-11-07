@@ -1,11 +1,11 @@
 import {
-  getCurrentSessionLabel,
-  getTeacherIdFromSession,
-  getTeacherClassesInSession,
   getParticipantsForClasses,
+  getTeacherClassesInSession,
+  getTeacherIdFromSession,
 } from "@/lib/services/teacher-attendance-service";
-import TeacherAttendanceClient from "./_components/teacher-attendance-client";
+import { getCurrentSessionLabel } from "@/lib/utils";
 import { notFound } from "next/navigation";
+import TeacherAttendanceClient from "./_components/teacher-attendance-client";
 
 export default async function TeacherAttendancePage({
   searchParams,

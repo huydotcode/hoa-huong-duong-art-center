@@ -2,12 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-export function getCurrentSessionLabel(now = new Date()): string {
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
 export async function getTeacherIdFromSession(): Promise<string | null> {
   const supabase = await createClient();
   const {
