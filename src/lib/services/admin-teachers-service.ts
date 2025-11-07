@@ -1,15 +1,15 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
 import type {
-  Teacher,
   CreateTeacherData,
+  Teacher,
   UpdateTeacherData,
 } from "@/types/database";
+import { revalidatePath } from "next/cache";
 
 // Re-export for convenience
-export type { Teacher, CreateTeacherData, UpdateTeacherData };
+export type { CreateTeacherData, Teacher, UpdateTeacherData };
 
 export async function getTeachers(query?: string): Promise<Teacher[]> {
   const supabase = await createClient();
@@ -69,11 +69,6 @@ export async function createTeacher(data: CreateTeacherData, path?: string) {
     );
 
     const authData = await response.json();
-
-    console.log({
-      authData,
-    });
-
     if (authData.error_code === "phone_exists") {
       throw new Error("Số điện thoại đã tồn tại");
     }

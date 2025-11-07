@@ -6,6 +6,20 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function getCurrentSessionLabel(now = new Date()): string {
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+export function generateTimeSlots(): string[] {
+  const slots: string[] = [];
+  for (let hour = 6; hour <= 22; hour++) {
+    slots.push(`${String(hour).padStart(2, "0")}:00`);
+  }
+  return slots;
+}
+
 export function formatCurrencyVN(value: number) {
   try {
     return value.toLocaleString("vi-VN") + "đ";
