@@ -48,11 +48,21 @@ export async function getClassesCount(
   return count ?? 0;
 }
 
+const normalizeText = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
 export async function getClasses(
   query: string = "",
   opts?: { is_active?: boolean; limit?: number; subject?: string }
 ): Promise<ClassListItem[]> {
   const supabase = await createClient();
+  const trimmedQuery = query.trim();
+  const trimmedSubject = opts?.subject?.trim() ?? "";
+  const hasQuery = trimmedQuery.length > 0;
+  const hasSubjectFilter = trimmedSubject.length > 0;
 
   // Use relationship counts via PostgREST embedding
   let q = supabase
@@ -62,17 +72,11 @@ export async function getClasses(
     })
     .order("name", { ascending: true });
 
-  const trimmed = query.trim();
-  if (trimmed) {
-    q = q.ilike("name", `%${trimmed}%`);
-  }
-  if (opts?.subject) {
-    q = q.ilike("name", `%${opts.subject}%`);
-  }
   if (opts?.is_active !== undefined) {
     q = q.eq("is_active", opts.is_active);
   }
-  if (opts?.limit !== undefined) {
+
+  if (!hasQuery && !hasSubjectFilter && opts?.limit !== undefined) {
     q = q.limit(opts.limit);
   }
 
@@ -83,6 +87,7 @@ export async function getClasses(
     class_teachers?: { count?: number }[];
     student_class_enrollments?: { count?: number }[];
   };
+
   const mapped: ClassListItem[] =
     (data as RawRow[] | null | undefined)?.map((row) => ({
       ...(row as Class),
@@ -93,7 +98,25 @@ export async function getClasses(
         ? (row.student_class_enrollments[0]?.count ?? 0)
         : 0,
     })) || [];
-  return mapped;
+
+  if (!hasQuery && !hasSubjectFilter) {
+    return mapped;
+  }
+
+  const normalizedQuery = hasQuery ? normalizeText(trimmedQuery) : "";
+  const normalizedSubject = hasSubjectFilter
+    ? normalizeText(trimmedSubject)
+    : "";
+
+  const filtered = mapped.filter((item) => {
+    const normalizedName = normalizeText(item.name);
+    const matchesQuery = !hasQuery || normalizedName.includes(normalizedQuery);
+    const matchesSubject =
+      !hasSubjectFilter || normalizedName.includes(normalizedSubject);
+    return matchesQuery && matchesSubject;
+  });
+
+  return filtered;
 }
 
 export async function getClassById(id: string): Promise<Class | null> {
