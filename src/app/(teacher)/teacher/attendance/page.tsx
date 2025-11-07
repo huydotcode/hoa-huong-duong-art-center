@@ -1,12 +1,12 @@
 import {
-  getAttendanceStateForTeacherSessions,
   getClassesAndStudentsForTeacher,
   getTeacherClassesInSessionWithTimes,
   getTeacherIdFromSession,
+  getAttendanceStateForTeacherSessions,
 } from "@/lib/services/teacher-attendance-service";
 import { getCurrentSessionLabel } from "@/lib/utils";
 import { notFound } from "next/navigation";
-import TeacherAttendanceClient from "../teacher/attendance/_components/teacher-attendance-client";
+import TeacherAttendanceClient from "./_components/teacher-attendance-client";
 
 function normalizeToHourSlot(time: string): string {
   const [hour] = time.split(":").map(Number);
