@@ -82,10 +82,10 @@ export async function proxy(request: NextRequest) {
       if (role === "admin") {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       } else if (role === "teacher") {
-        return NextResponse.redirect(new URL("/teacher/classes", request.url));
+        return NextResponse.redirect(new URL("/teacher", request.url));
       }
       // Fallback for users with no/other roles
-      return NextResponse.redirect(new URL("/teacher/classes", request.url));
+      return NextResponse.redirect(new URL("/teacher", request.url));
     }
 
     // Redirect from root path based on role
@@ -93,20 +93,20 @@ export async function proxy(request: NextRequest) {
       if (role === "admin") {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       } else if (role === "teacher") {
-        return NextResponse.redirect(new URL("/teacher/classes", request.url));
+        return NextResponse.redirect(new URL("/teacher", request.url));
       }
     }
 
     // Role-based access control
     // If a non-admin tries to access an admin route, redirect them
     if (pathname.startsWith("/admin/dashboard") && role !== "admin") {
-      return NextResponse.redirect(new URL("/teacher/classes", request.url));
+      return NextResponse.redirect(new URL("/teacher", request.url));
     }
 
     // A teacher can ONLY access teacher routes (e.g., /classes)
-    const isTeacherRoute = pathname.startsWith("/teacher/classes");
+    const isTeacherRoute = pathname.startsWith("/teacher");
     if (role === "teacher" && !isTeacherRoute && pathname !== "/") {
-      return NextResponse.redirect(new URL("/teacher/classes", request.url));
+      return NextResponse.redirect(new URL("/teacher", request.url));
     }
   }
 
