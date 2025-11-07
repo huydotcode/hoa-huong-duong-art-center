@@ -33,8 +33,8 @@ CREATE TABLE public.classes (
   duration_minutes INTEGER NOT NULL,
   current_student_count INTEGER NOT NULL DEFAULT 0,
   max_student_count INTEGER NOT NULL DEFAULT 20,
-  monthly_fee DECIMAL(10,2) NOT NULL,
-  salary_per_session DECIMAL(10,2) NOT NULL,
+  monthly_fee DECIMAL(14,2) NOT NULL,
+  salary_per_session DECIMAL(14,2) NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   is_active BOOLEAN DEFAULT true NOT NULL,
@@ -139,7 +139,7 @@ COMMENT ON TABLE public.payment_status IS 'Quản lý trạng thái đóng học
 -- Quản lý các khoản chi phí hàng tháng.
 CREATE TABLE public.expenses (
   id UUID PRIMARY KEY NOT NULL DEFAULT gen_random_uuid(),
-  amount DECIMAL(10,2) NOT NULL,
+  amount DECIMAL(14,2) NOT NULL,
   reason TEXT NOT NULL,
   expense_date DATE NOT NULL,
   month INTEGER NOT NULL,
