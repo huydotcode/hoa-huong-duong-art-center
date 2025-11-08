@@ -265,6 +265,8 @@ export interface ClassStudentItem {
   enrollment_id: string;
   status: EnrollmentStatus;
   enrollment_date: string;
+  leave_date: string | null;
+  leave_reason: string | null;
   student: Student;
 }
 

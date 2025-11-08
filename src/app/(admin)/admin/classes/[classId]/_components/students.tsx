@@ -290,6 +290,19 @@ export default function StudentsSection({
                         locale: vi,
                       })}
                     </p>
+                    {s.leave_date && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Rời lớp:{" "}
+                        {format(new Date(s.leave_date), "dd/MM/yyyy", {
+                          locale: vi,
+                        })}
+                      </p>
+                    )}
+                    {s.leave_reason && (
+                      <p className="text-xs text-muted-foreground mt-1 italic">
+                        Lý do: {s.leave_reason}
+                      </p>
+                    )}
                   </div>
                   <Badge
                     variant={
@@ -325,6 +338,8 @@ export default function StudentsSection({
               <TableHead>Họ và tên</TableHead>
               <TableHead>Số điện thoại</TableHead>
               <TableHead>Ngày đăng ký</TableHead>
+              <TableHead>Ngày rời lớp</TableHead>
+              <TableHead>Lý do rời lớp</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead className="text-right">Thao tác</TableHead>
             </TableHeaderRow>
@@ -333,7 +348,7 @@ export default function StudentsSection({
             {students.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Chưa có học sinh nào
@@ -360,6 +375,22 @@ export default function StudentsSection({
                     {format(new Date(s.enrollment_date), "dd/MM/yyyy", {
                       locale: vi,
                     })}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {s.leave_date
+                      ? format(new Date(s.leave_date), "dd/MM/yyyy", {
+                          locale: vi,
+                        })
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground max-w-[200px]">
+                    {s.leave_reason ? (
+                      <span className="truncate block" title={s.leave_reason}>
+                        {s.leave_reason}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge

@@ -389,7 +389,7 @@ export async function getClassStudents(
   const supabase = await createClient();
   let q = supabase
     .from("student_class_enrollments")
-    .select("id,status,enrollment_date,students(*)")
+    .select("id,status,enrollment_date,leave_date,leave_reason,students(*)")
     .eq("class_id", classId)
     .order("created_at", { ascending: true });
 
@@ -404,6 +404,8 @@ export async function getClassStudents(
         id: string;
         status: EnrollmentStatus;
         enrollment_date: string;
+        leave_date: string | null;
+        leave_reason: string | null;
         students: Student;
       }>
     | null
@@ -413,6 +415,8 @@ export async function getClassStudents(
       enrollment_id: row.id,
       status: row.status,
       enrollment_date: row.enrollment_date,
+      leave_date: row.leave_date,
+      leave_reason: row.leave_reason,
       student: row.students,
     })) || [];
   return items;
@@ -495,6 +499,53 @@ export async function enrollStudents(
   if (path) revalidatePath(path);
 }
 
+/**
+ * Deactivate student enrollments by setting leave_date and leave_reason
+ * instead of deleting the record (preserves history)
+ */
+export async function deactivateStudentEnrollments(
+  classId: string,
+  studentIds: string[],
+  options?: {
+    leave_date?: string;
+    leave_reason?: string;
+  },
+  path?: string
+): Promise<void> {
+  if (studentIds.length === 0) return;
+  const supabase = await createClient();
+
+  // Get enrollment IDs for the students
+  const { data: enrollments } = await supabase
+    .from("student_class_enrollments")
+    .select("id")
+    .eq("class_id", classId)
+    .in("student_id", studentIds);
+
+  if (!enrollments || enrollments.length === 0) return;
+
+  const enrollmentIds = enrollments.map((e) => e.id);
+  const leaveDate =
+    options?.leave_date || new Date().toISOString().split("T")[0];
+  const leaveReason = options?.leave_reason || "Xóa khỏi lớp";
+
+  const { error } = await supabase
+    .from("student_class_enrollments")
+    .update({
+      status: "inactive",
+      leave_date: leaveDate,
+      leave_reason: leaveReason,
+    })
+    .in("id", enrollmentIds);
+
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
+/**
+ * Remove student enrollments (hard delete - use with caution)
+ * Prefer deactivateStudentEnrollments to preserve history
+ */
 export async function removeClassEnrollments(
   classId: string,
   studentIds: string[],
@@ -612,25 +663,97 @@ export async function moveStudentsToClass(
     path
   );
 
-  // Always remove from source regardless of duplicate state (policy for Cut)
-  await removeClassEnrollments(sourceClassId, studentIds, path);
+  // Deactivate enrollments in source class (preserves history with leave_date and leave_reason)
+  // instead of deleting them
+  await deactivateStudentEnrollments(
+    sourceClassId,
+    studentIds,
+    {
+      leave_date: new Date().toISOString().split("T")[0],
+      leave_reason: "Chuyển lớp",
+    },
+    path
+  );
   return { inserted, updated, skipped, removedFromSource: studentIds.length };
 }
 
 export async function updateStudentEnrollment(
   enrollmentId: string,
-  data: { status?: EnrollmentStatus; enrollment_date?: string },
+  data: {
+    status?: EnrollmentStatus;
+    enrollment_date?: string;
+    leave_date?: string | null;
+    leave_reason?: string | null;
+  },
   path?: string
 ): Promise<void> {
   const supabase = await createClient();
-  const updateData: { status?: EnrollmentStatus; enrollment_date?: string } =
-    {};
+
+  // Get current enrollment to check old status
+  const { data: currentEnrollment } = await supabase
+    .from("student_class_enrollments")
+    .select("status, leave_date")
+    .eq("id", enrollmentId)
+    .single();
+
+  const oldStatus = currentEnrollment?.status;
+  const updateData: {
+    status?: EnrollmentStatus;
+    enrollment_date?: string;
+    leave_date?: string | null;
+    leave_reason?: string | null;
+  } = {};
+
+  // Handle status changes
   if (data.status !== undefined) {
     updateData.status = data.status;
+
+    // Auto-set leave_date when status changes to "inactive"
+    if (data.status === "inactive" && oldStatus !== "inactive") {
+      // If leave_date is explicitly provided, use it; otherwise set to today
+      if (data.leave_date !== undefined) {
+        updateData.leave_date = data.leave_date;
+      } else {
+        updateData.leave_date = new Date().toISOString().split("T")[0];
+      }
+      // If leave_reason is explicitly provided, use it; otherwise keep existing or null
+      if (data.leave_reason !== undefined) {
+        updateData.leave_reason = data.leave_reason;
+      }
+    }
+
+    // Clear leave_date and leave_reason when reactivating from "inactive"
+    if (data.status !== "inactive" && oldStatus === "inactive") {
+      updateData.leave_date = null;
+      updateData.leave_reason = null;
+    }
   }
+
+  // Handle enrollment_date updates
   if (data.enrollment_date !== undefined) {
     updateData.enrollment_date = data.enrollment_date;
   }
+
+  // Allow explicit setting of leave_date and leave_reason (only if status is not changing)
+  // If status is changing, the logic above handles it
+  if (data.status === undefined) {
+    // Only allow explicit setting if status is not being changed
+    if (data.leave_date !== undefined) {
+      updateData.leave_date = data.leave_date;
+    }
+    if (data.leave_reason !== undefined) {
+      updateData.leave_reason = data.leave_reason;
+    }
+  } else if (data.status === "inactive") {
+    // If status is being set to inactive, allow explicit override of leave_date/leave_reason
+    if (data.leave_date !== undefined) {
+      updateData.leave_date = data.leave_date;
+    }
+    if (data.leave_reason !== undefined) {
+      updateData.leave_reason = data.leave_reason;
+    }
+  }
+
   const { error } = await supabase
     .from("student_class_enrollments")
     .update(updateData)
