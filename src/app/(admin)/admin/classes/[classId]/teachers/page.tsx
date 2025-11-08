@@ -4,6 +4,7 @@ import {
   getClassById,
   getClassTeachers,
 } from "@/lib/services/admin-classes-service";
+import { normalizeText, normalizePhone } from "@/lib/utils";
 
 export default async function TeachersPage({
   params,
@@ -18,14 +19,27 @@ export default async function TeachersPage({
   if (!cls) return notFound();
   const allTeachers = await getClassTeachers(classId);
 
-  // Filter teachers based on search query
-  const query = (q || "").trim().toLowerCase();
+  // Filter teachers based on search query (diacritic-insensitive)
+  const query = (q || "").trim();
   const teachers = query
-    ? allTeachers.filter(
-        (t) =>
-          t.teacher.full_name.toLowerCase().includes(query) ||
-          t.teacher.phone.includes(query)
-      )
+    ? (() => {
+        const normalizedQuery = normalizeText(query);
+        const normalizedQueryForPhone = normalizePhone(query);
+
+        return allTeachers.filter((t) => {
+          // Search by full_name (diacritic-insensitive)
+          const nameMatch = t.teacher.full_name
+            ? normalizeText(t.teacher.full_name).includes(normalizedQuery)
+            : false;
+
+          // Search by phone (remove separators)
+          const phoneMatch = t.teacher.phone
+            ? normalizePhone(t.teacher.phone).includes(normalizedQueryForPhone)
+            : false;
+
+          return nameMatch || phoneMatch;
+        });
+      })()
     : allTeachers;
 
   // Use all teachers for assignedTeacherIds (not filtered)

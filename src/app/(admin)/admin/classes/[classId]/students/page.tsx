@@ -6,6 +6,7 @@ import {
 import { type ClassListItem } from "@/types";
 import { notFound } from "next/navigation";
 import StudentsSection from "../_components/students";
+import { normalizeText, normalizePhone } from "@/lib/utils";
 
 export default async function StudentsPage({
   params,
@@ -31,14 +32,27 @@ export default async function StudentsPage({
     .filter((c) => c.id !== classId)
     .map((c) => ({ id: c.id, name: c.name }));
 
-  // Filter students based on search query
-  const query = (q || "").trim().toLowerCase();
+  // Filter students based on search query (diacritic-insensitive)
+  const query = (q || "").trim();
   const students = query
-    ? allStudents.filter(
-        (s) =>
-          s.student.full_name.toLowerCase().includes(query) ||
-          s.student.phone.includes(query)
-      )
+    ? (() => {
+        const normalizedQuery = normalizeText(query);
+        const normalizedQueryForPhone = normalizePhone(query);
+
+        return allStudents.filter((s) => {
+          // Search by full_name (diacritic-insensitive)
+          const nameMatch = s.student.full_name
+            ? normalizeText(s.student.full_name).includes(normalizedQuery)
+            : false;
+
+          // Search by phone (remove separators)
+          const phoneMatch = s.student.phone
+            ? normalizePhone(s.student.phone).includes(normalizedQueryForPhone)
+            : false;
+
+          return nameMatch || phoneMatch;
+        });
+      })()
     : allStudents;
 
   // Use all students for enrolledStudentIds (not filtered)

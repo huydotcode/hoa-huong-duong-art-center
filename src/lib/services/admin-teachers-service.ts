@@ -7,6 +7,7 @@ import type {
   UpdateTeacherData,
 } from "@/types/database";
 import { revalidatePath } from "next/cache";
+import { normalizeText, normalizePhone } from "@/lib/utils";
 
 // Re-export for convenience
 export type { CreateTeacherData, Teacher, UpdateTeacherData };
@@ -14,29 +15,47 @@ export type { CreateTeacherData, Teacher, UpdateTeacherData };
 export async function getTeachers(query?: string): Promise<Teacher[]> {
   const supabase = await createClient();
 
-  let request = supabase.from("teachers").select("*").order("created_at", {
-    ascending: false,
-  });
-
-  const q = (query || "").trim();
-  if (q) {
-    const qDigits = q.replace(/\D/g, "");
-    // Supabase OR filter across name and phone
-    // If phone digits present, match by digits; also match raw query for name
-    const phoneFilter = qDigits
-      ? `phone.ilike.%${qDigits}%`
-      : `phone.ilike.%${q}%`;
-    request = request.or(`full_name.ilike.%${q}%,${phoneFilter}`);
-  }
-
-  const { data, error } = await request;
+  // Fetch all teachers first
+  const { data, error } = await supabase
+    .from("teachers")
+    .select("*")
+    .order("created_at", {
+      ascending: false,
+    });
 
   if (error) {
     console.error("Error fetching teachers:", error);
     return [];
   }
 
-  return data || [];
+  if (!data) return [];
+
+  const q = (query || "").trim();
+
+  // If no query, return all teachers
+  if (q.length === 0) {
+    return data || [];
+  }
+
+  // Filter client-side with diacritic-insensitive search
+  const normalizedQuery = normalizeText(q);
+  const normalizedQueryForPhone = normalizePhone(q);
+
+  const filtered = (data as Teacher[]).filter((teacher) => {
+    // Search by full_name (diacritic-insensitive)
+    const nameMatch = teacher.full_name
+      ? normalizeText(teacher.full_name).includes(normalizedQuery)
+      : false;
+
+    // Search by phone (remove separators)
+    const phoneMatch = teacher.phone
+      ? normalizePhone(teacher.phone).includes(normalizedQueryForPhone)
+      : false;
+
+    return nameMatch || phoneMatch;
+  });
+
+  return filtered;
 }
 
 export async function createTeacher(data: CreateTeacherData, path?: string) {

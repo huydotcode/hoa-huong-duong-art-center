@@ -8,6 +8,7 @@ import type {
   UpdateExpenseData,
 } from "@/types/database";
 import { isTeacherSalaryExpense } from "@/lib/utils/expense";
+import { normalizeText } from "@/lib/utils";
 
 export async function getExpenses(
   month?: number,
@@ -32,12 +33,14 @@ export async function getExpenses(
 
   let expenses = (data as Expense[]) || [];
 
-  // Filter by reason if query provided
+  // Filter by reason if query provided (diacritic-insensitive)
   if (query && query.trim().length > 0) {
-    const trimmedQuery = query.trim().toLowerCase();
-    expenses = expenses.filter((expense) =>
-      expense.reason.toLowerCase().includes(trimmedQuery)
-    );
+    const trimmedQuery = query.trim();
+    const normalizedQuery = normalizeText(trimmedQuery);
+    expenses = expenses.filter((expense) => {
+      const normalizedReason = normalizeText(expense.reason);
+      return normalizedReason.includes(normalizedQuery);
+    });
   }
 
   return expenses;
@@ -206,7 +209,7 @@ export async function syncTeacherSalaryExpense(
   // Tìm expense có reason chứa pattern lương giáo viên cho tháng này
   const existingExpense = allExpenses?.find(
     (exp) =>
-      exp.reason.toLowerCase().includes("lương") &&
+      normalizeText(exp.reason).includes(normalizeText("lương")) &&
       exp.reason.includes(`T${month}/${year}`)
   );
 

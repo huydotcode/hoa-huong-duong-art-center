@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { normalizeText } from "@/lib/utils";
 
 interface StudentInfo {
   id: string;
@@ -37,20 +38,18 @@ export default function SearchPage() {
     const supabase = createClient();
 
     try {
-      // Tìm kiếm học sinh theo tên
-      const { data, error } = await supabase
+      // Fetch all students first
+      const { data: allStudents, error: fetchError } = await supabase
         .from("students")
-        .select("*")
-        .ilike("full_name", `%${studentName}%`)
-        .maybeSingle();
+        .select("*");
 
-      if (error) {
-        console.error("Search error:", error);
+      if (fetchError) {
+        console.error("Search error:", fetchError);
         toast.error("Đã xảy ra lỗi khi tìm kiếm");
         return;
       }
 
-      if (!data) {
+      if (!allStudents || allStudents.length === 0) {
         toast.error(
           "Không tìm thấy học sinh. Vui lòng kiểm tra lại thông tin."
         );
@@ -58,7 +57,29 @@ export default function SearchPage() {
         return;
       }
 
-      setStudentInfo(data);
+      // Filter client-side with diacritic-insensitive search
+      const trimmedQuery = studentName.trim();
+      if (trimmedQuery.length === 0) {
+        toast.error("Vui lòng nhập tên học sinh");
+        setStudentInfo(null);
+        return;
+      }
+
+      const normalizedQuery = normalizeText(trimmedQuery);
+      const foundStudent = allStudents.find((student) => {
+        const normalizedName = normalizeText(student.full_name || "");
+        return normalizedName.includes(normalizedQuery);
+      });
+
+      if (!foundStudent) {
+        toast.error(
+          "Không tìm thấy học sinh. Vui lòng kiểm tra lại thông tin."
+        );
+        setStudentInfo(null);
+        return;
+      }
+
+      setStudentInfo(foundStudent as StudentInfo);
       toast.success("Tìm thấy thông tin học sinh!");
     } catch (error) {
       console.error("Search error:", error);

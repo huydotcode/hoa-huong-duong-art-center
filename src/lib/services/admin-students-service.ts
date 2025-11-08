@@ -2,25 +2,51 @@
 import { createClient } from "@/lib/supabase/server";
 import { Student } from "@/types";
 import { revalidatePath } from "next/cache";
+import { normalizeText, normalizePhone } from "@/lib/utils";
 
 export async function getStudents(query: string = ""): Promise<Student[]> {
   const supabase = await createClient();
-  let q = supabase
+
+  // Fetch all students first
+  const { data, error } = await supabase
     .from("students")
     .select("*")
     .order("full_name", { ascending: true });
 
+  if (error) throw error;
+  if (!data) return [];
+
   const trimmed = query.trim();
-  if (trimmed.length > 0) {
-    // Search by full_name or phone or parent_phone (case-insensitive contains)
-    q = q.or(
-      `full_name.ilike.%${trimmed}%,phone.ilike.%${trimmed}%,parent_phone.ilike.%${trimmed}%`
-    );
+
+  // If no query, return all students
+  if (trimmed.length === 0) {
+    return (data as Student[]) || [];
   }
 
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data as Student[]) || [];
+  // Filter client-side with diacritic-insensitive search
+  const normalizedQuery = normalizeText(trimmed);
+  const normalizedQueryForPhone = normalizePhone(trimmed);
+
+  const filtered = (data as Student[]).filter((student) => {
+    // Search by full_name (diacritic-insensitive)
+    const nameMatch = student.full_name
+      ? normalizeText(student.full_name).includes(normalizedQuery)
+      : false;
+
+    // Search by phone (remove separators)
+    const phoneMatch = student.phone
+      ? normalizePhone(student.phone).includes(normalizedQueryForPhone)
+      : false;
+
+    // Search by parent_phone (remove separators)
+    const parentPhoneMatch = student.parent_phone
+      ? normalizePhone(student.parent_phone).includes(normalizedQueryForPhone)
+      : false;
+
+    return nameMatch || phoneMatch || parentPhoneMatch;
+  });
+
+  return filtered;
 }
 
 type CreateStudentData = Pick<

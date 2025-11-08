@@ -13,7 +13,7 @@ import {
   ClassTeacherItem,
   ClassStudentItem,
 } from "@/types";
-import { toArray } from "@/lib/utils";
+import { toArray, normalizeText } from "@/lib/utils";
 
 /*
 getClasses(query?, { is_active? }): trả về danh sách lớp có kèm đếm teachers_count, students_count dùng embed class_teachers(count), student_class_enrollments(count), sắp xếp theo tên.
@@ -47,12 +47,6 @@ export async function getClassesCount(
   if (error) throw error;
   return count ?? 0;
 }
-
-const normalizeText = (value: string): string =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 
 export async function getClasses(
   query: string = "",
