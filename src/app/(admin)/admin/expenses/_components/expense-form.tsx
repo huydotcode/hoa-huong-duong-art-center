@@ -28,6 +28,7 @@ import {
   createExpense,
   updateExpense,
 } from "@/lib/services/admin-expenses-service";
+import { isTeacherSalaryExpense } from "@/lib/utils/expense";
 import type { Expense } from "@/types/database";
 import {
   createExpenseSchema,
@@ -49,6 +50,7 @@ export function ExpenseForm({ expense, children }: Props) {
   const path = usePathname();
 
   const isEdit = !!expense;
+  const isSalaryExpense = expense ? isTeacherSalaryExpense(expense) : false;
 
   const form = useForm<CreateExpenseSchema | UpdateExpenseSchema>({
     resolver: zodResolver(isEdit ? updateExpenseSchema : createExpenseSchema),
@@ -106,7 +108,17 @@ export function ExpenseForm({ expense, children }: Props) {
     setIsLoading(true);
     try {
       if (isEdit && expense) {
-        await updateExpense(expense.id, values as UpdateExpenseSchema, path);
+        // Nếu là lương giáo viên, chỉ cho phép update amount, không cho update reason và expense_date
+        const updateData: UpdateExpenseSchema = isSalaryExpense
+          ? {
+              amount: values.amount,
+              // Giữ nguyên reason và expense_date từ expense gốc
+              reason: expense.reason,
+              expense_date: expense.expense_date,
+            }
+          : (values as UpdateExpenseSchema);
+
+        await updateExpense(expense.id, updateData, path);
         toast.success("Cập nhật chi phí thành công!");
       } else {
         await createExpense(values as CreateExpenseSchema, path);
@@ -205,9 +217,15 @@ export function ExpenseForm({ expense, children }: Props) {
                         "flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       )}
                       placeholder="Nhập lý do chi phí"
+                      disabled={isSalaryExpense}
                       {...field}
                     />
                   </FormControl>
+                  {isSalaryExpense && (
+                    <p className="text-xs text-muted-foreground">
+                      Không thể chỉnh sửa lý do của chi phí lương giáo viên
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -220,8 +238,18 @@ export function ExpenseForm({ expense, children }: Props) {
                 <FormItem>
                   <FormLabel>Ngày chi</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} value={field.value || ""} />
+                    <Input
+                      type="date"
+                      {...field}
+                      value={field.value || ""}
+                      disabled={isSalaryExpense}
+                    />
                   </FormControl>
+                  {isSalaryExpense && (
+                    <p className="text-xs text-muted-foreground">
+                      Không thể chỉnh sửa ngày chi của chi phí lương giáo viên
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

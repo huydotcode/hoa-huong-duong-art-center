@@ -1,7 +1,7 @@
 import { UpdateTeacherForm } from "@/components/forms/update-teacher-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { getTeachers } from "@/lib/services/admin-teachers-service";
 import { Pencil } from "lucide-react";
+import { TeachersSearchBar } from "./_components";
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;
@@ -70,6 +71,13 @@ export default async function TeachersPage(props: SearchProps) {
           ))
         )}
       </div>
+
+      <CardHeader className="px-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>Danh sách giáo viên</CardTitle>
+          <TeachersSearchBar />
+        </div>
+      </CardHeader>
 
       {/* Desktop: Table view */}
       <CardContent className="hidden p-0 md:block">

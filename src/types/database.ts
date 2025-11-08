@@ -331,3 +331,22 @@ export interface DashboardStats {
   students: number;
   classes: number;
 }
+
+// ========== TEACHER SALARY ==========
+
+export interface TeacherSalaryDetail {
+  classId: string;
+  className: string;
+  sessions: number; // Số buổi có mặt
+  salaryPerSession: number;
+  totalSalary: number; // sessions × salaryPerSession
+}
+
+export interface TeacherSalarySummary {
+  teacherId: string;
+  teacherName: string;
+  phone: string;
+  totalSessions: number; // Tổng số buổi dạy
+  totalSalary: number; // Tổng lương
+  details: TeacherSalaryDetail[]; // Chi tiết theo từng lớp
+}

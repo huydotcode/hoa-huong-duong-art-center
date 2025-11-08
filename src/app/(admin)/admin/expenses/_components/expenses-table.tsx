@@ -27,6 +27,7 @@ import type { Expense } from "@/types/database";
 import { formatVND } from "@/lib/utils";
 import { ExpenseForm } from "./expense-form";
 import { deleteExpense } from "@/lib/services/admin-expenses-service";
+import { isTeacherSalaryExpense } from "@/lib/utils/expense";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -97,57 +98,66 @@ export default function ExpensesTable({ expenses }: ExpensesTableProps) {
               </TableCell>
             </TableRow>
           ) : (
-            expenses.map((expense) => (
-              <TableRow key={expense.id}>
-                <TableCell className="font-medium">
-                  {formatDate(expense.expense_date)}
-                </TableCell>
-                <TableCell className="text-right font-semibold">
-                  {formatVND(expense.amount)}
-                </TableCell>
-                <TableCell>{expense.reason}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <ExpenseForm expense={expense}>
-                      <Button variant="ghost" size="icon">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </ExpenseForm>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={deletingId === expense.id}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Xác nhận xóa chi phí
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Bạn có chắc chắn muốn xóa chi phí này không? Hành
-                            động này không thể hoàn tác.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Hủy</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(expense.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Xóa
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
+            expenses.map((expense) => {
+              const isSalary = isTeacherSalaryExpense(expense);
+              return (
+                <TableRow key={expense.id}>
+                  <TableCell className="font-medium">
+                    {formatDate(expense.expense_date)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {formatVND(expense.amount)}
+                  </TableCell>
+                  <TableCell>{expense.reason}</TableCell>
+                  <TableCell className="text-right">
+                    {!isSalary ? (
+                      <div className="flex justify-end gap-2">
+                        <ExpenseForm expense={expense}>
+                          <Button variant="ghost" size="icon">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </ExpenseForm>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={deletingId === expense.id}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Xác nhận xóa chi phí
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Bạn có chắc chắn muốn xóa chi phí này không?
+                                Hành động này không thể hoàn tác.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Hủy</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(expense.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Xóa
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Tự động quản lý
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>

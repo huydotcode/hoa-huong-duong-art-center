@@ -106,7 +106,7 @@ export async function getRevenueData(): Promise<MonthlyStats[]> {
       });
   }
 
-  // Xử lý chi phí
+  // Xử lý chi phí (bao gồm cả lương giáo viên đã được sync vào expenses)
   expenses.data?.forEach((e) => {
     const key = `${e.year}-${e.month}`;
     if (!monthlyData[key]) {

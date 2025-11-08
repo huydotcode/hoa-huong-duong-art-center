@@ -6,6 +6,7 @@ export interface NavItem {
 export const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/dashboard", label: "Tổng quan" },
   { href: "/admin/teachers", label: "Giáo viên" },
+  { href: "/admin/teachers/salary", label: "Lương giáo viên" },
   { href: "/admin/students", label: "Học sinh" },
   { href: "/admin/classes", label: "Lớp học" },
   { href: "/admin/expenses", label: "Chi phí" },

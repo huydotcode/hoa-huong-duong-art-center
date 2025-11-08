@@ -16,9 +16,34 @@ function NavContent({ onLinkClick }: NavContentProps) {
   return (
     <nav className="flex flex-col gap-2 p-4">
       {ADMIN_NAV_ITEMS.map((item) => {
-        // Chỉ active khi exact match hoặc là sub-route (có "/" sau href)
-        const isActive =
-          pathname === item.href || pathname.startsWith(item.href + "/");
+        // Check exact match first
+        if (pathname === item.href) {
+          return (
+            <Button
+              key={item.href}
+              asChild
+              variant="secondary"
+              className="justify-start"
+              onClick={onLinkClick}
+            >
+              <Link href={item.href}>{item.label}</Link>
+            </Button>
+          );
+        }
+
+        // Check if pathname starts with this item's href + "/"
+        // But only if no other item has an exact match or is a more specific match
+        const isSubRoute = pathname.startsWith(item.href + "/");
+
+        // Check if there's a more specific route that matches
+        const hasMoreSpecificMatch = ADMIN_NAV_ITEMS.some(
+          (otherItem) =>
+            otherItem.href !== item.href &&
+            pathname.startsWith(otherItem.href) &&
+            otherItem.href.length > item.href.length
+        );
+
+        const isActive = isSubRoute && !hasMoreSpecificMatch;
 
         return (
           <Button
