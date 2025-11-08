@@ -128,11 +128,43 @@ export async function getClassById(id: string): Promise<Class | null> {
   return (data as Class) ?? null;
 }
 
+/**
+ * Check if a class name already exists (case-insensitive)
+ * @param name Class name to check
+ * @param excludeId Optional class ID to exclude from check (for update)
+ * @returns true if name exists, false otherwise
+ */
+export async function checkClassNameExists(
+  name: string,
+  excludeId?: string
+): Promise<boolean> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("classes")
+    .select("id", { count: "exact", head: true })
+    .ilike("name", name.trim()); // Case-insensitive search
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { count, error } = await query;
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 export async function createClass(
   data: CreateClassData,
   options?: { teacherIds?: string[]; path?: string }
 ): Promise<string> {
   const supabase = await createClient();
+
+  // Check if class name already exists
+  const nameExists = await checkClassNameExists(data.name);
+  if (nameExists) {
+    throw new Error("Tên lớp đã tồn tại. Vui lòng chọn tên khác.");
+  }
+
   const payload: CreateClassData = { ...data } as CreateClassData;
   const { data: inserted, error } = await supabase
     .from("classes")
@@ -163,6 +195,15 @@ export async function updateClass(
   path?: string
 ): Promise<void> {
   const supabase = await createClient();
+
+  // Check if class name already exists (exclude current class)
+  if (data.name) {
+    const nameExists = await checkClassNameExists(data.name, id);
+    if (nameExists) {
+      throw new Error("Tên lớp đã tồn tại. Vui lòng chọn tên khác.");
+    }
+  }
+
   const { error } = await supabase
     .from("classes")
     .update({ ...data })

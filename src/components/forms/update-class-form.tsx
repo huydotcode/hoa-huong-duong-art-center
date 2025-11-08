@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -31,7 +31,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateClass } from "@/lib/services/admin-classes-service";
+import {
+  updateClass,
+  checkClassNameExists,
+} from "@/lib/services/admin-classes-service";
 import { formatCurrencyVNDots } from "@/lib/utils";
 import {
   updateClassSchema,
@@ -48,6 +51,7 @@ interface Props {
 export function UpdateClassForm({ classData, children }: Props) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingName, setIsCheckingName] = useState(false);
   const router = useRouter();
   const path = usePathname();
 
@@ -83,6 +87,59 @@ export function UpdateClassForm({ classData, children }: Props) {
     },
   });
 
+  const className = form.watch("name");
+
+  // Check class name exists with debounce (exclude current class)
+  const checkName = useCallback(
+    async (name: string) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        form.clearErrors("name");
+        return;
+      }
+
+      // If name hasn't changed, don't check
+      if (trimmedName === classData.name) {
+        form.clearErrors("name");
+        return;
+      }
+
+      setIsCheckingName(true);
+      try {
+        const exists = await checkClassNameExists(trimmedName, classData.id);
+        if (exists) {
+          form.setError("name", {
+            type: "manual",
+            message: "Tên lớp đã tồn tại. Vui lòng chọn tên khác.",
+          });
+        } else {
+          form.clearErrors("name");
+        }
+      } catch (error) {
+        console.error("Error checking class name:", error);
+        // Don't show error to user for validation check failures
+      } finally {
+        setIsCheckingName(false);
+      }
+    },
+    [form, classData.id, classData.name]
+  );
+
+  // Debounce name checking
+  useEffect(() => {
+    if (!open) return; // Only check when dialog is open
+
+    const timer = setTimeout(() => {
+      if (className) {
+        checkName(className);
+      } else {
+        form.clearErrors("name");
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(timer);
+  }, [className, open, checkName, form]);
+
   // Reset form when dialog opens or classData changes
   useEffect(() => {
     if (open) {
@@ -101,11 +158,32 @@ export function UpdateClassForm({ classData, children }: Props) {
         end_date: classData.end_date,
         is_active: classData.is_active,
       });
+      setIsCheckingName(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, classData]);
 
   async function onSubmit(values: UpdateClassSchema) {
+    // Double check name before submitting if it has changed
+    if (values.name && values.name.trim() !== classData.name) {
+      try {
+        const nameExists = await checkClassNameExists(
+          values.name.trim(),
+          classData.id
+        );
+        if (nameExists) {
+          form.setError("name", {
+            type: "manual",
+            message: "Tên lớp đã tồn tại. Vui lòng chọn tên khác.",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Error checking class name:", error);
+        // Continue with submission if check fails
+      }
+    }
+
     setIsLoading(true);
     try {
       await updateClass(classData.id, values, path);
@@ -145,12 +223,20 @@ export function UpdateClassForm({ classData, children }: Props) {
                   <FormItem>
                     <FormLabel>Tên lớp</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Nhập tên lớp"
-                        autoComplete="off"
-                        list="class-name-suggestions"
-                        {...field}
-                      />
+                      <div className="relative">
+                        <Input
+                          placeholder="Nhập tên lớp"
+                          autoComplete="off"
+                          list="class-name-suggestions"
+                          {...field}
+                          disabled={isCheckingName}
+                        />
+                        {isCheckingName && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                          </div>
+                        )}
+                      </div>
                     </FormControl>
                     <datalist id="class-name-suggestions">
                       <option value="Piano" />

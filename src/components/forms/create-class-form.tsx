@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -25,7 +25,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { usePathname, useRouter } from "next/navigation";
-import { createClass } from "@/lib/services/admin-classes-service";
+import {
+  createClass,
+  checkClassNameExists,
+} from "@/lib/services/admin-classes-service";
 import {
   createClassSchema,
   type CreateClassSchema,
@@ -40,6 +43,7 @@ export function CreateClassForm({ children }: Props) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [durationMonths, setDurationMonths] = useState(3); // Local state for calculation only
+  const [isCheckingName, setIsCheckingName] = useState(false);
   const router = useRouter();
   const path = usePathname();
 
@@ -58,7 +62,80 @@ export function CreateClassForm({ children }: Props) {
     },
   });
 
+  const className = form.watch("name");
+
+  // Check class name exists with debounce
+  const checkName = useCallback(
+    async (name: string) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        form.clearErrors("name");
+        return;
+      }
+
+      setIsCheckingName(true);
+      try {
+        const exists = await checkClassNameExists(trimmedName);
+        if (exists) {
+          form.setError("name", {
+            type: "manual",
+            message: "Tên lớp đã tồn tại. Vui lòng chọn tên khác.",
+          });
+        } else {
+          form.clearErrors("name");
+        }
+      } catch (error) {
+        console.error("Error checking class name:", error);
+        // Don't show error to user for validation check failures
+      } finally {
+        setIsCheckingName(false);
+      }
+    },
+    [form]
+  );
+
+  // Debounce name checking
+  useEffect(() => {
+    if (!open) return; // Only check when dialog is open
+
+    const timer = setTimeout(() => {
+      if (className) {
+        checkName(className);
+      } else {
+        form.clearErrors("name");
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(timer);
+  }, [className, open, checkName, form]);
+
+  // Reset form and clear errors when dialog closes
+  useEffect(() => {
+    if (!open) {
+      form.reset();
+      form.clearErrors();
+      setIsCheckingName(false);
+    }
+  }, [open, form]);
+
   async function onSubmit(values: CreateClassSchema) {
+    // Double check name before submitting
+    if (values.name.trim()) {
+      try {
+        const nameExists = await checkClassNameExists(values.name.trim());
+        if (nameExists) {
+          form.setError("name", {
+            type: "manual",
+            message: "Tên lớp đã tồn tại. Vui lòng chọn tên khác.",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Error checking class name:", error);
+        // Continue with submission if check fails
+      }
+    }
+
     setIsLoading(true);
     try {
       // Ensure days_of_week is always an array and is_active is always boolean
@@ -105,12 +182,20 @@ export function CreateClassForm({ children }: Props) {
                   <FormItem>
                     <FormLabel>Tên lớp</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Nhập tên lớp"
-                        autoComplete="off"
-                        list="class-name-suggestions"
-                        {...field}
-                      />
+                      <div className="relative">
+                        <Input
+                          placeholder="Nhập tên lớp"
+                          autoComplete="off"
+                          list="class-name-suggestions"
+                          {...field}
+                          disabled={isCheckingName}
+                        />
+                        {isCheckingName && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                          </div>
+                        )}
+                      </div>
                     </FormControl>
                     <datalist id="class-name-suggestions">
                       <option value="Piano" />
