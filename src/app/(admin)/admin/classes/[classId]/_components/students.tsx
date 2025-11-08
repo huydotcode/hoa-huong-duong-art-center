@@ -267,7 +267,9 @@ export default function StudentsSection({
             {students.map((s) => (
               <Card
                 key={s.enrollment_id}
-                className="border p-3 cursor-pointer hover:bg-muted/50 relative pl-10"
+                className={`border p-3 cursor-pointer hover:bg-muted/50 relative pl-10 ${
+                  !s.student.is_active ? "opacity-60 bg-muted/30" : ""
+                }`}
                 onClick={() => setSelectedEnrollmentId(s.enrollment_id)}
               >
                 {/* Mobile item checkbox */}
@@ -304,17 +306,25 @@ export default function StudentsSection({
                       </p>
                     )}
                   </div>
-                  <Badge
-                    variant={
-                      s.status === "active"
-                        ? "default"
-                        : s.status === "trial"
-                          ? "outline"
-                          : "secondary"
-                    }
-                  >
-                    {formatEnrollmentStatus(s.status)}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-1 justify-end">
+                    <Badge
+                      variant={
+                        s.status === "active"
+                          ? "default"
+                          : s.status === "trial"
+                            ? "outline"
+                            : "secondary"
+                      }
+                      className="text-xs"
+                    >
+                      {formatEnrollmentStatus(s.status)}
+                    </Badge>
+                    {!s.student.is_active && (
+                      <Badge variant="destructive" className="text-xs">
+                        Đã ẩn
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </Card>
             ))}
@@ -356,7 +366,12 @@ export default function StudentsSection({
               </TableRow>
             ) : (
               students.map((s) => (
-                <TableRow key={s.enrollment_id}>
+                <TableRow
+                  key={s.enrollment_id}
+                  className={
+                    !s.student.is_active ? "opacity-60 bg-muted/30" : ""
+                  }
+                >
                   <TableCell className="w-[36px]">
                     <input
                       type="checkbox"
@@ -393,17 +408,25 @@ export default function StudentsSection({
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        s.status === "active"
-                          ? "default"
-                          : s.status === "trial"
-                            ? "outline"
-                            : "secondary"
-                      }
-                    >
-                      {formatEnrollmentStatus(s.status)}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge
+                        variant={
+                          s.status === "active"
+                            ? "default"
+                            : s.status === "trial"
+                              ? "outline"
+                              : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {formatEnrollmentStatus(s.status)}
+                      </Badge>
+                      {!s.student.is_active && (
+                        <Badge variant="destructive" className="text-xs">
+                          Đã ẩn
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
