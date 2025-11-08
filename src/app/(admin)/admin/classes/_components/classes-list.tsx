@@ -113,23 +113,36 @@ export default function ClassesList({
                   </div>
                 </div>
               </div>
-              <div className="mt-2 pt-2 border-t text-sm flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div>
-                    <span className="text-muted-foreground">GV:</span>{" "}
-                    {c.teachers_count}
-                    <span className="mx-2">•</span>
-                    <span className="text-muted-foreground">HS:</span>{" "}
-                    {c.current_student_count ?? c.students_count}/
-                    {c.max_student_count ?? "-"}
+              <div className="mt-2 pt-2 border-t text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div>
+                      <span className="text-muted-foreground">GV:</span>{" "}
+                      {c.teachers_count}
+                    </div>
+                    <span className="hidden sm:inline">•</span>
+                    <div>
+                      <span className="text-muted-foreground">HS:</span>{" "}
+                      {c.current_student_count ?? c.students_count}/
+                      {c.max_student_count ?? "-"}
+                    </div>
+                    <span className="hidden sm:inline">•</span>
+                    <div>
+                      <span className="text-muted-foreground">Doanh thu:</span>{" "}
+                      <span className="font-semibold">
+                        {formatCurrencyVN(
+                          (c.current_student_count ?? 0) * c.monthly_fee
+                        )}{" "}
+                        (dự kiến)
+                      </span>
+                    </div>
+                    {typeof c.current_student_count === "number" &&
+                      typeof c.max_student_count === "number" &&
+                      c.current_student_count >= c.max_student_count && (
+                        <Badge variant="destructive">Đã đầy</Badge>
+                      )}
                   </div>
-                  {typeof c.current_student_count === "number" &&
-                    typeof c.max_student_count === "number" &&
-                    c.current_student_count >= c.max_student_count && (
-                      <Badge variant="destructive">Đã đầy</Badge>
-                    )}
-                </div>
-                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
@@ -157,6 +170,7 @@ export default function ClassesList({
                     <Calendar className="h-3 w-3 mr-1" />
                     Xem lịch
                   </Button>
+                  </div>
                 </div>
               </div>
             </Card>

@@ -66,17 +66,31 @@ export default function OverviewSection({
               </div>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t text-sm flex items-center gap-2">
-            <div>
-              <span className="text-muted-foreground">GV:</span>{" "}
-              {teachers.length}
-              <span className="mx-2">•</span>
-              <span className="text-muted-foreground">HS:</span>{" "}
-              {cls.current_student_count}/{cls.max_student_count}
+          <div className="mt-3 pt-3 border-t text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <div>
+                <span className="text-muted-foreground">GV:</span>{" "}
+                {teachers.length}
+              </div>
+              <span>•</span>
+              <div>
+                <span className="text-muted-foreground">HS:</span>{" "}
+                {cls.current_student_count}/{cls.max_student_count}
+              </div>
+              <span>•</span>
+              <div>
+                <span className="text-muted-foreground">Doanh thu:</span>{" "}
+                <span className="font-semibold">
+                  {formatCurrencyVNDots(
+                    (cls.current_student_count ?? 0) * cls.monthly_fee
+                  )}{" "}
+                  (dự kiến)
+                </span>
+              </div>
+              {cls.current_student_count >= cls.max_student_count && (
+                <Badge variant="destructive">Đã đầy</Badge>
+              )}
             </div>
-            {cls.current_student_count >= cls.max_student_count && (
-              <Badge variant="destructive">Đã đầy</Badge>
-            )}
           </div>
         </Card>
       </div>
