@@ -109,6 +109,84 @@ export async function getAdminClassesInSession(
   });
 }
 
+export async function getAdminAllClassesInDay(
+  dateISO: string
+): Promise<AdminClassSession[]> {
+  const supabase = await createClient();
+
+  // Parse dateISO (YYYY-MM-DD) using UTC to avoid timezone issues
+  const [year, month, day] = dateISO.split("-").map(Number);
+  const dateObj = new Date(Date.UTC(year, month - 1, day));
+  const weekday = dateObj.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+  const { data: classesData } = await supabase
+    .from("classes")
+    .select("id, start_date, end_date, duration_minutes, days_of_week")
+    .eq("is_active", true);
+
+  const matchedSessions: AdminClassSession[] = [];
+
+  (Array.isArray(classesData)
+    ? (classesData as {
+        id: string;
+        start_date: string;
+        end_date: string;
+        duration_minutes: number;
+        days_of_week: unknown;
+      }[])
+    : []
+  ).forEach((c) => {
+    const start = new Date(String(c.start_date));
+    const end = new Date(String(c.end_date));
+    if (new Date(dateISO) < start || new Date(dateISO) > end) return;
+
+    let slots: { day: number; start_time: string; end_time?: string }[] = [];
+    try {
+      const parsed = Array.isArray(c.days_of_week)
+        ? c.days_of_week
+        : JSON.parse((c.days_of_week as string) || "[]");
+      slots = Array.isArray(parsed)
+        ? (parsed as { day: number; start_time: string; end_time?: string }[])
+        : [];
+    } catch {
+      slots = [];
+    }
+
+    // Lấy tất cả các slot trong ngày này (không lọc theo session)
+    slots.forEach(
+      (s: { day: number; start_time: string; end_time?: string }) => {
+        const slotDay = Number(s.day);
+        if (slotDay !== weekday) {
+          return;
+        }
+
+        const sessionTime = String(s.start_time || "00:00");
+        let endTime: string;
+        if (s.end_time) {
+          endTime = String(s.end_time);
+        } else {
+          const [startHour, startMin] = sessionTime.split(":").map(Number);
+          const duration = Number(c.duration_minutes || 60);
+          const startTotalMinutes = (startHour || 0) * 60 + (startMin || 0);
+          const endTotalMinutes = startTotalMinutes + duration;
+          const endHour = Math.floor(endTotalMinutes / 60) % 24;
+          const endMinute = endTotalMinutes % 60;
+          endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+        }
+
+        const classId = String(c.id);
+        matchedSessions.push({
+          classId,
+          sessionTime,
+          endTime,
+        });
+      }
+    );
+  });
+
+  return matchedSessions;
+}
+
 export type AdminAttendanceRow = {
   key: string; // `${kind}:${id}:${classId}`
   id: string;
@@ -234,8 +312,11 @@ export async function getAttendanceStateForSessions(
   const sessionTimes = Array.from(
     new Set(classSessions.map((item) => item.sessionTime))
   );
-  const sessionLookup = new Map(
-    classSessions.map((item) => [item.classId, item.sessionTime])
+
+  // Create a set of valid (classId, sessionTime) pairs for faster lookup
+  // This supports multiple sessions for the same class
+  const validSessions = new Set(
+    classSessions.map((item) => `${item.classId}::${item.sessionTime}`)
   );
 
   const { data, error } = await supabase
@@ -263,8 +344,9 @@ export async function getAttendanceStateForSessions(
     const classId = row.class_id ? String(row.class_id) : null;
     const session = row.session_time ? String(row.session_time) : null;
     if (!classId || !session) continue;
-    const expectedSession = sessionLookup.get(classId);
-    if (!expectedSession || expectedSession !== session) continue;
+
+    // Check if this (classId, sessionTime) combination is in our valid sessions
+    if (!validSessions.has(`${classId}::${session}`)) continue;
 
     let baseKey: string | null = null;
     if (row.student_id) {

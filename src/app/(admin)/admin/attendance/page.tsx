@@ -1,5 +1,6 @@
 import {
   getAdminClassesInSession,
+  getAdminAllClassesInDay,
   getParticipantsForClasses,
   getAttendanceStateForSessions,
 } from "@/lib/services/admin-attendance-service";
@@ -15,9 +16,9 @@ function normalizeToHourSlot(time: string): string {
 export default async function AdminAttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; session?: string }>;
+  searchParams: Promise<{ date?: string; session?: string; showAll?: string }>;
 }) {
-  const { date, session } = await searchParams;
+  const { date, session, showAll } = await searchParams;
   const dateISO = (date ? new Date(date) : new Date())
     .toISOString()
     .slice(0, 10);
@@ -25,14 +26,38 @@ export default async function AdminAttendancePage({
     ? session
     : normalizeToHourSlot(getCurrentSessionLabel());
 
-  const classSessions = await getAdminClassesInSession(dateISO, sessionLabel);
+  const showAllClasses = showAll === "true";
+
+  // Nếu showAll = true, lấy tất cả các lớp trong ngày
+  // Nếu không, lấy theo ca như cũ
+  const classSessions = showAllClasses
+    ? await getAdminAllClassesInDay(dateISO)
+    : await getAdminClassesInSession(dateISO, sessionLabel);
+
   const classIds = classSessions.map((item) => item.classId);
-  const classSessionTimes = Object.fromEntries(
-    classSessions.map((item) => [
-      item.classId,
-      { sessionTime: item.sessionTime, endTime: item.endTime },
-    ])
-  );
+  // Tạo map với key là classId, nhưng lưu tất cả các ca (vì một lớp có thể có nhiều ca)
+  // Khi có nhiều ca, sẽ lấy ca đầu tiên để hiển thị default, nhưng client sẽ xử lý để hiển thị tất cả
+  const classSessionTimesMap = new Map<
+    string,
+    { sessionTime: string; endTime: string }[]
+  >();
+  classSessions.forEach((item) => {
+    const existing = classSessionTimesMap.get(item.classId) || [];
+    existing.push({ sessionTime: item.sessionTime, endTime: item.endTime });
+    classSessionTimesMap.set(item.classId, existing);
+  });
+
+  // Convert to object format expected by client
+  // For multiple sessions, we'll pass all of them and client will handle grouping
+  const classSessionTimes: Record<
+    string,
+    { sessionTime: string; endTime: string }
+  > = {};
+  classSessionTimesMap.forEach((sessions, classId) => {
+    // Use first session as default, but we'll pass all sessions in the data
+    classSessionTimes[classId] = sessions[0];
+  });
+
   const { classes, rows } = await getParticipantsForClasses(classIds);
   const attendanceState = await getAttendanceStateForSessions(
     dateISO,
@@ -48,9 +73,11 @@ export default async function AdminAttendancePage({
         dateISO={dateISO}
         sessionLabel={sessionLabel}
         classSessionTimes={classSessionTimes}
+        classSessions={classSessions}
         classes={classes}
         rows={rows}
         initialState={attendanceState}
+        showAllClasses={showAllClasses}
       />
     </div>
   );
