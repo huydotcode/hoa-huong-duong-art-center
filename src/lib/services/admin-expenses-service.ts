@@ -221,28 +221,41 @@ export async function syncTeacherSalaryExpense(
 
   if (totalSalary === 0) {
     // Nếu không có lương và đã có expense lương thì xóa
+    // Xóa trực tiếp bằng Supabase vì đây là internal operation
+    // và không nên qua deleteExpense (sẽ bị chặn bởi protection check)
     if (existingExpense) {
-      await deleteExpense(existingExpense.id, path);
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("id", existingExpense.id);
+
+      if (error) throw error;
+
+      if (path) revalidatePath(path);
     }
     return;
   }
 
   if (existingExpense) {
     // Update nếu đã tồn tại
-    const needsUpdate =
-      Number(existingExpense.amount) !== totalSalary ||
-      existingExpense.reason !== reason;
+    // Chỉ update amount vì reason, expense_date, month, year không nên thay đổi
+    // (chúng được xác định bởi month và year)
+    const needsUpdate = Number(existingExpense.amount) !== totalSalary;
 
     if (needsUpdate) {
-      await updateExpense(
-        existingExpense.id,
-        {
+      // Update trực tiếp bằng Supabase để bypass protection check
+      // vì đây là internal operation của sync function
+      const { error } = await supabase
+        .from("expenses")
+        .update({
           amount: totalSalary,
-          reason: reason,
-          expense_date: expenseDate,
-        },
-        path
-      );
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingExpense.id);
+
+      if (error) throw error;
+
+      if (path) revalidatePath(path);
     }
   } else {
     // Create mới nếu chưa có
