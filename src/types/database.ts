@@ -334,6 +334,21 @@ export interface DashboardStats {
   classes: number;
 }
 
+// ========== REPORTS ==========
+
+export interface ClassRevenueItem {
+  classId: string;
+  className: string;
+  month: number;
+  year: number;
+  totalRevenue: number;
+  paidCount: number;
+  unpaidCount: number;
+  totalStudents: number;
+  startDate: string | null;
+  endDate: string | null;
+}
+
 // ========== TEACHER SALARY ==========
 
 export interface TeacherSalaryDetail {

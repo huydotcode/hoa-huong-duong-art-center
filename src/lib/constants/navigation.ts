@@ -12,6 +12,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/tuition", label: "Học phí" },
   { href: "/admin/expenses", label: "Chi phí" },
   { href: "/admin/attendance", label: "Điểm danh" },
+  { href: "/admin/reports", label: "Báo cáo" },
 ];
 
 export const TEACHER_NAV_ITEMS: NavItem[] = [
