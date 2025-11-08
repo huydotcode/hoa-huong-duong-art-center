@@ -6,6 +6,46 @@ export default async function DashboardPage() {
   const stats = await getStats();
   const revenueData = await getRevenueData();
 
+  // Lấy 3 tháng liền kề gần nhất (tháng hiện tại và 2 tháng trước)
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+
+  // Tạo danh sách 3 tháng gần nhất (từ cũ đến mới)
+  const targetMonths: string[] = [];
+  for (let i = 2; i >= 0; i--) {
+    let month = currentMonth - i;
+    let year = currentYear;
+
+    // Xử lý trường hợp tháng < 1 (lùi về năm trước)
+    while (month < 1) {
+      month += 12;
+      year -= 1;
+    }
+
+    targetMonths.push(`${month}/${year}`);
+  }
+
+  // Tạo Map để tra cứu nhanh
+  const dataMap = new Map(revenueData.map((item) => [item.month, item]));
+
+  // Lấy dữ liệu cho 3 tháng, nếu không có thì tạo object rỗng
+  const sortedAndFiltered = targetMonths.map((monthKey) => {
+    const existing = dataMap.get(monthKey);
+    if (existing) {
+      return existing;
+    }
+    // Nếu không có dữ liệu, trả về object với giá trị 0
+    return {
+      month: monthKey,
+      newStudents: 0,
+      leftStudents: 0,
+      revenue: 0,
+      expenses: 0,
+      profit: 0,
+    };
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -107,12 +147,12 @@ export default async function DashboardPage() {
         {/* Charts (responsive for all breakpoints) */}
         <CardContent className="p-2 md:p-4">
           <ChartsSection
-            studentsData={revenueData.map((r) => ({
+            studentsData={sortedAndFiltered.map((r) => ({
               month: r.month,
               newStudents: r.newStudents,
               leftStudents: r.leftStudents,
             }))}
-            financeData={revenueData.map((r) => ({
+            financeData={sortedAndFiltered.map((r) => ({
               month: r.month,
               revenue: r.revenue,
               expenses: r.expenses,
