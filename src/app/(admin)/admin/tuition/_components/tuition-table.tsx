@@ -11,7 +11,7 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil } from "lucide-react";
+import { Pencil, CheckCircle2, Circle } from "lucide-react";
 import type { TuitionItem } from "@/lib/services/admin-payment-service";
 import {
   formatVND,
@@ -24,6 +24,7 @@ interface TuitionTableProps {
   tuitionData: TuitionItem[];
   onCreatePayment: (item: TuitionItem) => void;
   onEditPayment: (item: TuitionItem) => void;
+  onTogglePayment?: (item: TuitionItem) => Promise<void>;
   className?: string; // Tên lớp (optional, để hiển thị trong header)
   showClassHeader?: boolean; // Có hiển thị header với tên lớp không
 }
@@ -32,6 +33,7 @@ export default function TuitionTable({
   tuitionData,
   onCreatePayment,
   onEditPayment,
+  onTogglePayment,
   className,
   showClassHeader = false,
 }: TuitionTableProps) {
@@ -190,23 +192,49 @@ export default function TuitionTable({
                     </TableCell>
                     <TableCell>{getStatusBadge(item)}</TableCell>
                     <TableCell className="text-right">
-                      {item.paymentStatusId === null ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onCreatePayment(item)}
-                        >
-                          Tạo học phí
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onEditPayment(item)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Toggle button - chỉ hiển thị khi đã có payment_status */}
+                        {item.paymentStatusId !== null && onTogglePayment && (
+                          <Button
+                            variant={item.isPaid ? "outline" : "default"}
+                            size="sm"
+                            className="gap-2"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await onTogglePayment(item);
+                            }}
+                          >
+                            {item.isPaid ? (
+                              <>
+                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                Đã đóng
+                              </>
+                            ) : (
+                              <>Đóng học phí</>
+                            )}
+                          </Button>
+                        )}
+
+                        {/* Existing buttons */}
+                        {item.paymentStatusId === null ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onCreatePayment(item)}
+                          >
+                            Tạo học phí
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onEditPayment(item)}
+                            title="Chỉnh sửa"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

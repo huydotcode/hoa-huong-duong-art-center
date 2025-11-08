@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Pencil } from "lucide-react";
+import { Pencil, CheckCircle2, Circle } from "lucide-react";
 import type { TuitionItem } from "@/lib/services/admin-payment-service";
 import { formatVND, formatEnrollmentStatus } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +11,14 @@ interface TuitionCardsProps {
   tuitionData: TuitionItem[];
   onCreatePayment: (item: TuitionItem) => void;
   onEditPayment: (item: TuitionItem) => void;
+  onTogglePayment?: (item: TuitionItem) => Promise<void>;
 }
 
 export default function TuitionCards({
   tuitionData,
   onCreatePayment,
   onEditPayment,
+  onTogglePayment,
 }: TuitionCardsProps) {
   const getStatusBadge = (item: TuitionItem) => {
     if (item.paymentStatusId === null) {
@@ -125,7 +127,32 @@ export default function TuitionCards({
                 </div>
                 <div className="mt-2">{getStatusBadge(item)}</div>
               </div>
-              <div className="ml-2">
+              <div className="ml-2 flex items-center gap-2">
+                {/* Toggle button - chỉ hiển thị khi đã có payment_status */}
+                {item.paymentStatusId !== null && onTogglePayment && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await onTogglePayment(item);
+                    }}
+                    title={
+                      item.isPaid
+                        ? "Đã đóng - Click để hủy"
+                        : "Chưa đóng - Click để đóng"
+                    }
+                  >
+                    {item.isPaid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
+                )}
+
+                {/* Existing buttons */}
                 {item.paymentStatusId === null ? (
                   <Button
                     variant="outline"
@@ -140,6 +167,7 @@ export default function TuitionCards({
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => onEditPayment(item)}
+                    title="Chỉnh sửa"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>

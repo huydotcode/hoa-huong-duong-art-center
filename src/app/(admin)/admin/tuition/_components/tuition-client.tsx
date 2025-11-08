@@ -6,13 +6,15 @@ import type {
   TuitionItem,
   TuitionSummary,
 } from "@/lib/services/admin-payment-service";
+import { togglePaymentStatus } from "@/lib/services/admin-payment-service";
 import { formatDateRange } from "@/lib/utils";
 import TuitionFilter from "./tuition-filter";
 import TuitionTable from "./tuition-table";
 import TuitionCards from "./tuition-cards";
 import { PaymentForm } from "./payment-form";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { toast } from "sonner";
 
 interface TuitionClientProps {
   initialTuitionData: TuitionItem[];
@@ -45,6 +47,7 @@ export default function TuitionClient({
   const [tuitionData, setTuitionData] =
     useState<TuitionItem[]>(initialTuitionData);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Sync local state với initialTuitionData khi props thay đổi (sau khi refresh)
   useEffect(() => {
@@ -128,6 +131,33 @@ export default function TuitionClient({
     }, 1000);
   };
 
+  // Toggle payment status (đóng/hủy đóng) nhanh
+  const handleTogglePayment = async (item: TuitionItem) => {
+    try {
+      const updatedItem = await togglePaymentStatus(
+        item,
+        initialMonth,
+        initialYear,
+        pathname
+      );
+
+      // Optimistic update
+      handlePaymentUpdate(updatedItem);
+
+      toast.success(
+        updatedItem.isPaid
+          ? "Đã đánh dấu đóng học phí"
+          : "Đã hủy đánh dấu đóng học phí"
+      );
+    } catch (error) {
+      console.error("Error toggling payment:", error);
+      toast.error("Lỗi khi cập nhật trạng thái", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6 relative">
       {/* Floating loading spinner */}
@@ -180,6 +210,7 @@ export default function TuitionClient({
                   tuitionData={group.items}
                   onCreatePayment={handleCreatePayment}
                   onEditPayment={handleEditPayment}
+                  onTogglePayment={handleTogglePayment}
                   className={group.className}
                   showClassHeader={true}
                 />
@@ -212,6 +243,7 @@ export default function TuitionClient({
                   tuitionData={group.items}
                   onCreatePayment={handleCreatePayment}
                   onEditPayment={handleEditPayment}
+                  onTogglePayment={handleTogglePayment}
                 />
               </Card>
             ))}

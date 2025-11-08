@@ -505,6 +505,57 @@ export async function bulkUpdatePaymentStatus(
 }
 
 /**
+ * Toggle payment status (đóng/hủy đóng) nhanh
+ * Nếu chưa có payment_status, tạo mới với is_paid = true
+ * Nếu đã có, toggle is_paid giữa true/false
+ */
+export async function togglePaymentStatus(
+  item: TuitionItem,
+  month: number,
+  year: number,
+  path?: string
+): Promise<TuitionItem> {
+  if (!item.paymentStatusId) {
+    // Chưa có payment_status, tạo mới với is_paid = true
+    const paymentStatusId = await createPaymentStatus(
+      {
+        student_id: item.studentId,
+        class_id: item.classId,
+        month,
+        year,
+        amount: item.monthlyFee,
+        is_paid: true,
+      },
+      path
+    );
+
+    return {
+      ...item,
+      paymentStatusId,
+      amount: item.monthlyFee,
+      isPaid: true,
+      paidAt: new Date().toISOString(),
+    };
+  } else {
+    // Đã có payment_status, toggle is_paid
+    const newIsPaid = !item.isPaid;
+    await updatePaymentStatus(
+      item.paymentStatusId,
+      {
+        is_paid: newIsPaid,
+      },
+      path
+    );
+
+    return {
+      ...item,
+      isPaid: newIsPaid,
+      paidAt: newIsPaid ? new Date().toISOString() : null,
+    };
+  }
+}
+
+/**
  * Tự động tạo payment status cho học sinh chưa có trong tháng/năm
  */
 export async function syncTuitionPaymentStatus(
