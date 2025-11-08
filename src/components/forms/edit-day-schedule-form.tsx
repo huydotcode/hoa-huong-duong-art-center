@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -29,10 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { usePathname, useRouter } from "next/navigation";
 import { updateClassDaySchedule } from "@/lib/services/admin-classes-service";
 import { type Class } from "@/types";
-import { X, Plus } from "lucide-react";
+import { X, Plus, AlertCircle } from "lucide-react";
 import { toArray } from "@/lib/utils";
 import { calculateEndTime as calculateEndTimeUtil } from "@/lib/utils/time";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -52,6 +53,33 @@ const dayScheduleSchema = z.object({
     .string()
     .regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, "Giờ không hợp lệ (HH:MM)"),
 });
+
+// Helper function to convert time string to minutes
+const timeToMinutes = (time: string): number => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+// Helper function to check if two time ranges overlap
+const doRangesOverlap = (
+  start1: string,
+  end1: string,
+  start2: string,
+  end2: string
+): boolean => {
+  const start1Min = timeToMinutes(start1);
+  const end1Min = timeToMinutes(end1);
+  const start2Min = timeToMinutes(start2);
+  const end2Min = timeToMinutes(end2);
+
+  // Check if ranges overlap (not just touching)
+  return start1Min < end2Min && start2Min < end1Min;
+};
+
+// Helper function to calculate duration in minutes
+const calculateDuration = (startTime: string, endTime: string): number => {
+  return timeToMinutes(endTime) - timeToMinutes(startTime);
+};
 
 const editDayScheduleSchema = z
   .object({
@@ -90,6 +118,46 @@ const editDayScheduleSchema = z
     },
     {
       message: "Giờ kết thúc phải sau giờ bắt đầu.",
+      path: ["times"],
+    }
+  )
+  .refine(
+    (data) => {
+      // Check minimum duration (30 minutes)
+      for (const item of data.times) {
+        const duration = calculateDuration(item.start_time, item.end_time);
+        if (duration < 30) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message: "Thời lượng mỗi ca học phải ít nhất 30 phút.",
+      path: ["times"],
+    }
+  )
+  .refine(
+    (data) => {
+      // Check for overlapping time ranges
+      for (let i = 0; i < data.times.length; i++) {
+        for (let j = i + 1; j < data.times.length; j++) {
+          if (
+            doRangesOverlap(
+              data.times[i].start_time,
+              data.times[i].end_time,
+              data.times[j].start_time,
+              data.times[j].end_time
+            )
+          ) {
+            return false;
+          }
+        }
+      }
+      return true;
+    },
+    {
+      message: "Các khung giờ không được chồng chéo nhau.",
       path: ["times"],
     }
   );
@@ -132,30 +200,37 @@ export function EditDayScheduleForm({
   const [selectedQuickTime, setSelectedQuickTime] = useState<
     string | undefined
   >(undefined);
+  const [autoCalculateEndTime, setAutoCalculateEndTime] = useState(true);
   const router = useRouter();
   const path = usePathname();
 
   // Helper function to calculate end time using class duration
-  const calculateEndTime = (startTime: string): string => {
-    return calculateEndTimeUtil(startTime, classData.duration_minutes);
-  };
+  const calculateEndTime = useCallback(
+    (startTime: string): string => {
+      return calculateEndTimeUtil(startTime, classData.duration_minutes);
+    },
+    [classData.duration_minutes]
+  );
 
-  // Get existing times for this day
-  const parsedDaysOfWeek = toArray<{
-    day: number;
-    start_time: string;
-    end_time?: string;
-  }>(classData.days_of_week);
-  const existingTimes = parsedDaysOfWeek
-    .filter((item) => item.day === day)
-    .map((item) => {
-      // Nếu đã có end_time trong DB thì dùng, nếu không thì tính từ duration_minutes (gợi ý)
-      const endTime = item.end_time || calculateEndTime(item.start_time);
-      return {
-        start_time: item.start_time,
-        end_time: endTime,
-      };
-    });
+  // Memoize existing times to avoid recalculation
+  const existingTimes = useMemo(() => {
+    const parsedDaysOfWeek = toArray<{
+      day: number;
+      start_time: string;
+      end_time?: string;
+    }>(classData.days_of_week);
+
+    return parsedDaysOfWeek
+      .filter((item) => item.day === day)
+      .map((item) => {
+        // Nếu đã có end_time trong DB thì dùng, nếu không thì tính từ duration_minutes
+        const endTime = item.end_time || calculateEndTime(item.start_time);
+        return {
+          start_time: item.start_time,
+          end_time: endTime,
+        };
+      });
+  }, [classData.days_of_week, day, calculateEndTime]);
 
   const form = useForm<EditDayScheduleSchema>({
     resolver: zodResolver(editDayScheduleSchema),
@@ -172,6 +247,7 @@ export function EditDayScheduleForm({
   // Watch form values to auto-sort
   const watchedTimes = form.watch("times");
 
+  // Auto-sort times when they change
   useEffect(() => {
     if (watchedTimes && watchedTimes.length > 1) {
       const sorted = [...watchedTimes].sort((a, b) =>
@@ -186,30 +262,25 @@ export function EditDayScheduleForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedTimes]);
 
-  // Handle start time change - KHÔNG tự động tính end_time (duration_minutes chỉ là gợi ý)
-  const handleStartTimeChange = (index: number, newStartTime: string) => {
-    form.setValue(`times.${index}.start_time`, newStartTime);
-    form.trigger("times");
-  };
+  // Handle start time change - auto-calculate end_time if enabled
+  const handleStartTimeChange = useCallback(
+    (index: number, newStartTime: string) => {
+      form.setValue(`times.${index}.start_time`, newStartTime);
+      if (autoCalculateEndTime) {
+        const calculatedEndTime = calculateEndTime(newStartTime);
+        form.setValue(`times.${index}.end_time`, calculatedEndTime);
+      }
+      // Trigger validation after a short delay to avoid race conditions
+      requestAnimationFrame(() => {
+        form.trigger("times");
+      });
+    },
+    [form, autoCalculateEndTime, calculateEndTime]
+  );
 
   // Reset form when dialog opens or day changes
   useEffect(() => {
     if (open) {
-      const parsedDaysOfWeek = toArray<{
-        day: number;
-        start_time: string;
-        end_time?: string;
-      }>(classData.days_of_week);
-      const existingTimes = parsedDaysOfWeek
-        .filter((item) => item.day === day)
-        .map((item) => {
-          // Nếu đã có end_time trong DB thì dùng, nếu không thì tính từ duration_minutes (gợi ý)
-          const endTime = item.end_time || calculateEndTime(item.start_time);
-          return {
-            start_time: item.start_time,
-            end_time: endTime,
-          };
-        });
       form.reset({
         times: existingTimes.length > 0 ? existingTimes : [],
       });
@@ -217,7 +288,66 @@ export function EditDayScheduleForm({
       setSelectedQuickTime(undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, day]);
+  }, [open, day, existingTimes]);
+
+  // Filter available quick times (exclude already added ones)
+  const currentTimes = form.watch("times");
+  const availableQuickTimes = useMemo(() => {
+    const currentStartTimes = new Set(currentTimes.map((t) => t.start_time));
+    return quickTimes.filter((slot) => !currentStartTimes.has(slot.start));
+  }, [currentTimes]);
+
+  // Handle quick time selection
+  const handleQuickTimeSelect = useCallback(
+    (value: string) => {
+      setSelectedQuickTime(value);
+      const slot = quickTimes.find((s) => `${s.start}-${s.end}` === value);
+      if (slot) {
+        const currentTimes = form.getValues("times");
+        // Check if time already exists
+        if (currentTimes.some((t) => t.start_time === slot.start)) {
+          toast.warning("Khung giờ này đã tồn tại", {
+            description: `Đã có khung giờ bắt đầu từ ${slot.start}`,
+          });
+          setSelectedQuickTime(undefined);
+          return;
+        }
+        append({
+          start_time: slot.start,
+          end_time: slot.end,
+        });
+        requestAnimationFrame(() => {
+          form.trigger("times");
+        });
+      }
+      // Reset selection
+      setSelectedQuickTime(undefined);
+    },
+    [form, append]
+  );
+
+  // Check for overlapping times
+  const getOverlapErrors = useCallback(() => {
+    const times = currentTimes;
+    const overlaps: Array<{ index1: number; index2: number }> = [];
+    for (let i = 0; i < times.length; i++) {
+      for (let j = i + 1; j < times.length; j++) {
+        if (
+          doRangesOverlap(
+            times[i].start_time,
+            times[i].end_time,
+            times[j].start_time,
+            times[j].end_time
+          )
+        ) {
+          overlaps.push({ index1: i, index2: j });
+        }
+      }
+    }
+    return overlaps;
+  }, [currentTimes]);
+
+  const overlapErrors = getOverlapErrors();
 
   async function onSubmit(values: EditDayScheduleSchema) {
     setIsLoading(true);
@@ -226,7 +356,7 @@ export function EditDayScheduleForm({
       const daySchedules = values.times.map((t) => ({
         day,
         start_time: t.start_time,
-        end_time: t.end_time, // Lưu end_time vào database
+        end_time: t.end_time,
       }));
       // Pass day parameter to handle empty array case (when deleting all schedules)
       await updateClassDaySchedule(classData.id, daySchedules, path, day);
@@ -260,6 +390,29 @@ export function EditDayScheduleForm({
             className="space-y-4"
             autoComplete="off"
           >
+            {/* Auto-calculate end time option */}
+            <div className="flex items-center space-x-2 rounded-md border p-3">
+              <Checkbox
+                id="auto-calculate"
+                checked={autoCalculateEndTime}
+                onCheckedChange={(checked) =>
+                  setAutoCalculateEndTime(checked === true)
+                }
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="auto-calculate"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Tự động tính giờ kết thúc
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Tự động tính giờ kết thúc dựa trên thời lượng lớp học (
+                  {classData.duration_minutes} phút) khi thay đổi giờ bắt đầu
+                </p>
+              </div>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <FormLabel>Khung giờ học</FormLabel>
@@ -275,43 +428,42 @@ export function EditDayScheduleForm({
                 </FormLabel>
                 <Select
                   value={selectedQuickTime}
-                  onValueChange={(value) => {
-                    setSelectedQuickTime(value);
-                    const slot = quickTimes.find(
-                      (s) => `${s.start}-${s.end}` === value
-                    );
-                    if (slot) {
-                      const currentTimes = form.getValues("times");
-                      // Check if time already exists
-                      if (
-                        !currentTimes.some((t) => t.start_time === slot.start)
-                      ) {
-                        append({
-                          start_time: slot.start,
-                          end_time: slot.end,
-                        });
-                        setTimeout(() => form.trigger("times"), 0);
-                      }
-                      // Reset selection
-                      setSelectedQuickTime(undefined);
-                    }
-                  }}
+                  onValueChange={handleQuickTimeSelect}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Chọn khung giờ" />
                   </SelectTrigger>
                   <SelectContent>
-                    {quickTimes.map((slot, idx) => (
-                      <SelectItem
-                        key={`${slot.start}-${slot.end}-${idx}`}
-                        value={`${slot.start}-${slot.end}`}
-                      >
-                        {slot.label}
-                      </SelectItem>
-                    ))}
+                    {availableQuickTimes.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        Tất cả khung giờ đã được thêm
+                      </div>
+                    ) : (
+                      availableQuickTimes.map((slot, idx) => (
+                        <SelectItem
+                          key={`${slot.start}-${slot.end}-${idx}`}
+                          value={`${slot.start}-${slot.end}`}
+                        >
+                          {slot.label}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Overlap warning */}
+              {overlapErrors.length > 0 && (
+                <div className="mb-3 rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <div className="text-sm text-destructive">
+                      Có {overlapErrors.length} cặp khung giờ bị chồng chéo. Vui
+                      lòng kiểm tra lại.
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-2 space-y-2">
                 {fields.length === 0 && (
@@ -321,85 +473,118 @@ export function EditDayScheduleForm({
                   </p>
                 )}
                 {fields.length > 0 && (
-                  <div className="hidden sm:grid grid-cols-2 gap-2 mb-1 px-1">
+                  <div className="hidden sm:grid grid-cols-3 gap-2 mb-1 px-1">
                     <FormLabel className="text-xs text-muted-foreground">
                       Bắt đầu
                     </FormLabel>
                     <FormLabel className="text-xs text-muted-foreground">
                       Kết thúc
                     </FormLabel>
+                    <FormLabel className="text-xs text-muted-foreground">
+                      Thời lượng
+                    </FormLabel>
                   </div>
                 )}
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="relative flex flex-col sm:flex-row sm:items-center gap-2"
-                  >
-                    {/* Delete button - positioned top right on mobile, inline on desktop */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-1 w-full pr-8 sm:pr-0 sm:flex-1">
-                      <div className="flex flex-col sm:flex-1 w-full">
-                        <FormLabel className="text-xs text-muted-foreground mb-1 sm:hidden">
-                          Bắt đầu
-                        </FormLabel>
-                        <FormField
-                          control={form.control}
-                          name={`times.${index}.start_time`}
-                          render={({ field }) => (
-                            <FormItem className="w-full">
-                              <FormControl>
-                                <TimePicker
-                                  value={field.value || "08:00"}
-                                  onChange={(value) => {
-                                    handleStartTimeChange(index, value);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <span className="hidden sm:inline text-muted-foreground font-medium shrink-0 mx-1">
-                        -
-                      </span>
-                      <div className="flex flex-col sm:flex-1 w-full">
-                        <FormLabel className="text-xs text-muted-foreground mb-1 sm:hidden">
-                          Kết thúc
-                        </FormLabel>
-                        <FormField
-                          control={form.control}
-                          name={`times.${index}.end_time`}
-                          render={({ field }) => (
-                            <FormItem className="w-full">
-                              <FormControl>
-                                <TimePicker
-                                  value={field.value || "09:00"}
-                                  onChange={(value) => {
-                                    field.onChange(value);
-                                    form.trigger("times");
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        remove(index);
-                        setTimeout(() => form.trigger("times"), 0);
-                      }}
-                      className="absolute top-0 right-0 sm:relative sm:top-auto sm:right-auto shrink-0 z-10"
+                {fields.map((field, index) => {
+                  const startTime = form.watch(`times.${index}.start_time`);
+                  const endTime = form.watch(`times.${index}.end_time`);
+                  const duration =
+                    startTime && endTime
+                      ? calculateDuration(startTime, endTime)
+                      : 0;
+                  const hasOverlap = overlapErrors.some(
+                    (err) => err.index1 === index || err.index2 === index
+                  );
+
+                  return (
+                    <div
+                      key={field.id}
+                      className={`relative flex flex-col sm:flex-row sm:items-center gap-2 p-2 rounded-md border ${
+                        hasOverlap ? "border-destructive bg-destructive/5" : ""
+                      }`}
                     >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                      {/* Delete button - positioned top right on mobile, inline on desktop */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-1 w-full pr-8 sm:pr-0 sm:flex-1">
+                        <div className="flex flex-col sm:flex-1 w-full">
+                          <FormLabel className="text-xs text-muted-foreground mb-1 sm:hidden">
+                            Bắt đầu
+                          </FormLabel>
+                          <FormField
+                            control={form.control}
+                            name={`times.${index}.start_time`}
+                            render={({ field }) => (
+                              <FormItem className="w-full">
+                                <FormControl>
+                                  <TimePicker
+                                    value={field.value || "08:00"}
+                                    onChange={(value) => {
+                                      handleStartTimeChange(index, value);
+                                    }}
+                                    aria-label={`Giờ bắt đầu ca ${index + 1}`}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <span className="hidden sm:inline text-muted-foreground font-medium shrink-0 mx-1">
+                          -
+                        </span>
+                        <div className="flex flex-col sm:flex-1 w-full">
+                          <FormLabel className="text-xs text-muted-foreground mb-1 sm:hidden">
+                            Kết thúc
+                          </FormLabel>
+                          <FormField
+                            control={form.control}
+                            name={`times.${index}.end_time`}
+                            render={({ field }) => (
+                              <FormItem className="w-full">
+                                <FormControl>
+                                  <TimePicker
+                                    value={field.value || "09:00"}
+                                    onChange={(value) => {
+                                      field.onChange(value);
+                                      requestAnimationFrame(() => {
+                                        form.trigger("times");
+                                      });
+                                    }}
+                                    aria-label={`Giờ kết thúc ca ${index + 1}`}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        {/* Duration preview */}
+                        <div className="flex flex-col sm:flex-1 w-full sm:items-center">
+                          <FormLabel className="text-xs text-muted-foreground mb-1 sm:hidden">
+                            Thời lượng
+                          </FormLabel>
+                          <div className="text-xs text-muted-foreground font-medium mt-2 sm:mt-0">
+                            {duration > 0 ? `${duration} phút` : "-"}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          remove(index);
+                          requestAnimationFrame(() => {
+                            form.trigger("times");
+                          });
+                        }}
+                        className="absolute top-2 right-2 sm:relative sm:top-auto sm:right-auto shrink-0 z-10"
+                        aria-label={`Xóa ca ${index + 1}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
                 <Button
                   type="button"
                   variant="outline"
@@ -409,7 +594,9 @@ export function EditDayScheduleForm({
                       start_time: "08:00",
                       end_time: calculateEndTime("08:00"),
                     });
-                    setTimeout(() => form.trigger("times"), 0);
+                    requestAnimationFrame(() => {
+                      form.trigger("times");
+                    });
                   }}
                   className="w-full"
                 >
@@ -437,7 +624,7 @@ export function EditDayScheduleForm({
               </Button>
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || overlapErrors.length > 0}
                 className="w-full sm:w-auto"
               >
                 {isLoading ? "Đang lưu..." : "Lưu"}
