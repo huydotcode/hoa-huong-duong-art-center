@@ -209,7 +209,7 @@ export async function getMonthlyRevenueData(
     .from("payment_status")
     .select("month, year, class_id, is_paid, amount");
 
-  let expenseQuery = supabase.from("expenses").select("month, year, amount");
+  const expenseQuery = supabase.from("expenses").select("month, year, amount");
 
   // Filter by classIds if provided
   if (classIds && classIds.length > 0) {
