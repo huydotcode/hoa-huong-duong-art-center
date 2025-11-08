@@ -103,6 +103,14 @@ export default function AdminAttendanceMatrix({
       next.add(cellKey);
       return next;
     });
+
+    // Thêm toast loading
+    const personType = row.kind === "student" ? "Học sinh" : "Giáo viên";
+    const status = present ? "có mặt" : "vắng";
+    const loadingToastId = toast.loading(
+      `Đang đánh dấu ${personType} ${row.full_name} ${status}...`
+    );
+
     try {
       if (row.kind === "student") {
         await upsertStudentAttendance({
@@ -128,9 +136,17 @@ export default function AdminAttendanceMatrix({
         next[cellKey] = present;
         return next;
       });
+
+      // Thay thế toast loading bằng toast success
+      toast.success(`Đã đánh dấu ${personType} ${row.full_name} ${status}`, {
+        id: loadingToastId,
+      });
     } catch (error) {
       console.error("Admin attendance update failed", error);
-      toast.error("Cập nhật điểm danh thất bại");
+      // Thay thế toast loading bằng toast error
+      toast.error("Cập nhật điểm danh thất bại", {
+        id: loadingToastId,
+      });
     } finally {
       setPendingCellKeys((s) => {
         const n = new Set(s);
@@ -160,8 +176,27 @@ export default function AdminAttendanceMatrix({
 
     if (targets.length === 0) return;
 
-    await Promise.all(targets.map((row) => applyToggle(row, present)));
-    setSelectedCellKeys(new Set());
+    // Thêm toast loading cho bulk update
+    const status = present ? "có mặt" : "vắng";
+    const loadingToastId = toast.loading(
+      `Đang đánh dấu ${targets.length} người ${status}...`
+    );
+
+    try {
+      await Promise.all(targets.map((row) => applyToggle(row, present)));
+      setSelectedCellKeys(new Set());
+
+      // Thay thế toast loading bằng toast success
+      toast.success(`Đã đánh dấu ${targets.length} người ${status}`, {
+        id: loadingToastId,
+      });
+    } catch (error) {
+      console.error("Bulk attendance update failed", error);
+      // Thay thế toast loading bằng toast error
+      toast.error("Cập nhật điểm danh hàng loạt thất bại", {
+        id: loadingToastId,
+      });
+    }
   };
 
   useEffect(() => {
