@@ -1,0 +1,154 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Pencil } from "lucide-react";
+import type { TuitionItem } from "@/lib/services/admin-payment-service";
+import { formatVND, formatEnrollmentStatus } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+
+interface TuitionCardsProps {
+  tuitionData: TuitionItem[];
+  onCreatePayment: (item: TuitionItem) => void;
+  onEditPayment: (item: TuitionItem) => void;
+}
+
+export default function TuitionCards({
+  tuitionData,
+  onCreatePayment,
+  onEditPayment,
+}: TuitionCardsProps) {
+  const getStatusBadge = (item: TuitionItem) => {
+    if (item.paymentStatusId === null) {
+      return (
+        <Badge variant="outline" className="bg-gray-100 text-gray-700">
+          Chưa tạo
+        </Badge>
+      );
+    }
+    if (item.isPaid === true) {
+      return (
+        <Badge variant="outline" className="bg-green-100 text-green-700">
+          Đã đóng
+        </Badge>
+      );
+    }
+    if (item.isPaid === false) {
+      return (
+        <Badge variant="outline" className="bg-yellow-100 text-yellow-700">
+          Chưa đóng
+        </Badge>
+      );
+    }
+    return null;
+  };
+
+  if (tuitionData.length === 0) {
+    return (
+      <div className="px-3">
+        <p className="text-center text-sm text-muted-foreground py-8">
+          Chưa có dữ liệu học phí
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2 px-3 md:hidden">
+      {tuitionData.map((item) => (
+        <Card
+          className="py-0 md:py-0"
+          key={`${item.studentId}-${item.classId}-${item.enrollmentId}`}
+        >
+          <CardContent className="px-2 py-1">
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold">{item.studentName}</h3>
+                  {(() => {
+                    const status = item.enrollmentStatus;
+                    if (status === "active") {
+                      return (
+                        <Badge
+                          variant="outline"
+                          className="bg-blue-100 text-blue-700 text-xs"
+                        >
+                          {formatEnrollmentStatus(status)}
+                        </Badge>
+                      );
+                    }
+                    if (status === "trial") {
+                      return (
+                        <Badge
+                          variant="outline"
+                          className="bg-purple-100 text-purple-700 text-xs"
+                        >
+                          {formatEnrollmentStatus(status)}
+                        </Badge>
+                      );
+                    }
+                    if (status === "inactive") {
+                      return (
+                        <Badge
+                          variant="outline"
+                          className="bg-gray-100 text-gray-700 text-xs"
+                        >
+                          {formatEnrollmentStatus(status)}
+                        </Badge>
+                      );
+                    }
+                    return (
+                      <Badge variant="outline" className="text-xs">
+                        {formatEnrollmentStatus(status)}
+                      </Badge>
+                    );
+                  })()}
+                </div>
+                {/* Bỏ hiển thị tên lớp vì đã có header lớp rồi */}
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      Học phí:
+                    </span>
+                    <span className="text-sm font-semibold">
+                      {formatVND(item.monthlyFee)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      Đã đóng:
+                    </span>
+                    <span className="text-sm font-semibold">
+                      {item.amount !== null ? formatVND(item.amount) : "-"}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2">{getStatusBadge(item)}</div>
+              </div>
+              <div className="ml-2">
+                {item.paymentStatusId === null ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onCreatePayment(item)}
+                  >
+                    Tạo
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onEditPayment(item)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}

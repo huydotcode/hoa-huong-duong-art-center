@@ -36,7 +36,9 @@ export async function getRevenueData(): Promise<MonthlyStats[]> {
     supabase
       .from("student_class_enrollments")
       .select("enrollment_date, leave_date, status"),
-    supabase.from("payment_status").select("month, year, class_id, is_paid"),
+    supabase
+      .from("payment_status")
+      .select("month, year, class_id, is_paid, amount"),
     supabase.from("expenses").select("month, year, amount"),
   ]);
 
@@ -102,7 +104,12 @@ export async function getRevenueData(): Promise<MonthlyStats[]> {
             profit: 0,
           };
         }
-        monthlyData[key].revenue += Number(classFeeMap.get(p.class_id) || 0);
+        // Ưu tiên dùng amount từ payment_status, fallback về monthly_fee
+        const paymentAmount =
+          p.amount !== null
+            ? Number(p.amount)
+            : Number(classFeeMap.get(p.class_id) || 0);
+        monthlyData[key].revenue += paymentAmount;
       });
   }
 

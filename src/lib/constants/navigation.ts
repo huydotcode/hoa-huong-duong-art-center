@@ -9,6 +9,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/teachers/salary", label: "Lương giáo viên" },
   { href: "/admin/students", label: "Học sinh" },
   { href: "/admin/classes", label: "Lớp học" },
+  { href: "/admin/tuition", label: "Học phí" },
   { href: "/admin/expenses", label: "Chi phí" },
   { href: "/admin/attendance", label: "Điểm danh" },
 ];

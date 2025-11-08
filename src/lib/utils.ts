@@ -136,3 +136,32 @@ export function formatCurrencyVNDots(value: number): string {
 
 // Convenience alias
 export const formatVND = formatCurrencyVN;
+
+// Normalize Vietnamese text: remove diacritics, handle đ/Đ, normalize spaces, and convert to lowercase
+// Example: "Diệu" -> "dieu", "Nguyễn" -> "nguyen", "Đặng" -> "dang"
+export function normalizeText(value: string): string {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .replace(/đ/g, "d") // Replace đ with d
+    .replace(/Đ/g, "d") // Replace Đ with d
+    .normalize("NFD") // Decompose characters (á -> a + ́)
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
+    .replace(/\s+/g, " ") // Normalize multiple spaces to single space
+    .trim() // Remove leading/trailing spaces
+    .toLowerCase();
+}
+
+// Normalize phone number: remove spaces, dashes, dots, and other separators
+// Example: "0123 456 789" -> "0123456789", "0123-456-789" -> "0123456789"
+export function normalizePhone(value: string): string {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .replace(/[\s\-\.\(\)]/g, "") // Remove spaces, dashes, dots, parentheses
+    .trim();
+}

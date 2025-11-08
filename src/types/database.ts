@@ -210,6 +210,8 @@ export interface CreatePaymentStatusData {
   month: number;
   year: number;
   amount?: number | null;
+  is_paid?: boolean;
+  paid_at?: string;
 }
 
 export interface UpdatePaymentStatusData {
