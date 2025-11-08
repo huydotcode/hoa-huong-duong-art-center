@@ -17,9 +17,11 @@ export default function TeachersLayout({
 
   return (
     <div className="space-y-6">
-      {!isSalaryPage && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold sm:text-3xl">Quản lý giáo viên</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold sm:text-3xl">
+          {isSalaryPage ? "Lương giáo viên" : "Quản lý giáo viên"}
+        </h1>
+        {!isSalaryPage && (
           <div className="flex gap-2">
             <CreateTeacherForm>
               <Button size="sm" className="flex-1 sm:flex-none">
@@ -29,8 +31,8 @@ export default function TeachersLayout({
             </CreateTeacherForm>
             <RefreshButton />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <Card>{children}</Card>
     </div>
