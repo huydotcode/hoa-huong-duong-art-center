@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -8,11 +8,9 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Pencil } from "lucide-react";
 import { getStudents } from "@/lib/services/admin-students-service";
-import { UpdateStudentForm } from "@/components/forms";
+import { StudentCard } from "./_components/student-card";
+import { StudentTableRow } from "./_components/student-table-row";
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;
@@ -39,24 +37,7 @@ export default async function StudentsPage(props: SearchProps) {
             Chưa có học sinh nào
           </p>
         ) : (
-          students.map((s) => (
-            <UpdateStudentForm key={s.id} student={s}>
-              <Card role="button" className="cursor-pointer">
-                <CardContent className="p-3">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-semibold">{s.full_name}</h3>
-                      <p className="text-sm text-muted-foreground">{s.phone}</p>
-                    </div>
-                    <Badge variant={s.is_active ? "default" : "destructive"}>
-                      {s.is_active ? "Hoạt động" : "Ngừng hoạt động"}
-                    </Badge>
-                  </div>
-                  {/* Thông tin phụ huynh tạm ẩn */}
-                </CardContent>
-              </Card>
-            </UpdateStudentForm>
-          ))
+          students.map((s) => <StudentCard key={s.id} student={s} />)
         )}
       </div>
 
@@ -83,25 +64,7 @@ export default async function StudentsPage(props: SearchProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              students.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.full_name}</TableCell>
-                  <TableCell>{s.phone}</TableCell>
-                  {/* Cột phụ huynh tạm ẩn */}
-                  <TableCell className="text-center">
-                    <Badge variant={s.is_active ? "default" : "destructive"}>
-                      {s.is_active ? "Hoạt động" : "Ngừng hoạt động"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <UpdateStudentForm student={s}>
-                      <Button variant="ghost" size="icon">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </UpdateStudentForm>
-                  </TableCell>
-                </TableRow>
-              ))
+              students.map((s) => <StudentTableRow key={s.id} student={s} />)
             )}
           </TableBody>
         </Table>

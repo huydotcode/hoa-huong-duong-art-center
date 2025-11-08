@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Student } from "@/types";
 import { revalidatePath } from "next/cache";
-import { normalizeText, normalizePhone } from "@/lib/utils";
+import { normalizeText, normalizePhone, toArray } from "@/lib/utils";
 
 export async function getStudents(query: string = ""): Promise<Student[]> {
   const supabase = await createClient();
@@ -106,4 +106,65 @@ export async function updateStudentFromForm(formData: FormData) {
   if (is_active_raw) payload.is_active = is_active_raw === "true";
 
   await updateStudent(id, payload, path);
+}
+
+/**
+ * Get all current classes a student is enrolled in (active or trial, not left)
+ */
+export async function getStudentCurrentClasses(studentId: string): Promise<
+  Array<{
+    enrollmentId: string;
+    classId: string;
+    className: string;
+    daysOfWeek: Array<{
+      day: number;
+      start_time: string;
+      end_time?: string;
+    }>;
+    durationMinutes: number;
+    enrollmentDate: string;
+    status: "trial" | "active" | "inactive";
+  }>
+> {
+  const supabase = await createClient();
+
+  const { data: enrollments, error } = await supabase
+    .from("student_class_enrollments")
+    .select(
+      `
+      id,
+      class_id,
+      enrollment_date,
+      status,
+      classes(id, name, days_of_week, duration_minutes, is_active)
+    `
+    )
+    .eq("student_id", studentId)
+    .in("status", ["active", "trial"])
+    .is("leave_date", null);
+
+  if (error) throw error;
+  if (!enrollments || enrollments.length === 0) return [];
+
+  return enrollments
+    .filter((e) => {
+      const classData = Array.isArray(e.classes) ? e.classes[0] : e.classes;
+      return classData?.is_active === true;
+    })
+    .map((e) => {
+      const classData = Array.isArray(e.classes) ? e.classes[0] : e.classes;
+      return {
+        enrollmentId: e.id,
+        classId: e.class_id,
+        className: classData?.name || "",
+        daysOfWeek: toArray<{
+          day: number;
+          start_time: string;
+          end_time?: string;
+        }>(classData?.days_of_week || []),
+        durationMinutes: Number(classData?.duration_minutes || 0),
+        enrollmentDate: e.enrollment_date,
+        status: e.status as "trial" | "active" | "inactive",
+      };
+    });
 }

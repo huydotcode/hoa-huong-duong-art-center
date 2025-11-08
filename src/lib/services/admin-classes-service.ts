@@ -14,6 +14,7 @@ import {
   ClassStudentItem,
 } from "@/types";
 import { toArray, normalizeText } from "@/lib/utils";
+import { DAY_ORDER } from "@/lib/constants/schedule";
 
 /*
 getClasses(query?, { is_active? }): trả về danh sách lớp có kèm đếm teachers_count, students_count dùng embed class_teachers(count), student_class_enrollments(count), sắp xếp theo tên.
@@ -204,12 +205,33 @@ export async function updateClassDaySchedule(
   // Remove all schedules for the specific day
   const filteredDays = existingDays.filter((item) => item.day !== dayToUpdate);
 
+  // Sort daySchedules by start_time within the same day
+  const sortedDaySchedules = [...daySchedules].sort((a, b) =>
+    a.start_time.localeCompare(b.start_time)
+  );
+
   // Merge with new schedules (can be empty array to clear all schedules for the day)
-  const updatedDaysOfWeek = [...filteredDays, ...daySchedules];
+  const updatedDaysOfWeek = [...filteredDays, ...sortedDaySchedules];
+
+  // Sort by day (DAY_ORDER: 1,2,3,4,5,6,0) then by start_time within each day
+  const dayOrderMap = new Map<number, number>(DAY_ORDER.map((d, i) => [d, i]));
+
+  const sortedDaysOfWeek = updatedDaysOfWeek.sort((a, b) => {
+    // First sort by day order
+    const dayOrderA = dayOrderMap.get(a.day) ?? 999;
+    const dayOrderB = dayOrderMap.get(b.day) ?? 999;
+
+    if (dayOrderA !== dayOrderB) {
+      return dayOrderA - dayOrderB;
+    }
+
+    // If same day, sort by start_time
+    return a.start_time.localeCompare(b.start_time);
+  });
 
   const { error } = await supabase
     .from("classes")
-    .update({ days_of_week: updatedDaysOfWeek })
+    .update({ days_of_week: sortedDaysOfWeek })
     .eq("id", classId);
 
   if (error) throw error;
@@ -574,4 +596,58 @@ export async function updateStudentEnrollment(
     .eq("id", enrollmentId);
   if (error) throw error;
   if (path) revalidatePath(path);
+}
+
+/**
+ * Get classes by subject (matching class name with subject)
+ */
+export async function getClassesBySubject(
+  subject: string,
+  excludeClassIds?: string[]
+): Promise<ClassListItem[]> {
+  const supabase = await createClient();
+  const normalizedSubject = normalizeText(subject.trim());
+
+  // Fetch all active classes
+  const q = supabase
+    .from("classes")
+    .select(`*, class_teachers(count), student_class_enrollments(count)`, {
+      count: "exact",
+    })
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  type RawRow = Class & {
+    class_teachers?: { count?: number }[];
+    student_class_enrollments?: { count?: number }[];
+  };
+
+  const mapped: ClassListItem[] =
+    (data as RawRow[] | null | undefined)?.map((row) => ({
+      ...(row as Class),
+      teachers_count: Array.isArray(row.class_teachers)
+        ? (row.class_teachers[0]?.count ?? 0)
+        : 0,
+      students_count: Array.isArray(row.student_class_enrollments)
+        ? (row.student_class_enrollments[0]?.count ?? 0)
+        : 0,
+    })) || [];
+
+  // Filter by subject (diacritic-insensitive)
+  const filtered = mapped.filter((item) => {
+    const normalizedName = normalizeText(item.name);
+    const matchesSubject = normalizedName.includes(normalizedSubject);
+
+    // Exclude specified class IDs
+    if (excludeClassIds && excludeClassIds.includes(item.id)) {
+      return false;
+    }
+
+    return matchesSubject;
+  });
+
+  return filtered;
 }
