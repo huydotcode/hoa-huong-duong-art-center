@@ -15,6 +15,16 @@ import { PaymentForm } from "./payment-form";
 import { Loader2 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TuitionClientProps {
   initialTuitionData: TuitionItem[];
@@ -46,6 +56,11 @@ export default function TuitionClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tuitionData, setTuitionData] =
     useState<TuitionItem[]>(initialTuitionData);
+  const [cancelPaymentDialog, setCancelPaymentDialog] = useState<{
+    open: boolean;
+    item: TuitionItem | null;
+  }>({ open: false, item: null });
+  const [isCancelingPayment, setIsCancelingPayment] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -133,9 +148,41 @@ export default function TuitionClient({
 
   // Toggle payment status (đóng/hủy đóng) nhanh
   const handleTogglePayment = async (item: TuitionItem) => {
+    // Nếu đang đóng (chưa đóng → đã đóng), toggle ngay
+    if (!item.isPaid) {
+      try {
+        const updatedItem = await togglePaymentStatus(
+          item,
+          initialMonth,
+          initialYear,
+          pathname
+        );
+
+        // Optimistic update
+        handlePaymentUpdate(updatedItem);
+
+        toast.success("Đã đánh dấu đóng học phí");
+      } catch (error) {
+        console.error("Error toggling payment:", error);
+        toast.error("Lỗi khi cập nhật trạng thái", {
+          description:
+            error instanceof Error ? error.message : "Vui lòng thử lại",
+        });
+      }
+    } else {
+      // Nếu đang hủy đóng (đã đóng → chưa đóng), hiển thị confirmation
+      setCancelPaymentDialog({ open: true, item });
+    }
+  };
+
+  // Handler xác nhận hủy đóng
+  const handleConfirmCancelPayment = async () => {
+    if (!cancelPaymentDialog.item) return;
+
+    setIsCancelingPayment(true);
     try {
       const updatedItem = await togglePaymentStatus(
-        item,
+        cancelPaymentDialog.item,
         initialMonth,
         initialYear,
         pathname
@@ -144,17 +191,16 @@ export default function TuitionClient({
       // Optimistic update
       handlePaymentUpdate(updatedItem);
 
-      toast.success(
-        updatedItem.isPaid
-          ? "Đã đánh dấu đóng học phí"
-          : "Đã hủy đánh dấu đóng học phí"
-      );
+      toast.success("Đã hủy đánh dấu đóng học phí");
+      setCancelPaymentDialog({ open: false, item: null });
     } catch (error) {
-      console.error("Error toggling payment:", error);
-      toast.error("Lỗi khi cập nhật trạng thái", {
+      console.error("Error canceling payment:", error);
+      toast.error("Lỗi khi hủy đánh dấu đóng học phí", {
         description:
           error instanceof Error ? error.message : "Vui lòng thử lại",
       });
+    } finally {
+      setIsCancelingPayment(false);
     }
   };
 
@@ -192,6 +238,49 @@ export default function TuitionClient({
         onSuccess={handleCloseDialog}
         onPaymentUpdate={handlePaymentUpdate}
       />
+
+      {/* Confirmation dialog khi hủy đóng học phí */}
+      <AlertDialog
+        open={cancelPaymentDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelPaymentDialog({ open: false, item: null });
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận hủy đóng học phí</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn hủy đánh dấu đóng học phí cho học sinh{" "}
+              <span className="font-semibold">
+                {cancelPaymentDialog.item?.studentName}
+              </span>{" "}
+              không? Hành động này sẽ cập nhật trạng thái từ &quot;Đã đóng&quot;
+              sang &quot;Chưa đóng&quot;.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancelingPayment}>
+              Hủy
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCancelPayment}
+              disabled={isCancelingPayment}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isCancelingPayment ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                "Xác nhận hủy đóng"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Hiển thị mỗi lớp là một Card riêng */}
       {groupedByClass.length === 0 ? (
