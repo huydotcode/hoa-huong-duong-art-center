@@ -168,6 +168,13 @@ export function AttendanceCombinedMatrix(props: {
       const session = sessions[0];
       if (!session || selectedMobileRowKeys.size === 0) return;
       const selectedRows = rows.filter((r) => selectedMobileRowKeys.has(r.key));
+
+      // Thêm toast loading
+      const status = present ? "có mặt" : "vắng";
+      const loadingToastId = toast.loading(
+        `Đang đánh dấu ${selectedRows.length} người ${status}...`
+      );
+
       setIsMobileBulkPending(true);
       try {
         await Promise.all(
@@ -200,8 +207,16 @@ export function AttendanceCombinedMatrix(props: {
           return next;
         });
         setSelectedMobileRowKeys(new Set());
+
+        // Thay thế toast loading bằng toast success
+        toast.success(`Đã đánh dấu ${selectedRows.length} người ${status}`, {
+          id: loadingToastId,
+        });
       } catch {
-        toast.error("Cập nhật điểm danh thất bại");
+        // Thay thế toast loading bằng toast error
+        toast.error("Cập nhật điểm danh thất bại", {
+          id: loadingToastId,
+        });
       } finally {
         setIsMobileBulkPending(false);
       }
@@ -216,6 +231,14 @@ export function AttendanceCombinedMatrix(props: {
       next.add(cellKey);
       return next;
     });
+
+    // Thêm toast loading
+    const personType = row.kind === "student" ? "Học sinh" : "Giáo viên";
+    const status = present ? "có mặt" : "vắng";
+    const loadingToastId = toast.loading(
+      `Đang đánh dấu ${personType} ${row.full_name} ${status}...`
+    );
+
     try {
       if (row.kind === "student") {
         await toggleStudent.mutateAsync({
@@ -241,8 +264,16 @@ export function AttendanceCombinedMatrix(props: {
         ...prev,
         [session]: { ...(prev[session] || {}), [row.key]: present },
       }));
+
+      // Thay thế toast loading bằng toast success
+      toast.success(`Đã đánh dấu ${personType} ${row.full_name} ${status}`, {
+        id: loadingToastId,
+      });
     } catch {
-      toast.error("Cập nhật điểm danh thất bại");
+      // Thay thế toast loading bằng toast error
+      toast.error("Cập nhật điểm danh thất bại", {
+        id: loadingToastId,
+      });
     } finally {
       setPendingCellKeys((prev) => {
         const next = new Set(prev);
@@ -258,9 +289,10 @@ export function AttendanceCombinedMatrix(props: {
       ...prev,
       [session]: { ...(prev[session] || {}), [row.key]: present },
     }));
-    applyToggle(session, row, present).catch(() =>
-      toast.error("Cập nhật điểm danh thất bại")
-    );
+    // applyToggle đã xử lý toast loading/success/error rồi, không cần catch ở đây
+    applyToggle(session, row, present).catch(() => {
+      // Error đã được xử lý trong applyToggle
+    });
   };
 
   // Removed legacy per-session bulk function (replaced by column multi-select)
@@ -290,7 +322,20 @@ export function AttendanceCombinedMatrix(props: {
         toast.info("Chọn ít nhất 1 cột hoặc 1 ô");
         return;
       }
+
+      // Tính số lượng người sẽ được đánh dấu
       const selectedRows = rows;
+      const totalCount =
+        cellKeys.length > 0
+          ? cellKeys.length
+          : sessionsToApply.length * selectedRows.length;
+
+      // Thêm toast loading
+      const status = present ? "có mặt" : "vắng";
+      const loadingToastId = toast.loading(
+        `Đang đánh dấu ${totalCount} người ${status}...`
+      );
+
       try {
         await Promise.all(
           cellKeys.length > 0
@@ -366,8 +411,16 @@ export function AttendanceCombinedMatrix(props: {
         // Clear all selections after successful apply
         setSelectedCellKeys(new Set());
         setSelectedSessions(new Set());
+
+        // Thay thế toast loading bằng toast success
+        toast.success(`Đã đánh dấu ${totalCount} người ${status}`, {
+          id: loadingToastId,
+        });
       } catch {
-        toast.error("Cập nhật điểm danh thất bại");
+        // Thay thế toast loading bằng toast error
+        toast.error("Cập nhật điểm danh thất bại", {
+          id: loadingToastId,
+        });
       }
     },
     [selectedSessions, selectedCellKeys, rows, toggleStudent, toggleTeacher]
