@@ -227,7 +227,7 @@ export default function AdminAttendanceMatrix({
                       )}
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-[15px]">
+                          <span className="font-medium text-sm">
                             {row.full_name}
                           </span>
                           <span
@@ -351,10 +351,15 @@ export default function AdminAttendanceMatrix({
                   className={`p-3 rounded-md border cursor-pointer ${isSelected ? "ring-2 ring-primary" : ""}`}
                   onClick={() => onCellClick(row)}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate flex items-center gap-2">
-                        <span className="truncate">{row.full_name}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                        <span
+                          className="min-w-0"
+                          style={{ wordBreak: "break-word" }}
+                        >
+                          {row.full_name}
+                        </span>
                         <span
                           className={
                             row.kind === "teacher"
@@ -385,7 +390,7 @@ export default function AdminAttendanceMatrix({
                             }}
                             disabled={pending}
                           >
-                            Có mặt
+                            Có
                           </Button>
                           <Button
                             variant="destructive"
