@@ -246,32 +246,63 @@ export default function AdminAttendanceMatrix({
                       </td>
                       <td className="px-3 py-2 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <Select
-                            value={
-                              status === true
-                                ? "present"
-                                : status === false
-                                  ? "absent"
-                                  : undefined
-                            }
-                            onValueChange={(value) =>
-                              applyToggle(row, value === "present")
-                            }
-                            disabled={pending}
-                          >
-                            <SelectTrigger
-                              className="w-[120px] h-8 text-xs"
-                              onClick={(event) => event.stopPropagation()}
-                              onMouseDown={(event) => event.stopPropagation()}
-                              onPointerDown={(event) => event.stopPropagation()}
+                          {status === undefined ? (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  applyToggle(row, true);
+                                }}
+                                disabled={pending}
+                              >
+                                Có mặt
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  applyToggle(row, false);
+                                }}
+                                disabled={pending}
+                              >
+                                Vắng
+                              </Button>
+                            </>
+                          ) : (
+                            <Select
+                              value={
+                                status === true
+                                  ? "present"
+                                  : status === false
+                                    ? "absent"
+                                    : undefined
+                              }
+                              onValueChange={(value) =>
+                                applyToggle(row, value === "present")
+                              }
+                              disabled={pending}
                             >
-                              <SelectValue placeholder="Chọn trạng thái" />
-                            </SelectTrigger>
-                            <SelectContent align="center">
-                              <SelectItem value="present">Có</SelectItem>
-                              <SelectItem value="absent">Vắng</SelectItem>
-                            </SelectContent>
-                          </Select>
+                              <SelectTrigger
+                                className="w-[120px] h-8 text-xs"
+                                onClick={(event) => event.stopPropagation()}
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onPointerDown={(event) =>
+                                  event.stopPropagation()
+                                }
+                              >
+                                <SelectValue placeholder="Chọn trạng thái" />
+                              </SelectTrigger>
+                              <SelectContent align="center">
+                                <SelectItem value="present">Có</SelectItem>
+                                <SelectItem value="absent">Vắng</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -342,30 +373,56 @@ export default function AdminAttendanceMatrix({
                       </div>
                     </div>
                     <div className="shrink-0 flex items-center gap-1.5">
-                      {status === undefined && (
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Chưa điểm danh
-                        </span>
+                      {status === undefined ? (
+                        <>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              applyToggle(row, true);
+                            }}
+                            disabled={pending}
+                          >
+                            Có mặt
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              applyToggle(row, false);
+                            }}
+                            disabled={pending}
+                          >
+                            Vắng
+                          </Button>
+                        </>
+                      ) : (
+                        <Select
+                          value={
+                            status === true
+                              ? "present"
+                              : status === false
+                                ? "absent"
+                                : undefined
+                          }
+                          onValueChange={(v) =>
+                            applyToggle(row, v === "present")
+                          }
+                          disabled={pending}
+                        >
+                          <SelectTrigger className="w-[92px] h-8 text-xs">
+                            <SelectValue placeholder="Chọn" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="present">Có</SelectItem>
+                            <SelectItem value="absent">Vắng</SelectItem>
+                          </SelectContent>
+                        </Select>
                       )}
-                      <Select
-                        value={
-                          status === true
-                            ? "present"
-                            : status === false
-                              ? "absent"
-                              : undefined
-                        }
-                        onValueChange={(v) => applyToggle(row, v === "present")}
-                        disabled={pending}
-                      >
-                        <SelectTrigger className="w-[92px] h-8 text-xs">
-                          <SelectValue placeholder="Chọn" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="present">Có</SelectItem>
-                          <SelectItem value="absent">Vắng</SelectItem>
-                        </SelectContent>
-                      </Select>
                     </div>
                   </div>
                 </div>
