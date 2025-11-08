@@ -12,6 +12,7 @@ interface TuitionCardsProps {
   onCreatePayment: (item: TuitionItem) => void;
   onEditPayment: (item: TuitionItem) => void;
   onTogglePayment?: (item: TuitionItem) => Promise<void>;
+  onActivateTrial?: (item: TuitionItem) => Promise<void>;
 }
 
 export default function TuitionCards({
@@ -19,6 +20,7 @@ export default function TuitionCards({
   onCreatePayment,
   onEditPayment,
   onTogglePayment,
+  onActivateTrial,
 }: TuitionCardsProps) {
   const getStatusBadge = (item: TuitionItem) => {
     if (item.paymentStatusId === null) {
@@ -127,51 +129,71 @@ export default function TuitionCards({
                 </div>
                 <div className="mt-2">{getStatusBadge(item)}</div>
               </div>
-              <div className="ml-2 flex items-center gap-2">
-                {/* Toggle button - chỉ hiển thị khi đã có payment_status */}
-                {item.paymentStatusId !== null && onTogglePayment && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      await onTogglePayment(item);
-                    }}
-                    title={
-                      item.isPaid
-                        ? "Đã đóng - Click để hủy"
-                        : "Chưa đóng - Click để đóng"
-                    }
-                  >
-                    {item.isPaid ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-gray-400" />
-                    )}
-                  </Button>
-                )}
+              <div className="ml-2 flex flex-col items-end gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Toggle button - chỉ hiển thị khi đã có payment_status */}
+                  {item.paymentStatusId !== null && onTogglePayment && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await onTogglePayment(item);
+                      }}
+                      title={
+                        item.isPaid
+                          ? "Đã đóng - Click để hủy"
+                          : "Chưa đóng - Click để đóng"
+                      }
+                    >
+                      {item.isPaid ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-gray-400" />
+                      )}
+                    </Button>
+                  )}
 
-                {/* Existing buttons */}
-                {item.paymentStatusId === null ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onCreatePayment(item)}
-                  >
-                    Tạo
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => onEditPayment(item)}
-                    title="Chỉnh sửa"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                )}
+                  {/* Existing buttons */}
+                  {item.paymentStatusId === null ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onCreatePayment(item)}
+                    >
+                      Tạo
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onEditPayment(item)}
+                      title="Chỉnh sửa"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Nút chuyển sang chính thức - chỉ hiển thị khi trial và đã đóng học phí */}
+                {item.enrollmentStatus === "trial" &&
+                  item.isPaid === true &&
+                  item.paymentStatusId !== null &&
+                  onActivateTrial && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-xs"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await onActivateTrial(item);
+                      }}
+                    >
+                      Chuyển sang chính thức
+                    </Button>
+                  )}
               </div>
             </div>
           </CardContent>

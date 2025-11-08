@@ -705,3 +705,21 @@ export async function syncTuitionPaymentStatus(
     skipped: validEnrollments.length - created,
   };
 }
+
+/**
+ * Chuyển học sinh từ trial sang active sau khi đóng học phí
+ */
+export async function activateTrialStudent(
+  enrollmentId: string,
+  path?: string
+): Promise<void> {
+  const { updateStudentEnrollment } = await import("./admin-classes-service");
+
+  await updateStudentEnrollment(
+    enrollmentId,
+    {
+      status: "active",
+    },
+    path
+  );
+}

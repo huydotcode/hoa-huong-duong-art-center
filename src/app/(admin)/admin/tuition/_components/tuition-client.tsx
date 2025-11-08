@@ -6,7 +6,10 @@ import type {
   TuitionItem,
   TuitionSummary,
 } from "@/lib/services/admin-payment-service";
-import { togglePaymentStatus } from "@/lib/services/admin-payment-service";
+import {
+  togglePaymentStatus,
+  activateTrialStudent,
+} from "@/lib/services/admin-payment-service";
 import { formatDateRange } from "@/lib/utils";
 import TuitionFilter from "./tuition-filter";
 import TuitionTable from "./tuition-table";
@@ -204,6 +207,45 @@ export default function TuitionClient({
     }
   };
 
+  // Handler chuyển học sinh từ trial sang active
+  const handleActivateTrial = async (item: TuitionItem) => {
+    try {
+      await activateTrialStudent(item.enrollmentId, pathname);
+
+      // Update local state: chuyển enrollmentStatus từ "trial" sang "active"
+      setTuitionData((prev) => {
+        return prev.map((i) => {
+          if (
+            i.studentId === item.studentId &&
+            i.classId === item.classId &&
+            i.enrollmentId === item.enrollmentId
+          ) {
+            return {
+              ...i,
+              enrollmentStatus: "active" as const,
+            };
+          }
+          return i;
+        });
+      });
+
+      toast.success("Đã chuyển học sinh sang chính thức");
+
+      // Refresh data ở background
+      setIsRefreshing(true);
+      router.refresh();
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 1000);
+    } catch (error) {
+      console.error("Error activating trial student:", error);
+      toast.error("Lỗi khi chuyển học sinh sang chính thức", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6 relative">
       {/* Floating loading spinner */}
@@ -300,6 +342,7 @@ export default function TuitionClient({
                   onCreatePayment={handleCreatePayment}
                   onEditPayment={handleEditPayment}
                   onTogglePayment={handleTogglePayment}
+                  onActivateTrial={handleActivateTrial}
                   className={group.className}
                   showClassHeader={true}
                 />
@@ -333,6 +376,7 @@ export default function TuitionClient({
                   onCreatePayment={handleCreatePayment}
                   onEditPayment={handleEditPayment}
                   onTogglePayment={handleTogglePayment}
+                  onActivateTrial={handleActivateTrial}
                 />
               </Card>
             ))}

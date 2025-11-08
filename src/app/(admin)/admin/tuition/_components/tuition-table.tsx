@@ -11,7 +11,7 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, CheckCircle2 } from "lucide-react";
 import type { TuitionItem } from "@/lib/services/admin-payment-service";
 import {
   formatVND,
@@ -25,6 +25,7 @@ interface TuitionTableProps {
   onCreatePayment: (item: TuitionItem) => void;
   onEditPayment: (item: TuitionItem) => void;
   onTogglePayment?: (item: TuitionItem) => Promise<void>;
+  onActivateTrial?: (item: TuitionItem) => Promise<void>;
   className?: string; // Tên lớp (optional, để hiển thị trong header)
   showClassHeader?: boolean; // Có hiển thị header với tên lớp không
 }
@@ -34,6 +35,7 @@ export default function TuitionTable({
   onCreatePayment,
   onEditPayment,
   onTogglePayment,
+  onActivateTrial,
   className,
   showClassHeader = false,
 }: TuitionTableProps) {
@@ -214,6 +216,24 @@ export default function TuitionTable({
                             )}
                           </Button>
                         )}
+
+                        {/* Nút chuyển sang chính thức - chỉ hiển thị khi trial và đã đóng học phí */}
+                        {item.enrollmentStatus === "trial" &&
+                          item.isPaid === true &&
+                          item.paymentStatusId !== null &&
+                          onActivateTrial && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="gap-2 bg-blue-600 hover:bg-blue-700"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await onActivateTrial(item);
+                              }}
+                            >
+                              Chuyển sang chính thức
+                            </Button>
+                          )}
 
                         {/* Existing buttons */}
                         {item.paymentStatusId === null ? (
