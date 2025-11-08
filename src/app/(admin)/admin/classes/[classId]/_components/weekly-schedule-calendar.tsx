@@ -69,7 +69,7 @@ export function WeeklyScheduleCalendar({
   });
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:grid-cols-4 2xl:grid-cols-7 sm:overflow-x-auto sm:mx-auto">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-7 2xl:flex 2xl:flex-wrap sm:overflow-x-auto sm:mx-auto">
       {DAY_ORDER.map((dayNum) => {
         const dayInfo = DAYS_MAP[dayNum];
         const day = Number(dayNum);
