@@ -20,7 +20,19 @@ export function exportReportsToExcel(
   const workbook = XLSX.utils.book_new();
 
   // Sheet 1: Doanh thu từng lớp (Class Revenue)
-  const classRevenueData = classRevenue.map((item) => ({
+  type ClassRevenueRow = {
+    "Lớp học": string;
+    Tháng: number | string;
+    Năm: number | string;
+    "Số học sinh": number;
+    "Đã đóng": number;
+    "Chưa đóng": number;
+    "Tổng doanh thu": number;
+    "Ngày bắt đầu": string;
+    "Ngày kết thúc": string;
+  };
+
+  const classRevenueData: ClassRevenueRow[] = classRevenue.map((item) => ({
     "Lớp học": item.className,
     Tháng: item.month,
     Năm: item.year,
