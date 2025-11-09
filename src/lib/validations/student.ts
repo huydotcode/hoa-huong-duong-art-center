@@ -1,31 +1,34 @@
 import { z } from "zod";
 
+// Phone validation: can be empty, but if provided must be valid format (10 digits, starts with 0)
+const phoneSchema = z
+  .string()
+  .refine(
+    (val) => {
+      // Allow empty string
+      const trimmed = val.trim();
+      if (trimmed.length === 0) return true;
+      // If provided, must be exactly 10 digits starting with 0
+      return /^0\d{9}$/.test(trimmed);
+    },
+    {
+      message: "Số điện thoại phải có 10 số và bắt đầu bằng 0.",
+    }
+  )
+  .or(z.literal(""))
+  .optional();
+
 export const createStudentSchema = z.object({
   full_name: z.string().min(1, "Vui lòng nhập họ và tên."),
-  phone: z
-    .string()
-    .length(10, "Số điện thoại phải có 10 số.")
-    .regex(/^0\d{9,}$/, "Số điện thoại không hợp lệ."),
-  parent_phone: z
-    .string()
-    .length(10, "Số điện thoại phải có 10 số.")
-    .regex(/^0\d{9,}$/, "Số điện thoại không hợp lệ.")
-    .optional(),
+  phone: phoneSchema,
+  parent_phone: phoneSchema,
   is_active: z.boolean().optional(),
 });
 
 export const updateStudentSchema = z.object({
   full_name: z.string().min(1, "Vui lòng nhập họ và tên.").optional(),
-  phone: z
-    .string()
-    .length(10, "Số điện thoại phải có 10 số.")
-    .regex(/^0\d{9,}$/, "Số điện thoại không hợp lệ.")
-    .optional(),
-  parent_phone: z
-    .string()
-    .length(10, "Số điện thoại phải có 10 số.")
-    .regex(/^0\d{9,}$/, "Số điện thoại không hợp lệ.")
-    .optional(),
+  phone: phoneSchema,
+  parent_phone: phoneSchema,
   is_active: z.boolean().optional(),
 });
 

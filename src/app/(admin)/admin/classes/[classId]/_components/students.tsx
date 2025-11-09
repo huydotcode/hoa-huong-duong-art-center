@@ -284,7 +284,7 @@ export default function StudentsSection({
                   <div className="flex-1">
                     <h3 className="font-semibold">{s.student.full_name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {s.student.phone}
+                      {s.student.phone || "-"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Đăng ký:{" "}
@@ -385,7 +385,7 @@ export default function StudentsSection({
                   <TableCell className="font-medium">
                     {s.student.full_name}
                   </TableCell>
-                  <TableCell>{s.student.phone}</TableCell>
+                  <TableCell>{s.student.phone || "-"}</TableCell>
                   <TableCell>
                     {format(new Date(s.enrollment_date), "dd/MM/yyyy", {
                       locale: vi,

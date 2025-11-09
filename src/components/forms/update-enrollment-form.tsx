@@ -139,7 +139,7 @@ export function UpdateEnrollmentForm({
                 {enrollment.student.full_name}
               </p>
               <p className="text-sm text-muted-foreground">
-                {enrollment.student.phone}
+                {enrollment.student.phone || "-"}
               </p>
             </div>
 

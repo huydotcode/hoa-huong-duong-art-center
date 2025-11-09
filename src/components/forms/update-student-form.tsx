@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -30,13 +30,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePathname, useRouter } from "next/navigation";
 import { updateStudent } from "@/lib/services/admin-students-service";
-import { type Student } from "@/types";
 import {
   updateStudentSchema,
   type UpdateStudentSchema,
 } from "@/lib/validations/student";
+import { type Student } from "@/types";
+import { usePathname, useRouter } from "next/navigation";
 
 interface Props {
   student: Student;
@@ -53,18 +53,33 @@ export function UpdateStudentForm({ student, children }: Props) {
     resolver: zodResolver(updateStudentSchema),
     defaultValues: {
       full_name: student.full_name,
-      phone: student.phone,
+      phone: student.phone || "",
       is_active: student.is_active,
     },
   });
+
+  // Reset form with latest student data whenever dialog opens
+  // This ensures form always shows the most up-to-date data after refresh
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        full_name: student.full_name,
+        phone: student.phone || "",
+        is_active: student.is_active,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, student.id, student.full_name, student.phone, student.is_active, student.updated_at]);
 
   async function onSubmit(values: UpdateStudentSchema) {
     setIsLoading(true);
     try {
       await updateStudent(student.id, values, path);
       toast.success("Cập nhật học sinh thành công!");
-      form.reset();
+      // Close dialog first
       setOpen(false);
+      // Then refresh to get updated data from server
+      // The key prop with updated_at will ensure form re-renders with new data
       router.refresh();
     } catch (error) {
       console.error("Error updating student:", error);
@@ -114,15 +129,18 @@ export function UpdateStudentForm({ student, children }: Props) {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Số điện thoại</FormLabel>
+                  <FormLabel>Số điện thoại (tùy chọn)</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Nhập số điện thoại"
+                      placeholder="Nhập số điện thoại (10 số, bắt đầu bằng 0)"
                       autoComplete="off"
                       {...field}
                     />
                   </FormControl>
                   <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                    Có thể để trống. Nếu nhập, phải có 10 số và bắt đầu bằng 0.
+                  </p>
                 </FormItem>
               )}
             />

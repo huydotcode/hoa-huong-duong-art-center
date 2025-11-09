@@ -108,15 +108,18 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Số điện thoại</FormLabel>
+                  <FormLabel>Số điện thoại (tùy chọn)</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Nhập số điện thoại"
+                      placeholder="Nhập số điện thoại (10 số, bắt đầu bằng 0)"
                       autoComplete="off"
                       {...field}
                     />
                   </FormControl>
                   <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                    Có thể để trống. Nếu nhập, phải có 10 số và bắt đầu bằng 0.
+                  </p>
                 </FormItem>
               )}
             />

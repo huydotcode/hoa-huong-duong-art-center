@@ -4,8 +4,8 @@ import { RefreshButton } from "@/components/shared";
 import StudentsSearchBar from "./_components/students-search-bar";
 import { StudentsListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
-import { CreateStudentForm } from "@/components/forms";
-import { Plus } from "lucide-react";
+import { CreateStudentForm, ImportStudentsForm } from "@/components/forms";
+import { Plus, FileSpreadsheet } from "lucide-react";
 
 export default function StudentsLayout({
   children,
@@ -23,6 +23,12 @@ export default function StudentsLayout({
               Thêm học sinh
             </Button>
           </CreateStudentForm>
+          <ImportStudentsForm>
+            <Button size="sm" variant="outline" className="flex-1 sm:flex-none">
+              <FileSpreadsheet className="h-4 w-4" />
+              Import Excel
+            </Button>
+          </ImportStudentsForm>
           <RefreshButton />
         </div>
       </div>

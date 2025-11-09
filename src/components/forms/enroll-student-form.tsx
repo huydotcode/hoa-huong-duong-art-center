@@ -235,7 +235,7 @@ export function EnrollStudentForm({
                                   {student.full_name}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {student.phone}
+                                  {student.phone || "-"}
                                 </div>
                               </div>
                             ))}
@@ -259,7 +259,7 @@ export function EnrollStudentForm({
                                   {student.full_name}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {student.phone}
+                                  {student.phone || "-"}
                                 </div>
                               </div>
                               <Button

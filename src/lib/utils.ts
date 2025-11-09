@@ -154,14 +154,39 @@ export function normalizeText(value: string): string {
     .toLowerCase();
 }
 
-// Normalize phone number: remove spaces, dashes, dots, and other separators
-// Example: "0123 456 789" -> "0123456789", "0123-456-789" -> "0123456789"
+// Normalize phone number: remove all spaces, dashes, dots, and other non-digit characters
+// Example: "033 499 3813" -> "0334993813", "0123-456-789" -> "0123456789", "0123.456.789" -> "0123456789"
 export function normalizePhone(value: string): string {
   if (!value || typeof value !== "string") {
     return "";
   }
 
+  // First, remove all whitespace characters (spaces, tabs, newlines, non-breaking spaces, etc.)
+  // Then remove all non-digit characters (dashes, dots, parentheses, etc.)
   return value
-    .replace(/[\s\-\.\(\)]/g, "") // Remove spaces, dashes, dots, parentheses
+    .replace(/\s+/g, "") // Remove all whitespace characters (more comprehensive than [\s])
+    .replace(/[^\d]/g, "") // Remove all non-digit characters (defensive approach)
     .trim();
+}
+
+/**
+ * Check if student was created in the current month
+ * @param createdAt ISO date string from database
+ * @returns true if student was created in the current month
+ */
+export function isNewStudent(createdAt: string): boolean {
+  if (!createdAt) return false;
+
+  try {
+    const createdDate = new Date(createdAt);
+    const now = new Date();
+
+    // Compare year and month (ignore time and day)
+    return (
+      createdDate.getFullYear() === now.getFullYear() &&
+      createdDate.getMonth() === now.getMonth()
+    );
+  } catch {
+    return false;
+  }
 }

@@ -47,8 +47,8 @@ export interface UpdateTeacherData {
 export interface Student {
   id: string;
   full_name: string;
-  phone: string;
-  parent_phone: string;
+  phone: string | null;
+  parent_phone: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -56,14 +56,14 @@ export interface Student {
 
 export interface CreateStudentData {
   full_name: string;
-  phone: string;
-  parent_phone: string;
+  phone: string | null;
+  parent_phone: string | null;
 }
 
 export interface UpdateStudentData {
   full_name?: string;
-  phone?: string;
-  parent_phone?: string;
+  phone?: string | null;
+  parent_phone?: string | null;
   is_active?: boolean;
 }
 

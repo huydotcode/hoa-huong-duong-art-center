@@ -8,9 +8,11 @@ import { Pencil, Calendar } from "lucide-react";
 import { UpdateStudentForm } from "@/components/forms";
 import { StudentClassScheduleDialog } from "./student-class-schedule-dialog";
 import type { Student } from "@/types";
+import { isNewStudent } from "@/lib/utils";
 
 export function StudentCard({ student }: { student: Student }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const isNew = isNewStudent(student.created_at);
 
   return (
     <>
@@ -18,8 +20,20 @@ export function StudentCard({ student }: { student: Student }) {
         <CardContent className="p-3">
           <div className="flex justify-between items-start mb-2">
             <div className="flex-1">
-              <h3 className="font-semibold">{student.full_name}</h3>
-              <p className="text-sm text-muted-foreground">{student.phone}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold">{student.full_name}</h3>
+                {isNew && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                  >
+                    Mới
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {student.phone || "Chưa có"}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -34,7 +48,10 @@ export function StudentCard({ student }: { student: Student }) {
               >
                 <Calendar className="h-4 w-4" />
               </Button>
-              <UpdateStudentForm student={student}>
+              <UpdateStudentForm
+                key={`${student.id}-${student.updated_at}`}
+                student={student}
+              >
                 <Button
                   variant="ghost"
                   size="icon"
@@ -46,9 +63,11 @@ export function StudentCard({ student }: { student: Student }) {
               </UpdateStudentForm>
             </div>
           </div>
-          <Badge variant={student.is_active ? "default" : "destructive"}>
-            {student.is_active ? "Hoạt động" : "Ngừng hoạt động"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={student.is_active ? "default" : "destructive"}>
+              {student.is_active ? "Hoạt động" : "Ngừng hoạt động"}
+            </Badge>
+          </div>
         </CardContent>
       </Card>
       <StudentClassScheduleDialog
