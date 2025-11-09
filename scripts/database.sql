@@ -16,13 +16,15 @@ COMMENT ON TABLE public.teachers IS 'Quản lý thông tin chi tiết của giá
 CREATE TABLE public.students (
   id UUID PRIMARY KEY NOT NULL DEFAULT gen_random_uuid(),
   full_name VARCHAR(255) NOT NULL,
-  phone VARCHAR(20) NOT NULL,
-  parent_phone VARCHAR(20) NOT NULL,
+  phone VARCHAR(20),
+  parent_phone VARCHAR(20),
   is_active BOOLEAN DEFAULT true NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 COMMENT ON TABLE public.students IS 'Quản lý thông tin cơ bản của học sinh';
+COMMENT ON COLUMN public.students.phone IS 'Số điện thoại học sinh (có thể để trống)';
+COMMENT ON COLUMN public.students.parent_phone IS 'Số điện thoại phụ huynh (có thể để trống)';
 
 -- 3. Bảng `classes` (Lớp học)
 -- Quản lý thông tin các lớp học.
