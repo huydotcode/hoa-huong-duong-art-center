@@ -288,11 +288,12 @@ export async function importStudentsFromExcel(
 ): Promise<{
   success: number;
   errors: Array<{ row: number; errors: string[] }>;
+  studentIds: Array<{ rowIndex: number; studentId: string }>;
 }> {
   const supabase = await createClient();
 
   if (students.length === 0) {
-    return { success: 0, errors: [] };
+    return { success: 0, errors: [], studentIds: [] };
   }
 
   // Normalize all phone numbers first to ensure consistency
@@ -329,14 +330,31 @@ export async function importStudentsFromExcel(
   });
 
   if (toInsert.length === 0) {
-    return { success: 0, errors };
+    return { success: 0, errors, studentIds: [] };
   }
 
-  // Bulk insert
-  const { error } = await supabase.from("students").insert(toInsert);
+  // Bulk insert and return inserted rows with IDs
+  const { data: inserted, error } = await supabase
+    .from("students")
+    .insert(toInsert)
+    .select("id");
 
   if (error) {
     throw new Error(`Lỗi khi import học sinh: ${error.message}`);
+  }
+
+  // Map rowIndex to studentId
+  const studentIds: Array<{ rowIndex: number; studentId: string }> = [];
+  if (inserted && inserted.length > 0) {
+    inserted.forEach((student, index) => {
+      const rowIndex = normalizedStudents[index]?.rowIndex;
+      if (rowIndex && student.id) {
+        studentIds.push({
+          rowIndex,
+          studentId: student.id as string,
+        });
+      }
+    });
   }
 
   if (path) revalidatePath(path);
@@ -344,5 +362,6 @@ export async function importStudentsFromExcel(
   return {
     success: toInsert.length,
     errors,
+    studentIds,
   };
 }

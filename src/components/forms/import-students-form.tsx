@@ -46,6 +46,7 @@ import {
 import { importStudentsFromExcel } from "@/lib/services/admin-students-service";
 import { usePathname } from "next/navigation";
 import { normalizePhone } from "@/lib/utils";
+import { MapClassesDialog } from "./map-classes-dialog";
 
 interface ImportStudentsFormProps {
   children: React.ReactNode;
@@ -78,6 +79,10 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [showMapClasses, setShowMapClasses] = useState(false);
+  const [importedStudentsWithIds, setImportedStudentsWithIds] = useState<
+    StudentRowWithStatus[]
+  >([]);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -234,6 +239,22 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
 
       if (result.success > 0) {
         toast.success(`Đã import thành công ${result.success} học sinh`);
+
+        // Map studentIds vào rows với thông tin lớp
+        const studentsWithIds = validRows.map((row) => {
+          const studentIdData = result.studentIds.find(
+            (s) => s.rowIndex === row.rowIndex
+          );
+          return {
+            ...row,
+            studentId: studentIdData?.studentId,
+          };
+        });
+
+        setImportedStudentsWithIds(studentsWithIds);
+        // Close import dialog and show map classes dialog
+        setOpen(false);
+        setShowMapClasses(true);
       }
 
       if (result.errors.length > 0) {
@@ -248,13 +269,17 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
         });
       }
 
-      // Reset form
-      setAllRows([]);
-      setEditingRowIndex(null);
-      setOpen(false);
-
-      // Refresh page
-      router.refresh();
+      // Reset form only if not showing map classes dialog
+      if (
+        result.success === 0 ||
+        !result.studentIds ||
+        result.studentIds.length === 0
+      ) {
+        setAllRows([]);
+        setEditingRowIndex(null);
+        setOpen(false);
+        router.refresh();
+      }
     } catch (error) {
       console.error("Error importing students:", error);
       toast.error("Lỗi khi import học sinh", {
@@ -267,12 +292,39 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
   };
 
   const handleDownloadTemplate = () => {
-    // Create template Excel file
+    // Create template Excel file with all columns
     const templateData = [
-      ["Họ và tên", "Số điện thoại"],
-      ["Nguyễn Văn A", "0123456789"],
-      ["Trần Thị B", "0987654321"],
-      ["Lê Văn C", ""], // Example with empty phone
+      [
+        "STT",
+        "Họ Tên",
+        "SĐT",
+        "Môn",
+        "Thời gian",
+        "Thứ",
+        "Đóng học phí",
+        "Ghi chú học thử",
+      ],
+      [
+        "1",
+        "Nguyễn Văn A",
+        "0123456789",
+        "Piano",
+        "18h-19h",
+        "Thứ 7 - CN",
+        "Đã đóng",
+        "",
+      ],
+      [
+        "2",
+        "Trần Thị B",
+        "0987654321",
+        "Guitar",
+        "17h-18h",
+        "Thứ 2 -4",
+        "Đã đóng",
+        "05/10",
+      ],
+      ["3", "Lê Văn C", "", "Piano", "9h-10h", "Thứ 7 - CN", "Nghỉ Luôn", ""],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(templateData);
@@ -281,8 +333,14 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
 
     // Set column widths
     ws["!cols"] = [
-      { wch: 30 }, // Họ và tên
+      { wch: 5 }, // STT
+      { wch: 25 }, // Họ và tên
       { wch: 15 }, // Số điện thoại
+      { wch: 15 }, // Môn
+      { wch: 15 }, // Thời gian
+      { wch: 15 }, // Thứ
+      { wch: 15 }, // Đóng học phí
+      { wch: 20 }, // Ghi chú học thử
     ];
 
     XLSX.writeFile(wb, "Mau_import_hoc_sinh.xlsx");
@@ -293,273 +351,305 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
   const invalidCount = allRows.filter((r) => !r.isValid).length;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent
-        maxWidth="max-w-[95vw] sm:max-w-6xl lg:max-w-7xl"
-        className="max-h-[90vh] overflow-y-auto w-full"
-      >
-        <DialogHeader>
-          <DialogTitle>Import học sinh từ Excel</DialogTitle>
-          <DialogDescription>
-            Chọn file Excel (.xlsx, .xls, .csv) chứa danh sách học sinh. File
-            cần có 2 cột: Họ và tên, Số điện thoại. Số điện thoại có thể để
-            trống.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>{children}</DialogTrigger>
+        <DialogContent
+          maxWidth="max-w-[95vw] sm:max-w-6xl lg:max-w-7xl"
+          className="max-h-[90vh] overflow-y-auto w-full"
+        >
+          <DialogHeader>
+            <DialogTitle>Import học sinh từ Excel</DialogTitle>
+            <DialogDescription>
+              Chọn file Excel (.xlsx, .xls, .csv) chứa danh sách học sinh. File
+              cần có 2 cột: Họ và tên, Số điện thoại. Số điện thoại có thể để
+              trống.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          {/* File input */}
-          <div className="space-y-2">
-            <Label htmlFor="file">Chọn file Excel</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="file"
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileChange}
-                disabled={isParsing || isLoading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadTemplate}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Tải file mẫu
-              </Button>
-            </div>
-          </div>
-
-          {/* Loading state */}
-          {isParsing && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Đang đọc file...</span>
-            </div>
-          )}
-
-          {/* Statistics */}
-          {allRows.length > 0 && (
-            <div className="flex items-center gap-4 text-sm">
-              <div>
-                <span className="font-medium">Tổng:</span> {allRows.length}
-              </div>
-              <div className="text-green-600">
-                <span className="font-medium">Hợp lệ:</span> {validCount}
-              </div>
-              {invalidCount > 0 && (
-                <div className="text-destructive">
-                  <span className="font-medium">Không hợp lệ:</span>{" "}
-                  {invalidCount}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Warning alert */}
-          {invalidCount > 0 && (
-            <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-              <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-              <div className="text-sm text-destructive">
-                <div className="font-medium mb-1">Cảnh báo</div>
-                <div>
-                  Có {invalidCount} học sinh không hợp lệ. Vui lòng chỉnh sửa
-                  hoặc bỏ qua để tiếp tục import. Chỉ học sinh hợp lệ sẽ được
-                  import vào hệ thống.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Students table */}
-          {allRows.length > 0 && (
+          <div className="space-y-4">
+            {/* File input */}
             <div className="space-y-2">
-              <div className="text-sm font-medium">Danh sách học sinh</div>
-              <div className="max-h-96 overflow-y-auto border rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableHeaderRow>
-                      <TableHead className="w-16">Dòng</TableHead>
-                      <TableHead>Họ và tên</TableHead>
-                      <TableHead>Số điện thoại</TableHead>
-                      <TableHead className="w-24">Trạng thái</TableHead>
-                      <TableHead className="w-32">Thao tác</TableHead>
-                    </TableHeaderRow>
-                  </TableHeader>
-                  <TableBody>
-                    {allRows.map((row, index) => (
-                      <React.Fragment key={index}>
-                        <TableRow
-                          className={
-                            row.isValid
-                              ? ""
-                              : "bg-destructive/5 hover:bg-destructive/10"
-                          }
-                        >
-                          <TableCell className="font-medium">
-                            {row.rowIndex}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {row.full_name}
-                          </TableCell>
-                          <TableCell>{row.phone || "-"}</TableCell>
-                          <TableCell>
-                            {row.isValid ? (
-                              <Badge variant="default">Hợp lệ</Badge>
-                            ) : (
-                              <Badge variant="destructive">Không hợp lệ</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {!row.isValid && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingRowIndex(index);
-                                  editForm.reset({
-                                    full_name: row.full_name,
-                                    phone: row.phone || "",
-                                  });
-                                }}
-                              >
-                                <Pencil className="h-4 w-4 mr-1" />
-                                Chỉnh sửa
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        {!row.isValid && row.errors.length > 0 && (
-                          <TableRow className="bg-destructive/5">
-                            <TableCell colSpan={5} className="p-2">
-                              <div className="text-xs text-destructive">
-                                <strong>Lỗi:</strong> {row.errors.join(", ")}
-                              </div>
+              <Label htmlFor="file">Chọn file Excel</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="file"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileChange}
+                  disabled={isParsing || isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadTemplate}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Tải file mẫu
+                </Button>
+              </div>
+            </div>
+
+            {/* Loading state */}
+            {isParsing && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Đang đọc file...</span>
+              </div>
+            )}
+
+            {/* Statistics */}
+            {allRows.length > 0 && (
+              <div className="flex items-center gap-4 text-sm">
+                <div>
+                  <span className="font-medium">Tổng:</span> {allRows.length}
+                </div>
+                <div className="text-green-600">
+                  <span className="font-medium">Hợp lệ:</span> {validCount}
+                </div>
+                {invalidCount > 0 && (
+                  <div className="text-destructive">
+                    <span className="font-medium">Không hợp lệ:</span>{" "}
+                    {invalidCount}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Warning alert */}
+            {invalidCount > 0 && (
+              <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <div className="text-sm text-destructive">
+                  <div className="font-medium mb-1">Cảnh báo</div>
+                  <div>
+                    Có {invalidCount} học sinh không hợp lệ. Vui lòng chỉnh sửa
+                    hoặc bỏ qua để tiếp tục import. Chỉ học sinh hợp lệ sẽ được
+                    import vào hệ thống.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Students table */}
+            {allRows.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Danh sách học sinh</div>
+                <div className="max-h-96 overflow-y-auto border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableHeaderRow>
+                        <TableHead className="w-16">Dòng</TableHead>
+                        <TableHead>Họ và tên</TableHead>
+                        <TableHead>Số điện thoại</TableHead>
+                        <TableHead>Môn</TableHead>
+                        <TableHead>Thời gian</TableHead>
+                        <TableHead>Thứ</TableHead>
+                        <TableHead>Trạng thái học phí</TableHead>
+                        <TableHead className="w-24">Trạng thái</TableHead>
+                        <TableHead className="w-32">Thao tác</TableHead>
+                      </TableHeaderRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allRows.map((row, index) => (
+                        <React.Fragment key={index}>
+                          <TableRow
+                            className={
+                              row.isValid
+                                ? ""
+                                : "bg-destructive/5 hover:bg-destructive/10"
+                            }
+                          >
+                            <TableCell className="font-medium">
+                              {row.rowIndex}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {row.full_name}
+                            </TableCell>
+                            <TableCell>{row.phone || "-"}</TableCell>
+                            <TableCell>{row.subject || "-"}</TableCell>
+                            <TableCell>{row.time_slot || "-"}</TableCell>
+                            <TableCell>{row.days || "-"}</TableCell>
+                            <TableCell>{row.payment_status || "-"}</TableCell>
+                            <TableCell>
+                              {row.isValid ? (
+                                <Badge variant="default">Hợp lệ</Badge>
+                              ) : (
+                                <Badge variant="destructive">
+                                  Không hợp lệ
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {!row.isValid && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingRowIndex(index);
+                                    editForm.reset({
+                                      full_name: row.full_name,
+                                      phone: row.phone || "",
+                                    });
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4 mr-1" />
+                                  Chỉnh sửa
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </TableBody>
-                </Table>
+                          {!row.isValid && row.errors.length > 0 && (
+                            <TableRow className="bg-destructive/5">
+                              <TableCell colSpan={9} className="p-2">
+                                <div className="text-xs text-destructive">
+                                  <strong>Lỗi:</strong> {row.errors.join(", ")}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Edit Dialog */}
-        <Dialog
-          open={editingRowIndex !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditingRowIndex(null);
-              editForm.reset();
-            }
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                Chỉnh sửa học sinh (Dòng{" "}
-                {editingRowIndex !== null
-                  ? allRows[editingRowIndex]?.rowIndex
-                  : ""}
-                )
-              </DialogTitle>
-            </DialogHeader>
-            <Form {...editForm}>
-              <form
-                onSubmit={editForm.handleSubmit(handleEditRow)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={editForm.control}
-                  name="full_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Họ và tên</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Nhập họ và tên"
-                          autoComplete="off"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Số điện thoại (tùy chọn)</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Nhập số điện thoại (10 số, bắt đầu bằng 0)"
-                          autoComplete="off"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                      <p className="text-xs text-muted-foreground">
-                        Có thể để trống. Nếu nhập, phải có 10 số và bắt đầu bằng
-                        0.
-                      </p>
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingRowIndex(null);
-                      editForm.reset();
-                    }}
-                  >
-                    Hủy
-                  </Button>
-                  <Button type="submit">Lưu</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setOpen(false);
-              setAllRows([]);
-              setEditingRowIndex(null);
-            }}
-            disabled={isLoading}
-          >
-            Hủy
-          </Button>
-          <Button
-            onClick={handleImport}
-            disabled={isLoading || validCount === 0}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang import...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Import ({validCount} học sinh)
-              </>
             )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+
+          {/* Edit Dialog */}
+          <Dialog
+            open={editingRowIndex !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setEditingRowIndex(null);
+                editForm.reset();
+              }
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  Chỉnh sửa học sinh (Dòng{" "}
+                  {editingRowIndex !== null
+                    ? allRows[editingRowIndex]?.rowIndex
+                    : ""}
+                  )
+                </DialogTitle>
+              </DialogHeader>
+              <Form {...editForm}>
+                <form
+                  onSubmit={editForm.handleSubmit(handleEditRow)}
+                  className="space-y-4"
+                >
+                  <FormField
+                    control={editForm.control}
+                    name="full_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Họ và tên</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nhập họ và tên"
+                            autoComplete="off"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Số điện thoại (tùy chọn)</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nhập số điện thoại (10 số, bắt đầu bằng 0)"
+                            autoComplete="off"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                        <p className="text-xs text-muted-foreground">
+                          Có thể để trống. Nếu nhập, phải có 10 số và bắt đầu
+                          bằng 0.
+                        </p>
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingRowIndex(null);
+                        editForm.reset();
+                      }}
+                    >
+                      Hủy
+                    </Button>
+                    <Button type="submit">Lưu</Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                setAllRows([]);
+                setEditingRowIndex(null);
+              }}
+              disabled={isLoading}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={isLoading || validCount === 0}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang import...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import ({validCount} học sinh)
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Map Classes Dialog - rendered outside import dialog to avoid nested dialogs */}
+      <MapClassesDialog
+        open={showMapClasses}
+        onOpenChange={(open) => {
+          setShowMapClasses(open);
+          if (!open) {
+            // Reset form when dialog closes
+            setAllRows([]);
+            setEditingRowIndex(null);
+            router.refresh();
+          }
+        }}
+        importedStudents={importedStudentsWithIds}
+        onSuccess={() => {
+          setShowMapClasses(false);
+          setAllRows([]);
+          setEditingRowIndex(null);
+        }}
+      />
+    </>
   );
 }
