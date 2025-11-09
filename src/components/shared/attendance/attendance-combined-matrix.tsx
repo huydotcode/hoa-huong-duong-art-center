@@ -26,7 +26,7 @@ import {
   useTeacherAttendanceToggleAnySession,
 } from "@/lib/hooks/use-attendance";
 
-type Student = { id: string; full_name: string; phone: string };
+type Student = { id: string; full_name: string; phone: string | null };
 type Teacher = { id: string; full_name: string; phone: string };
 
 type FilterMode = "all" | "teacher" | "student";
@@ -80,7 +80,7 @@ export function AttendanceCombinedMatrix(props: {
       id: s.id,
       kind: "student",
       full_name: s.full_name,
-      phone: s.phone,
+      phone: s.phone || "",
     }));
     let all = [...tRows, ...sRows];
     if (filter === "teacher") all = tRows;

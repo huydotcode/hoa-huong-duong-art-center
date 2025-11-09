@@ -53,7 +53,15 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
     setIsLoading(true);
 
     try {
-      await createStudent(values, path);
+      await createStudent(
+        {
+          full_name: values.full_name,
+          phone: values.phone || null,
+          parent_phone: values.parent_phone || null,
+          is_active: values.is_active,
+        },
+        path
+      );
       toast.success("Thêm học sinh thành công!");
       form.reset();
       setOpen(false);
