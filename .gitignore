@@ -12,6 +12,7 @@ docs
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+excel
 
 # testing
 /coverage
