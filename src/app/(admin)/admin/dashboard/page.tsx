@@ -1,6 +1,9 @@
 import { getStats, getRevenueData } from "@/lib/services/admin-stats-service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ChartsSection from "@/components/shared/charts/charts-section";
+import { CreateAdminForm } from "@/components/forms";
+import { Button } from "@/components/ui/button";
+import { UserPlus } from "lucide-react";
 
 export default async function DashboardPage() {
   const stats = await getStats();
@@ -48,8 +51,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Tổng quan</h1>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Tổng quan</h1>
+        </div>
+        <CreateAdminForm>
+          <Button className="self-start md:self-auto">
+            <UserPlus className="mr-2 h-4 w-4" />
+            Tạo tài khoản admin
+          </Button>
+        </CreateAdminForm>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
