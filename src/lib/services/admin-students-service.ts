@@ -198,6 +198,14 @@ export async function updateStudent(
   if (path) revalidatePath(path);
 }
 
+export async function deleteStudent(id: string, path?: string) {
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("students").delete().eq("id", id);
+  if (error) throw new Error(`Lỗi khi xóa học sinh: ${error.message}`);
+  if (path) revalidatePath(path);
+}
+
 export async function updateStudentFromForm(formData: FormData) {
   const id = String(formData.get("id") || "").trim();
   const full_name = String(formData.get("full_name") || "").trim();

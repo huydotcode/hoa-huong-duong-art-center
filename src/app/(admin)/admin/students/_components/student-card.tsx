@@ -9,6 +9,7 @@ import { UpdateStudentForm } from "@/components/forms";
 import { StudentClassScheduleDialog } from "./student-class-schedule-dialog";
 import type { Student } from "@/types";
 import { isNewStudent } from "@/lib/utils";
+import { DeleteStudentButton } from "./delete-student-button";
 
 export function StudentCard({ student }: { student: Student }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -61,6 +62,7 @@ export function StudentCard({ student }: { student: Student }) {
                   <Pencil className="h-4 w-4" />
                 </Button>
               </UpdateStudentForm>
+              <DeleteStudentButton student={student} className="h-8 w-8" />
             </div>
           </div>
           <div className="flex items-center gap-2">
