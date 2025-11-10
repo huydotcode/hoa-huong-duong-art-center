@@ -19,4 +19,5 @@ export const TEACHER_NAV_ITEMS: NavItem[] = [
   { href: "/teacher", label: "Tổng quan" },
   { href: "/teacher/classes", label: "Lớp học" },
   { href: "/teacher/attendance", label: "Điểm danh" },
+  { href: "/teacher/grades", label: "Chấm điểm" },
 ];
