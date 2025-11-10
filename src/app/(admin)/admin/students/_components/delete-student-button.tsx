@@ -40,6 +40,12 @@ export function DeleteStudentButton({
       toast.success("Đã xóa học sinh thành công");
       setOpen(false);
       router.refresh();
+      // Notify client lists to optimistically remove the student
+      try {
+        window.dispatchEvent(
+          new CustomEvent("student-deleted", { detail: { id: student.id } })
+        );
+      } catch {}
     } catch (error) {
       console.error("Error deleting student:", error);
       toast.error("Xóa học sinh thất bại", {

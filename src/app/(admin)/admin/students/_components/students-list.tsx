@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import {
@@ -37,6 +37,23 @@ export default function StudentsList({
   const hasQuery = query.trim().length > 0;
   const displayedCount = allData.length;
   const hasMore = totalCount > displayedCount;
+
+  // Remove deleted student optimistically when receiving global event
+  useEffect(() => {
+    function handleDeleted(e: Event) {
+      const custom = e as CustomEvent<{ id?: string }>;
+      const id = custom.detail?.id;
+      if (!id) return;
+      setAllData((prev) => prev.filter((s) => s.id !== id));
+    }
+    window.addEventListener("student-deleted", handleDeleted as EventListener);
+    return () => {
+      window.removeEventListener(
+        "student-deleted",
+        handleDeleted as EventListener
+      );
+    };
+  }, []);
 
   const handleLoadMore = () => {
     if (isPending || !hasMore) return;
