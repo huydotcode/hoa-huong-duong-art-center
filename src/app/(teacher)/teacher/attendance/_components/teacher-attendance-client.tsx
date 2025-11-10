@@ -289,6 +289,7 @@ export default function TeacherAttendanceClient({
                     showClassColumn={false}
                     initialState={stateForGroup}
                     statsRows={group.allRows as AdminAttendanceRow[]}
+                    markedBy="teacher"
                     onStatsChange={(statsSummary) =>
                       setAttendanceSummaries((prev) => {
                         const prevStats = prev[group.classId];
