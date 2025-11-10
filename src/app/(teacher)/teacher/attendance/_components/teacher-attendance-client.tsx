@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AttendanceDateToolbarClient } from "@/components/shared/attendance/attendance-date-toolbar-client";
 import {
@@ -12,9 +12,6 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import AdminAttendanceMatrix from "@/components/shared/attendance/admin-attendance-matrix";
-import type { AdminAttendanceRow } from "@/lib/services/admin-attendance-service";
 import type {
   TeacherAttendanceClass,
   TeacherAttendanceRow,
@@ -70,34 +67,6 @@ export default function TeacherAttendanceClient({
     [searchParams, router, sessionLabel]
   );
 
-  const [attendanceSummaries, setAttendanceSummaries] = useState<
-    Record<string, { presentStudents: number; totalStudents: number }>
-  >({});
-
-  const [bulkActionsMap, setBulkActionsMap] = useState<
-    Record<
-      string,
-      {
-        selectedCount: number;
-        allSelected: boolean;
-        toggleSelectAll: () => void;
-        handleBulk: (present: boolean) => Promise<void>;
-      }
-    >
-  >({});
-
-  const classStats = useMemo(() => {
-    const stats = new Map<string, { studentCount: number }>();
-    studentRows.forEach((row) => {
-      const entry = stats.get(row.classId) || {
-        studentCount: 0,
-      };
-      entry.studentCount += 1;
-      stats.set(row.classId, entry);
-    });
-    return stats;
-  }, [studentRows]);
-
   const grouped = useMemo(() => {
     const map = new Map<
       string,
@@ -107,7 +76,6 @@ export default function TeacherAttendanceClient({
         sessionTime: string;
         endTime?: string;
         rows: TeacherAttendanceRow[];
-        allRows: TeacherAttendanceRow[];
         initialState: Record<string, boolean>;
       }
     >();
@@ -120,15 +88,8 @@ export default function TeacherAttendanceClient({
         sessionTime: info?.sessionTime ?? sessionLabel,
         endTime: info?.endTime,
         rows: [],
-        allRows: [],
         initialState: {},
       });
-    });
-
-    studentRows.forEach((row) => {
-      const group = map.get(row.classId);
-      if (!group) return;
-      group.allRows.push(row);
     });
 
     studentRows.forEach((row) => {
@@ -140,7 +101,6 @@ export default function TeacherAttendanceClient({
           sessionTime: info?.sessionTime ?? sessionLabel,
           endTime: info?.endTime,
           rows: [row],
-          allRows: [row],
           initialState: {},
         });
       } else {
@@ -163,13 +123,7 @@ export default function TeacherAttendanceClient({
         sensitivity: "base",
       })
     );
-  }, [
-    classes,
-    studentRows,
-    classSessionTimes,
-    sessionLabel,
-    initialState,
-  ]);
+  }, [classes, studentRows, classSessionTimes, sessionLabel, initialState]);
 
   return (
     <div className="space-y-4">
@@ -208,13 +162,14 @@ export default function TeacherAttendanceClient({
       ) : (
         <div className="space-y-4">
           {grouped.map((group) => {
-            const stats = classStats.get(group.classId) || {
-              studentCount: 0,
-            };
             const sessionTime = group.sessionTime;
             const sessionEnd = group.endTime;
             const stateForGroup = group.initialState;
-            const summary = attendanceSummaries[group.classId];
+            const totalStudents = group.rows.length;
+            const presentStudents = group.rows.reduce((sum, row) => {
+              const key = `${row.key}@@${sessionTime}`;
+              return stateForGroup[key] ? sum + 1 : sum;
+            }, 0);
 
             return (
               <Card key={group.classId} className="shadow-sm">
@@ -224,10 +179,9 @@ export default function TeacherAttendanceClient({
                       {group.className || "Lớp chưa đặt tên"}
                     </CardTitle>
                     <div className="space-y-1 text-sm text-muted-foreground">
-                      <div>HS: {stats.studentCount}</div>
+                      <div>HS: {totalStudents}</div>
                       <div>
-                        Có mặt: {summary?.presentStudents ?? 0}/
-                        {summary?.totalStudents ?? stats.studentCount} HS
+                        Có mặt: {presentStudents}/{totalStudents} HS
                       </div>
                     </div>
                   </div>
@@ -239,85 +193,51 @@ export default function TeacherAttendanceClient({
                       Ca {sessionTime}
                       {sessionEnd ? ` - ${sessionEnd}` : ""}
                     </Badge>
-                    {bulkActionsMap[group.classId] && (
-                      <div className="hidden md:flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={
-                            bulkActionsMap[group.classId].toggleSelectAll
-                          }
-                          className="whitespace-nowrap"
-                        >
-                          {bulkActionsMap[group.classId].allSelected
-                            ? "Bỏ chọn"
-                            : "Chọn tất cả"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            bulkActionsMap[group.classId].handleBulk(true)
-                          }
-                          disabled={
-                            bulkActionsMap[group.classId].selectedCount === 0
-                          }
-                        >
-                          Có
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() =>
-                            bulkActionsMap[group.classId].handleBulk(false)
-                          }
-                          disabled={
-                            bulkActionsMap[group.classId].selectedCount === 0
-                          }
-                        >
-                          Vắng
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </CardHeader>
-                <CardContent className="p-2 md:px-6">
-                  <AdminAttendanceMatrix
-                    dateISO={dateISO}
-                    sessionLabel={sessionTime}
-                    sessionTime={sessionTime}
-                    rows={group.rows as AdminAttendanceRow[]}
-                    showClassColumn={false}
-                    initialState={stateForGroup}
-                    statsRows={group.allRows as AdminAttendanceRow[]}
-                    markedBy="teacher"
-                    onStatsChange={(statsSummary) =>
-                      setAttendanceSummaries((prev) => {
-                        const prevStats = prev[group.classId];
-                        if (
-                          prevStats &&
-                          prevStats.presentStudents ===
-                            statsSummary.presentStudents &&
-                          prevStats.totalStudents === statsSummary.totalStudents
-                        ) {
-                          return prev;
-                        }
-                        return {
-                          ...prev,
-                          [group.classId]: statsSummary,
-                        };
-                      })
-                    }
-                    onBulkActionsReady={
-                      group.rows.length > 0
-                        ? (actions) => {
-                            setBulkActionsMap((prev) => ({
-                              ...prev,
-                              [group.classId]: actions,
-                            }));
-                          }
-                        : undefined
-                    }
-                  />
+                <CardContent className="space-y-3">
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Danh sách học sinh
+                  </div>
+                  {group.rows.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                      Chưa có học sinh đăng ký.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {group.rows.map((row) => {
+                        const key = `${row.key}@@${sessionTime}`;
+                        const isPresent = stateForGroup[key] === true;
+                        return (
+                          <div
+                            key={row.key}
+                            className="flex items-center justify-between rounded-md border px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {row.full_name}
+                              </div>
+                              {row.phone && (
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {row.phone}
+                                </div>
+                              )}
+                            </div>
+                            <Badge
+                              variant={isPresent ? "default" : "secondary"}
+                              className={
+                                isPresent
+                                  ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
+                                  : "bg-muted text-muted-foreground"
+                              }
+                            >
+                              {isPresent ? "Có mặt" : "Vắng"}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

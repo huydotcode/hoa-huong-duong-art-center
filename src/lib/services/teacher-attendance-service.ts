@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { toArray } from "@/lib/utils";
+import type { ClassSchedule } from "@/types/database";
 
 export async function getTeacherIdFromSession(): Promise<string | null> {
   const supabase = await createClient();
@@ -358,6 +360,10 @@ export async function getAttendanceStateForTeacherSessions(
 export type TeacherAttendanceClass = {
   id: string;
   name: string;
+  days_of_week: ClassSchedule[];
+  duration_minutes: number;
+  current_student_count: number;
+  max_student_count: number;
 };
 
 export async function getClassesAndStudentsForTeacher(
@@ -370,7 +376,12 @@ export async function getClassesAndStudentsForTeacher(
   const supabase = await createClient();
 
   const [{ data: classesData }, { data: enrollments }] = await Promise.all([
-    supabase.from("classes").select("id, name").in("id", classIds),
+    supabase
+      .from("classes")
+      .select(
+        "id, name, days_of_week, duration_minutes, current_student_count, max_student_count"
+      )
+      .in("id", classIds),
     supabase
       .from("student_class_enrollments")
       .select("class_id, student:students(id, full_name, phone)")
@@ -380,11 +391,22 @@ export async function getClassesAndStudentsForTeacher(
 
   const classes: TeacherAttendanceClass[] = (
     Array.isArray(classesData)
-      ? (classesData as { id: string; name: string }[])
+      ? (classesData as {
+          id: string;
+          name: string;
+          days_of_week?: unknown;
+          duration_minutes?: number | null;
+          current_student_count?: number | null;
+          max_student_count?: number | null;
+        }[])
       : []
   ).map((c) => ({
     id: String(c.id),
     name: String(c.name),
+    days_of_week: toArray<ClassSchedule>(c.days_of_week),
+    duration_minutes: Number(c.duration_minutes ?? 0),
+    current_student_count: Number(c.current_student_count ?? 0),
+    max_student_count: Number(c.max_student_count ?? 0),
   }));
 
   const idToName = new Map<string, string>();

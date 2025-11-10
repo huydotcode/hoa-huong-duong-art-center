@@ -21,7 +21,8 @@ import { Edit } from "lucide-react";
 interface WeeklyScheduleCalendarProps {
   daysOfWeek: Class["days_of_week"];
   durationMinutes: number;
-  classData: Class;
+  classData?: Class;
+  readOnly?: boolean;
 }
 
 // Type definition for schedule map
@@ -33,8 +34,14 @@ export function WeeklyScheduleCalendar({
   daysOfWeek,
   durationMinutes,
   classData,
+  readOnly = false,
 }: WeeklyScheduleCalendarProps) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  const handleSelectDay = (day: number) => {
+    if (readOnly) return;
+    setSelectedDay(day);
+  };
 
   // Memoize schedule map calculation to avoid recalculation on every render
   const scheduleMap = useMemo<DayScheduleMap>(() => {
@@ -89,25 +96,35 @@ export function WeeklyScheduleCalendar({
         return (
           <Card
             key={day}
-            onClick={() => setSelectedDay(day)}
-            role="button"
-            tabIndex={0}
-            aria-label={`Chỉnh sửa lịch học ${dayInfo.label}`}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setSelectedDay(day);
-              }
-            }}
+            onClick={() => handleSelectDay(day)}
+            role={readOnly ? undefined : "button"}
+            tabIndex={readOnly ? -1 : 0}
+            aria-label={
+              readOnly ? undefined : `Chỉnh sửa lịch học ${dayInfo.label}`
+            }
+            onKeyDown={
+              readOnly
+                ? undefined
+                : (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleSelectDay(day);
+                    }
+                  }
+            }
             className={`
               border p-3 text-center transition-all duration-200 
-              w-full sm:w-auto cursor-pointer
+              w-full sm:w-auto ${readOnly ? "cursor-default" : "cursor-pointer"}
               ${
                 hasClass
                   ? "bg-primary/10 border-primary/30 hover:bg-primary/20 hover:border-primary/40 hover:shadow-md"
                   : "bg-muted/30 hover:bg-muted/50 border-muted"
               }
-              ${isSelected ? "ring-2 ring-primary ring-offset-2" : ""}
+              ${
+                !readOnly && isSelected
+                  ? "ring-2 ring-primary ring-offset-2"
+                  : ""
+              }
             `}
           >
             <div className="flex items-center justify-center gap-1 mb-2">
@@ -115,7 +132,7 @@ export function WeeklyScheduleCalendar({
                 <span className="sm:hidden">{dayInfo.label}</span>
                 <span className="hidden sm:inline">{dayInfo.short}</span>
               </span>
-              {hasClass && (
+              {hasClass && !readOnly && (
                 <Edit className="h-3 w-3 text-muted-foreground/50" />
               )}
             </div>
@@ -150,7 +167,7 @@ export function WeeklyScheduleCalendar({
           </Card>
         );
       })}
-      {selectedDay !== null && (
+      {!readOnly && selectedDay !== null && classData && (
         <EditDayScheduleForm
           classData={classData}
           day={selectedDay}
