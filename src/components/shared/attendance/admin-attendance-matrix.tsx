@@ -26,6 +26,7 @@ export default function AdminAttendanceMatrix({
   onStatsChange,
   statsRows,
   onBulkActionsReady,
+  markedBy = "admin",
 }: {
   dateISO: string;
   sessionLabel: string;
@@ -44,6 +45,7 @@ export default function AdminAttendanceMatrix({
     toggleSelectAll: () => void;
     handleBulk: (present: boolean) => Promise<void>;
   }) => void;
+  markedBy?: "admin" | "teacher";
 }) {
   const [selectedCellKeys, setSelectedCellKeys] = useState<Set<string>>(
     new Set()
@@ -119,7 +121,7 @@ export default function AdminAttendanceMatrix({
           date: dateISO,
           session_time: effectiveSession,
           is_present: present,
-          marked_by: "admin",
+          marked_by: markedBy,
         });
       } else {
         await upsertTeacherAttendance({
@@ -128,7 +130,7 @@ export default function AdminAttendanceMatrix({
           date: dateISO,
           session_time: effectiveSession,
           is_present: present,
-          marked_by: "admin",
+          marked_by: markedBy,
         });
       }
       setCellStates((state) => {
