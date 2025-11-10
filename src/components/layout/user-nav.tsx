@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
+import { ChangePasswordMenuItem } from "./change-password-dialog";
 
 export async function UserNav() {
   const supabase = await createClient();
@@ -59,6 +60,8 @@ export async function UserNav() {
           </div>
         </DropdownMenuLabel>
 
+        <DropdownMenuSeparator />
+        <ChangePasswordMenuItem />
         <DropdownMenuSeparator />
         <form action={signOut}>
           <button type="submit" className="w-full">

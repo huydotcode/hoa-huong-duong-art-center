@@ -1,11 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 
 export interface CreateAdminData {
   full_name: string;
   email: string;
   password: string;
+}
+
+interface ChangePasswordData {
+  current_password: string;
+  new_password: string;
 }
 
 export async function createAdmin(
@@ -57,4 +63,47 @@ export async function createAdmin(
       ? error
       : new Error("Không thể tạo tài khoản admin");
   }
+}
+
+export async function changePassword(data: ChangePasswordData): Promise<{
+  success: true;
+}> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: getUserError,
+  } = await supabase.auth.getUser();
+
+  if (getUserError || !user) {
+    throw new Error("Không thể xác định tài khoản hiện tại.");
+  }
+
+  const identifier = user.email || user.phone;
+  if (!identifier) {
+    throw new Error("Tài khoản không có email hoặc số điện thoại.");
+  }
+
+  const signInResponse = await supabase.auth.signInWithPassword(
+    user.email
+      ? { email: user.email, password: data.current_password }
+      : {
+          phone: user.phone!,
+          password: data.current_password,
+        }
+  );
+
+  if (signInResponse.error) {
+    throw new Error("Mật khẩu hiện tại không chính xác.");
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: data.new_password,
+  });
+
+  if (updateError) {
+    throw new Error(updateError.message || "Không thể đổi mật khẩu.");
+  }
+
+  return { success: true };
 }
