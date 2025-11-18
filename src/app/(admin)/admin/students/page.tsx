@@ -12,9 +12,9 @@ export default async function StudentsPage(props: SearchProps) {
   const searchParams = await props.searchParams;
   const q = searchParams?.q || "";
 
-  // Initial load: always load 10 students first
+  // Initial load: fetch 30 students by default for smoother browsing
   const [initialData, totalCount] = await Promise.all([
-    getStudents(q, { limit: 10, offset: 0 }),
+    getStudents(q, { limit: 30, offset: 0 }),
     getStudentsCount(q),
   ]);
 
