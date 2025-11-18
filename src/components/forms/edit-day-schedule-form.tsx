@@ -361,6 +361,13 @@ export function EditDayScheduleForm({
       // Pass day parameter to handle empty array case (when deleting all schedules)
       await updateClassDaySchedule(classData.id, daySchedules, path, day);
       toast.success(`Cập nhật lịch học ${DAY_NAME_MAP[day]} thành công!`);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("class-schedule-updated", {
+            detail: { classId: classData.id },
+          })
+        );
+      }
       onOpenChange(false);
       router.refresh();
     } catch (error) {

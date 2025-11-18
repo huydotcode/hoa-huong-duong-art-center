@@ -321,7 +321,7 @@ export default function StudentsSection({
                     </Badge>
                     {!s.student.is_active && (
                       <Badge variant="destructive" className="text-xs">
-                        Đã ẩn
+                        {s.student.is_active ? "Hoạt động" : "Ngừng hoạt động"}
                       </Badge>
                     )}
                   </div>
@@ -423,7 +423,9 @@ export default function StudentsSection({
                       </Badge>
                       {!s.student.is_active && (
                         <Badge variant="destructive" className="text-xs">
-                          Đã ẩn
+                          {s.student.is_active
+                            ? "Hoạt động"
+                            : "Ngừng hoạt động"}
                         </Badge>
                       )}
                     </div>

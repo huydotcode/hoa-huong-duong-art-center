@@ -17,7 +17,7 @@ import { Trash2, Loader2 } from "lucide-react";
 import type { Student } from "@/types";
 import { deleteStudent } from "@/lib/services/admin-students-service";
 import { toast } from "sonner";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 interface DeleteStudentButtonProps {
   student: Student;
@@ -30,7 +30,6 @@ export function DeleteStudentButton({
 }: DeleteStudentButtonProps) {
   const [open, setOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const router = useRouter();
   const path = usePathname();
 
   async function handleDelete() {
@@ -39,7 +38,6 @@ export function DeleteStudentButton({
       await deleteStudent(student.id, path);
       toast.success("Đã xóa học sinh thành công");
       setOpen(false);
-      router.refresh();
       // Notify client lists to optimistically remove the student
       try {
         window.dispatchEvent(

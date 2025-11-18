@@ -18,25 +18,30 @@ import { getStudents } from "@/lib/services/admin-students-service";
 import type { Student } from "@/types";
 import { Loader2 } from "lucide-react";
 
-const ITEMS_PER_PAGE = 10;
-
 interface StudentsListProps {
   initialData: Student[];
   query: string;
   totalCount: number;
+  pageSize: number;
 }
 
 export default function StudentsList({
   initialData,
   query,
   totalCount,
+  pageSize,
 }: StudentsListProps) {
   // State is automatically reset when component remounts (via key prop in parent)
   const [allData, setAllData] = useState<Student[]>(initialData);
+  const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
   const [isPending, startTransition] = useTransition();
   const hasQuery = query.trim().length > 0;
   const displayedCount = allData.length;
-  const hasMore = totalCount > displayedCount;
+  const hasMore = estimatedTotal > displayedCount;
+
+  useEffect(() => {
+    setEstimatedTotal(totalCount);
+  }, [totalCount]);
 
   // Remove deleted student optimistically when receiving global event
   useEffect(() => {
@@ -45,12 +50,26 @@ export default function StudentsList({
       const id = custom.detail?.id;
       if (!id) return;
       setAllData((prev) => prev.filter((s) => s.id !== id));
+      setEstimatedTotal((prev) => Math.max(prev - 1, 0));
     }
     window.addEventListener("student-deleted", handleDeleted as EventListener);
+    function handleUpdated(e: Event) {
+      const custom = e as CustomEvent<{ student?: Student }>;
+      const updated = custom.detail?.student;
+      if (!updated) return;
+      setAllData((prev) =>
+        prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
+      );
+    }
+    window.addEventListener("student-updated", handleUpdated as EventListener);
     return () => {
       window.removeEventListener(
         "student-deleted",
         handleDeleted as EventListener
+      );
+      window.removeEventListener(
+        "student-updated",
+        handleUpdated as EventListener
       );
     };
   }, []);
@@ -61,7 +80,7 @@ export default function StudentsList({
     startTransition(async () => {
       try {
         const nextBatch = await getStudents(query, {
-          limit: ITEMS_PER_PAGE,
+          limit: pageSize,
           offset: displayedCount,
         });
         setAllData((prev) => [...prev, ...nextBatch]);
@@ -159,13 +178,13 @@ export default function StudentsList({
                 Đang tải...
               </>
             ) : (
-              `Hiển thị thêm ${ITEMS_PER_PAGE} học sinh`
+              `Hiển thị thêm ${pageSize} học sinh`
             )}
           </Button>
         </div>
       )}
 
-      {!hasMore && displayedCount > ITEMS_PER_PAGE && (
+      {!hasMore && displayedCount > pageSize && (
         <div className="px-3 pb-3 pt-2">
           <p className="text-center text-sm text-muted-foreground">
             Đã hiển thị tất cả {totalCount} học sinh

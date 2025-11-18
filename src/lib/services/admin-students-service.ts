@@ -2,111 +2,64 @@
 import { createClient } from "@/lib/supabase/server";
 import { Student } from "@/types";
 import { revalidatePath } from "next/cache";
-import { normalizeText, normalizePhone, toArray } from "@/lib/utils";
+import { normalizePhone, toArray } from "@/lib/utils";
 
 export async function getStudents(
   query: string = "",
-  opts?: { limit?: number; offset?: number }
+  opts: { limit?: number; offset?: number } = {}
 ): Promise<Student[]> {
   const supabase = await createClient();
 
+  const limit = opts.limit ?? 30;
+  const offset = opts.offset ?? 0;
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
 
-  // Fetch all students first (for client-side filtering when query exists)
-  // If no query and has limit, use server-side pagination
-  let q = supabase
+  const selectColumns =
+    "id, full_name, phone, parent_phone, is_active, created_at, updated_at";
+
+  let request = supabase
     .from("students")
-    .select("*")
-    .order("full_name", { ascending: true });
+    .select(selectColumns)
+    .order("full_name", { ascending: true })
+    .range(offset, offset + limit - 1);
 
-  // Apply pagination only when no query (server-side pagination)
-  if (!hasQuery && opts?.limit !== undefined) {
-    const offset = opts.offset || 0;
-    q = q.range(offset, offset + opts.limit - 1);
+  if (hasQuery) {
+    const sanitized = trimmed.replace(/[%_]/g, "\\$&");
+    const pattern = `%${sanitized}%`;
+    request = request.or(
+      `full_name.ilike.${pattern},phone.ilike.${pattern},parent_phone.ilike.${pattern}`
+    );
   }
 
-  const { data, error } = await q;
+  const { data, error } = await request;
   if (error) throw error;
-  if (!data) return [];
 
-  // If no query, return paginated results
-  if (!hasQuery) {
-    return (data as Student[]) || [];
-  }
-
-  // Filter client-side with diacritic-insensitive search (when query exists)
-  const normalizedQuery = normalizeText(trimmed);
-  const normalizedQueryForPhone = normalizePhone(trimmed);
-
-  const filtered = (data as Student[]).filter((student) => {
-    // Search by full_name (diacritic-insensitive)
-    const nameMatch = student.full_name
-      ? normalizeText(student.full_name).includes(normalizedQuery)
-      : false;
-
-    // Search by phone (remove separators)
-    const phoneMatch = student.phone
-      ? normalizePhone(student.phone).includes(normalizedQueryForPhone)
-      : false;
-
-    // Search by parent_phone (remove separators)
-    const parentPhoneMatch = student.parent_phone
-      ? normalizePhone(student.parent_phone).includes(normalizedQueryForPhone)
-      : false;
-
-    return nameMatch || phoneMatch || parentPhoneMatch;
-  });
-
-  // Apply client-side pagination for filtered results
-  if (opts?.limit !== undefined) {
-    const offset = opts.offset || 0;
-    return filtered.slice(offset, offset + opts.limit);
-  }
-
-  return filtered;
+  return (data as Student[]) ?? [];
 }
 
 // Add function to get total count (for pagination)
 export async function getStudentsCount(query: string = ""): Promise<number> {
   const supabase = await createClient();
 
-  // If query exists, we need to fetch all and filter client-side
-  // Otherwise, we can use count query
   const trimmed = query.trim();
+  const hasQuery = trimmed.length > 0;
 
-  if (trimmed.length === 0) {
-    const { count, error } = await supabase
-      .from("students")
-      .select("*", { count: "exact", head: true });
+  let request = supabase
+    .from("students")
+    .select("*", { count: "exact", head: true });
 
-    if (error) throw error;
-    return count ?? 0;
+  if (hasQuery) {
+    const sanitized = trimmed.replace(/[%_]/g, "\\$&");
+    const pattern = `%${sanitized}%`;
+    request = request.or(
+      `full_name.ilike.${pattern},phone.ilike.${pattern},parent_phone.ilike.${pattern}`
+    );
   }
 
-  // For query, fetch all and count filtered results
-  const { data, error } = await supabase.from("students").select("*");
-
+  const { count, error } = await request;
   if (error) throw error;
-  if (!data) return 0;
-
-  const normalizedQuery = normalizeText(trimmed);
-  const normalizedQueryForPhone = normalizePhone(trimmed);
-
-  const filtered = (data as Student[]).filter((student) => {
-    const nameMatch = student.full_name
-      ? normalizeText(student.full_name).includes(normalizedQuery)
-      : false;
-    const phoneMatch = student.phone
-      ? normalizePhone(student.phone).includes(normalizedQueryForPhone)
-      : false;
-    const parentPhoneMatch = student.parent_phone
-      ? normalizePhone(student.parent_phone).includes(normalizedQueryForPhone)
-      : false;
-    return nameMatch || phoneMatch || parentPhoneMatch;
-  });
-
-  return filtered.length;
+  return count ?? 0;
 }
 
 type CreateStudentData = Pick<

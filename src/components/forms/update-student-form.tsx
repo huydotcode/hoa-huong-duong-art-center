@@ -69,13 +69,35 @@ export function UpdateStudentForm({ student, children }: Props) {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, student.id, student.full_name, student.phone, student.is_active, student.updated_at]);
+  }, [
+    open,
+    student.id,
+    student.full_name,
+    student.phone,
+    student.is_active,
+    student.updated_at,
+  ]);
 
   async function onSubmit(values: UpdateStudentSchema) {
     setIsLoading(true);
     try {
       await updateStudent(student.id, values, path);
       toast.success("Cập nhật học sinh thành công!");
+      try {
+        window.dispatchEvent(
+          new CustomEvent("student-updated", {
+            detail: {
+              student: {
+                ...student,
+                full_name: values.full_name,
+                phone: values.phone?.trim() || null,
+                is_active: values.is_active,
+                updated_at: new Date().toISOString(),
+              },
+            },
+          })
+        );
+      } catch {}
       // Close dialog first
       setOpen(false);
       // Then refresh to get updated data from server

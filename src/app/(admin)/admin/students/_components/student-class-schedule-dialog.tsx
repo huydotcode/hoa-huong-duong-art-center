@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,19 +18,42 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WeeklyScheduleCalendar } from "@/app/(admin)/admin/classes/[classId]/_components/weekly-schedule-calendar";
-import { getStudentCurrentClasses } from "@/lib/services/admin-students-service";
-import { formatEnrollmentStatus } from "@/lib/utils";
+import { formatEnrollmentStatus, toArray } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2, Calendar, ArrowRight } from "lucide-react";
 import type { Student } from "@/types";
 import type { Class } from "@/types/database";
 import { TransferClassDialog } from "./transfer-class-dialog";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
 interface StudentClassScheduleDialogProps {
   student: Student;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type EnrollmentRow = {
+  id: string;
+  class_id: string;
+  enrollment_date: string;
+  status: "trial" | "active" | "inactive";
+  leave_date?: string | null;
+  classes?:
+    | {
+        id: string;
+        name: string;
+        days_of_week: unknown;
+        duration_minutes: number;
+        is_active: boolean;
+      }
+    | Array<{
+        id: string;
+        name: string;
+        days_of_week: unknown;
+        duration_minutes: number;
+        is_active: boolean;
+      }>;
+};
 
 export function StudentClassScheduleDialog({
   student,
@@ -56,40 +79,134 @@ export function StudentClassScheduleDialog({
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
-  // Load student's current classes
+  const supabase = useMemo(() => createSupabaseClient(), []);
+
+  const mapClasses = useCallback(
+    (enrollments: EnrollmentRow[]) =>
+      enrollments
+        .filter((e) => {
+          const classData = Array.isArray(e.classes) ? e.classes[0] : e.classes;
+          return classData?.is_active === true;
+        })
+        .map((e) => {
+          const classData = Array.isArray(e.classes) ? e.classes[0] : e.classes;
+          return {
+            enrollmentId: e.id,
+            classId: e.class_id,
+            className: classData?.name || "",
+            daysOfWeek: toArray<{
+              day: number;
+              start_time: string;
+              end_time?: string;
+            }>(classData?.days_of_week || []),
+            durationMinutes: Number(classData?.duration_minutes || 0),
+            enrollmentDate: e.enrollment_date,
+            status: e.status as "trial" | "active" | "inactive",
+          };
+        }),
+    []
+  );
+
+  const applyClasses = useCallback((data: typeof classes) => {
+    setClasses(data);
+    setSelectedClass((prev) => {
+      if (prev && data.some((c) => c.classId === prev)) {
+        return prev;
+      }
+      return data.length > 0 ? data[0].classId : null;
+    });
+  }, []);
+
+  const fetchClasses = useCallback(async () => {
+    if (!student.id) return [];
+
+    const { data, error } = await supabase
+      .from("student_class_enrollments")
+      .select(
+        `
+        id,
+        class_id,
+        enrollment_date,
+        status,
+        leave_date,
+        classes(id, name, days_of_week, duration_minutes, is_active)
+      `
+      )
+      .eq("student_id", student.id)
+      .in("status", ["active", "trial"])
+      .is("leave_date", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return mapClasses(data || []);
+  }, [student.id, supabase, mapClasses]);
+
+  const reloadClasses = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchClasses();
+      applyClasses(data);
+    } catch (error) {
+      console.error("Error loading student classes:", error);
+      toast.error("Lỗi khi tải danh sách lớp học");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchClasses, applyClasses]);
+
+  // Load student's current classes whenever dialog opens
   useEffect(() => {
-    if (!open || !student.id) return;
+    if (!open) return;
+    let isActive = true;
 
-    let cancelled = false;
-
-    const loadClasses = async () => {
+    const load = async () => {
       setLoading(true);
       try {
-        const data = await getStudentCurrentClasses(student.id);
-        if (!cancelled) {
-          setClasses(data);
-          if (data.length > 0) {
-            setSelectedClass(data[0].classId);
-          }
-        }
+        const data = await fetchClasses();
+        if (!isActive) return;
+        applyClasses(data);
       } catch (error) {
-        if (!cancelled) {
-          console.error("Error loading student classes:", error);
-          toast.error("Lỗi khi tải danh sách lớp học");
-        }
+        if (!isActive) return;
+        console.error("Error loading student classes:", error);
+        toast.error("Lỗi khi tải danh sách lớp học");
       } finally {
-        if (!cancelled) {
+        if (isActive) {
           setLoading(false);
         }
       }
     };
 
-    loadClasses();
+    load();
 
     return () => {
-      cancelled = true;
+      isActive = false;
     };
-  }, [open, student.id]);
+  }, [open, fetchClasses, applyClasses]);
+
+  // Refresh when class schedule updated elsewhere while dialog is open
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (event: Event) => {
+      if (!open) return;
+      const customEvent = event as CustomEvent<{ classId?: string }>;
+      const classId = customEvent.detail?.classId;
+      if (classId && !classes.some((cls) => cls.classId === classId)) {
+        // Student không thuộc lớp này, bỏ qua
+        return;
+      }
+      reloadClasses();
+    };
+
+    window.addEventListener("class-schedule-updated", handler as EventListener);
+    return () => {
+      window.removeEventListener(
+        "class-schedule-updated",
+        handler as EventListener
+      );
+    };
+  }, [open, reloadClasses, classes]);
 
   const selectedClassData = classes.find((c) => c.classId === selectedClass);
 
@@ -134,27 +251,12 @@ export function StudentClassScheduleDialog({
             </div>
 
             {selectedClassData && (
-              <>
-                {/* Class info */}
-                <Card className="p-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-lg">
-                        {selectedClassData.className}
-                      </h3>
-                      <Badge
-                        variant="outline"
-                        className={
-                          selectedClassData.status === "active"
-                            ? "bg-blue-100 text-blue-700"
-                            : selectedClassData.status === "trial"
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-gray-100 text-gray-700"
-                        }
-                      >
-                        {formatEnrollmentStatus(selectedClassData.status)}
-                      </Badge>
-                    </div>
+              <Card className="p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold">
+                      {selectedClassData.className}
+                    </h3>
                     <p className="text-sm text-muted-foreground">
                       Ngày tham gia:{" "}
                       {new Date(
@@ -162,15 +264,19 @@ export function StudentClassScheduleDialog({
                       ).toLocaleDateString("vi-VN")}
                     </p>
                   </div>
-                </Card>
-
-                {/* Schedule calendar */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <label className="text-sm font-medium">Lịch học</label>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={
+                        selectedClassData.status === "active"
+                          ? "bg-blue-100 text-blue-700"
+                          : selectedClassData.status === "trial"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-gray-100 text-gray-700"
+                      }
+                    >
+                      {formatEnrollmentStatus(selectedClassData.status)}
+                    </Badge>
                     <Button
                       variant="outline"
                       size="sm"
@@ -180,31 +286,36 @@ export function StudentClassScheduleDialog({
                       Chuyển lớp
                     </Button>
                   </div>
-                  <Card className="p-4">
-                    <WeeklyScheduleCalendar
-                      daysOfWeek={selectedClassData.daysOfWeek}
-                      durationMinutes={selectedClassData.durationMinutes}
-                      classData={
-                        {
-                          id: selectedClassData.classId,
-                          name: selectedClassData.className,
-                          days_of_week: selectedClassData.daysOfWeek,
-                          duration_minutes: selectedClassData.durationMinutes,
-                          current_student_count: 0,
-                          max_student_count: 0,
-                          monthly_fee: 0,
-                          salary_per_session: 0,
-                          start_date: "",
-                          end_date: "",
-                          is_active: true,
-                          created_at: "",
-                          updated_at: "",
-                        } as Class
-                      }
-                    />
-                  </Card>
                 </div>
-              </>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    Lịch học
+                  </div>
+                  <WeeklyScheduleCalendar
+                    daysOfWeek={selectedClassData.daysOfWeek}
+                    durationMinutes={selectedClassData.durationMinutes}
+                    classData={
+                      {
+                        id: selectedClassData.classId,
+                        name: selectedClassData.className,
+                        days_of_week: selectedClassData.daysOfWeek,
+                        duration_minutes: selectedClassData.durationMinutes,
+                        current_student_count: 0,
+                        max_student_count: 0,
+                        monthly_fee: 0,
+                        salary_per_session: 0,
+                        start_date: "",
+                        end_date: "",
+                        is_active: true,
+                        created_at: "",
+                        updated_at: "",
+                      } as Class
+                    }
+                  />
+                </div>
+              </Card>
             )}
           </div>
         )}
@@ -224,18 +335,7 @@ export function StudentClassScheduleDialog({
               if (!open) {
                 // Refresh student classes when transfer dialog closes
                 if (student.id) {
-                  getStudentCurrentClasses(student.id)
-                    .then((data) => {
-                      setClasses(data);
-                      if (data.length > 0) {
-                        setSelectedClass(data[0].classId);
-                      } else {
-                        setSelectedClass(null);
-                      }
-                    })
-                    .catch((error) => {
-                      console.error("Error refreshing student classes:", error);
-                    });
+                  reloadClasses();
                 }
               }
             }}
