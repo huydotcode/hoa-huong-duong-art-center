@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import {
+  useEffect,
+  useState,
+  useTransition,
+  useCallback,
+  useMemo,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import {
@@ -35,7 +41,7 @@ export default function StudentsList({
   const [allData, setAllData] = useState<Student[]>(initialData);
   const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
   const [isPending, startTransition] = useTransition();
-  const hasQuery = query.trim().length > 0;
+  const hasQuery = useMemo(() => query.trim().length > 0, [query]);
   const displayedCount = allData.length;
   const hasMore = estimatedTotal > displayedCount;
 
@@ -44,23 +50,25 @@ export default function StudentsList({
   }, [totalCount]);
 
   // Remove deleted student optimistically when receiving global event
+  const handleDeleted = useCallback((e: Event) => {
+    const custom = e as CustomEvent<{ id?: string }>;
+    const id = custom.detail?.id;
+    if (!id) return;
+    setAllData((prev) => prev.filter((s) => s.id !== id));
+    setEstimatedTotal((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const handleUpdated = useCallback((e: Event) => {
+    const custom = e as CustomEvent<{ student?: Student }>;
+    const updated = custom.detail?.student;
+    if (!updated) return;
+    setAllData((prev) =>
+      prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
+    );
+  }, []);
+
   useEffect(() => {
-    function handleDeleted(e: Event) {
-      const custom = e as CustomEvent<{ id?: string }>;
-      const id = custom.detail?.id;
-      if (!id) return;
-      setAllData((prev) => prev.filter((s) => s.id !== id));
-      setEstimatedTotal((prev) => Math.max(prev - 1, 0));
-    }
     window.addEventListener("student-deleted", handleDeleted as EventListener);
-    function handleUpdated(e: Event) {
-      const custom = e as CustomEvent<{ student?: Student }>;
-      const updated = custom.detail?.student;
-      if (!updated) return;
-      setAllData((prev) =>
-        prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
-      );
-    }
     window.addEventListener("student-updated", handleUpdated as EventListener);
     return () => {
       window.removeEventListener(
@@ -72,9 +80,9 @@ export default function StudentsList({
         handleUpdated as EventListener
       );
     };
-  }, []);
+  }, [handleDeleted, handleUpdated]);
 
-  const handleLoadMore = () => {
+  const handleLoadMore = useCallback(() => {
     if (isPending || !hasMore) return;
 
     startTransition(async () => {
@@ -88,7 +96,7 @@ export default function StudentsList({
         console.error("Error loading more students:", error);
       }
     });
-  };
+  }, [isPending, hasMore, query, pageSize, displayedCount]);
 
   if (initialData.length === 0) {
     return (

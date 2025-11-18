@@ -4,7 +4,7 @@ import {
 } from "@/lib/services/admin-students-service";
 import StudentsList from "./_components/students-list";
 
-export const STUDENTS_PAGE_SIZE = 30;
+export const STUDENTS_PAGE_SIZE = 15; // Reduced initial load for better TBT
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;

@@ -1,19 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo, useMemo, lazy, Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Pencil, Calendar } from "lucide-react";
 import { UpdateStudentForm } from "@/components/forms";
-import { StudentClassScheduleDialog } from "./student-class-schedule-dialog";
 import type { Student } from "@/types";
 import { isNewStudent } from "@/lib/utils";
 import { DeleteStudentButton } from "./delete-student-button";
+import { Loader2 } from "lucide-react";
 
-export function StudentCard({ student }: { student: Student }) {
+// Lazy load heavy dialog component
+const StudentClassScheduleDialog = lazy(() =>
+  import("./student-class-schedule-dialog").then((mod) => ({
+    default: mod.StudentClassScheduleDialog,
+  }))
+);
+
+function StudentCardComponent({ student }: { student: Student }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-  const isNew = isNewStudent(student.created_at);
+  const isNew = useMemo(
+    () => isNewStudent(student.created_at),
+    [student.created_at]
+  );
 
   return (
     <>
@@ -72,11 +82,23 @@ export function StudentCard({ student }: { student: Student }) {
           </div>
         </CardContent>
       </Card>
-      <StudentClassScheduleDialog
-        student={student}
-        open={scheduleDialogOpen}
-        onOpenChange={setScheduleDialogOpen}
-      />
+      {scheduleDialogOpen && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          }
+        >
+          <StudentClassScheduleDialog
+            student={student}
+            open={scheduleDialogOpen}
+            onOpenChange={setScheduleDialogOpen}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
+
+export const StudentCard = memo(StudentCardComponent);
