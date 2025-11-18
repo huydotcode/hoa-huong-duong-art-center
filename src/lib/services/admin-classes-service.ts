@@ -31,7 +31,8 @@ export async function getClassesCount(
   opts?: { is_active?: boolean; subject?: string }
 ): Promise<number> {
   const supabase = await createClient();
-  let q = supabase.from("classes").select("*", { count: "exact", head: true });
+  // Use head: true to only get count, not data
+  let q = supabase.from("classes").select("id", { count: "exact", head: true });
 
   const trimmed = query.trim();
   if (trimmed) {
@@ -126,6 +127,27 @@ export async function getClassById(id: string): Promise<Class | null> {
     throw error;
   }
   return (data as Class) ?? null;
+}
+
+/**
+ * Get only id and name of all classes (lightweight query for dropdowns)
+ */
+export async function getClassesIdAndName(
+  excludeClassId?: string
+): Promise<Array<{ id: string; name: string }>> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("classes")
+    .select("id, name")
+    .order("name", { ascending: true });
+
+  if (excludeClassId) {
+    q = q.neq("id", excludeClassId);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data as Array<{ id: string; name: string }>) || [];
 }
 
 /**

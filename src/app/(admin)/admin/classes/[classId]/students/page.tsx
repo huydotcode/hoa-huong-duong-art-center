@@ -1,9 +1,8 @@
 import {
   getClassById,
   getClassStudents,
-  getClasses,
+  getClassesIdAndName,
 } from "@/lib/services/admin-classes-service";
-import { type ClassListItem } from "@/types";
 import { notFound } from "next/navigation";
 import StudentsSection from "../_components/students";
 import { normalizeText, normalizePhone } from "@/lib/utils";
@@ -23,14 +22,13 @@ export default async function StudentsPage({
   const validStatus = ["trial", "active", "inactive"].includes(statusValue)
     ? (statusValue as "trial" | "active" | "inactive")
     : undefined;
-  const allStudents = await getClassStudents(
-    classId,
-    validStatus ? { status: validStatus } : undefined
-  );
-  const allClasses: ClassListItem[] = await getClasses("");
-  const targetClasses = allClasses
-    .filter((c) => c.id !== classId)
-    .map((c) => ({ id: c.id, name: c.name }));
+  const [allStudents, targetClasses] = await Promise.all([
+    getClassStudents(
+      classId,
+      validStatus ? { status: validStatus } : undefined
+    ),
+    getClassesIdAndName(classId), // Only fetch id and name, exclude current class
+  ]);
 
   // Filter students based on search query (diacritic-insensitive)
   const query = (q || "").trim();
