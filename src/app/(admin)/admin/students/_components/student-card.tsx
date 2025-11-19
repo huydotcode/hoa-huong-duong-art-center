@@ -6,10 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Pencil, Calendar } from "lucide-react";
 import { UpdateStudentForm } from "@/components/forms";
-import type { Student } from "@/types";
-import { isNewStudent } from "@/lib/utils";
+import type { StudentWithClassSummary } from "@/types";
+import {
+  formatDateShort,
+  formatEnrollmentStatus,
+  isNewStudent,
+} from "@/lib/utils";
 import { DeleteStudentButton } from "./delete-student-button";
 import { Loader2 } from "lucide-react";
+import {
+  getAttendanceStatusBadge,
+  getTuitionStatusBadge,
+} from "./student-status-utils";
 
 // Lazy load heavy dialog component
 const StudentClassScheduleDialog = lazy(() =>
@@ -18,11 +26,26 @@ const StudentClassScheduleDialog = lazy(() =>
   }))
 );
 
-function StudentCardComponent({ student }: { student: Student }) {
+function StudentCardComponent({
+  student,
+}: {
+  student: StudentWithClassSummary;
+}) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
+  );
+  const classSummary = student.class_summary ?? [];
+  const visibleClasses = classSummary.slice(0, 2);
+  const remainingClasses = classSummary.length - visibleClasses.length;
+  const enrollmentDate = useMemo(
+    () => formatDateShort(student.first_enrollment_date),
+    [student.first_enrollment_date]
+  );
+  const tuitionBadge = getTuitionStatusBadge(student.tuition_status);
+  const attendanceBadge = getAttendanceStatusBadge(
+    student.attendance_today_status
   );
 
   return (
@@ -79,6 +102,46 @@ function StudentCardComponent({ student }: { student: Student }) {
             <Badge variant={student.is_active ? "default" : "destructive"}>
               {student.is_active ? "Hoạt động" : "Ngừng hoạt động"}
             </Badge>
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">Ngày nhập học</span>
+              <span className="font-medium">{enrollmentDate}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">Đóng học phí</span>
+              <Badge variant={tuitionBadge.variant}>{tuitionBadge.label}</Badge>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">Điểm danh hôm nay</span>
+              <Badge variant={attendanceBadge.variant}>
+                {attendanceBadge.label}
+              </Badge>
+            </div>
+          </div>
+          <div className="mt-2 space-y-1">
+            {classSummary.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Chưa xếp lớp</p>
+            ) : (
+              <>
+                {visibleClasses.map((cls) => (
+                  <div
+                    key={`${student.id}-${cls.classId}`}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span className="font-medium">{cls.className}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {formatEnrollmentStatus(cls.status)}
+                    </Badge>
+                  </div>
+                ))}
+                {remainingClasses > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    +{remainingClasses} lớp khác
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

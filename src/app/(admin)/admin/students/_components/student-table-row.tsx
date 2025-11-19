@@ -6,9 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Pencil, Calendar } from "lucide-react";
 import { UpdateStudentForm } from "@/components/forms";
-import type { Student } from "@/types";
-import { isNewStudent } from "@/lib/utils";
+import type { StudentWithClassSummary } from "@/types";
+import {
+  formatDateShort,
+  formatEnrollmentStatus,
+  isNewStudent,
+} from "@/lib/utils";
 import { DeleteStudentButton } from "./delete-student-button";
+import {
+  getAttendanceStatusBadge,
+  getTuitionStatusBadge,
+} from "./student-status-utils";
 import { Loader2 } from "lucide-react";
 
 // Lazy load heavy dialog component
@@ -18,11 +26,26 @@ const StudentClassScheduleDialog = lazy(() =>
   }))
 );
 
-function StudentTableRowComponent({ student }: { student: Student }) {
+function StudentTableRowComponent({
+  student,
+}: {
+  student: StudentWithClassSummary;
+}) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
+  );
+  const classSummary = student.class_summary ?? [];
+  const visibleClasses = classSummary.slice(0, 2);
+  const remainingClasses = classSummary.length - visibleClasses.length;
+  const enrollmentDate = useMemo(
+    () => formatDateShort(student.first_enrollment_date),
+    [student.first_enrollment_date]
+  );
+  const tuitionBadge = getTuitionStatusBadge(student.tuition_status);
+  const attendanceBadge = getAttendanceStatusBadge(
+    student.attendance_today_status
   );
 
   return (
@@ -42,6 +65,41 @@ function StudentTableRowComponent({ student }: { student: Student }) {
           </div>
         </TableCell>
         <TableCell>{student.phone || "-"}</TableCell>
+        <TableCell>
+          {classSummary.length === 0 ? (
+            <span className="text-sm text-muted-foreground">Chưa xếp lớp</span>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {visibleClasses.map((cls) => (
+                <div
+                  key={`${student.id}-${cls.classId}`}
+                  className="flex items-center gap-2"
+                >
+                  <span className="text-sm font-medium truncate">
+                    {cls.className}
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    {formatEnrollmentStatus(cls.status)}
+                  </Badge>
+                </div>
+              ))}
+              {remainingClasses > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  +{remainingClasses} lớp khác
+                </span>
+              )}
+            </div>
+          )}
+        </TableCell>
+        <TableCell>{enrollmentDate}</TableCell>
+        <TableCell>
+          <Badge variant={tuitionBadge.variant}>{tuitionBadge.label}</Badge>
+        </TableCell>
+        <TableCell>
+          <Badge variant={attendanceBadge.variant}>
+            {attendanceBadge.label}
+          </Badge>
+        </TableCell>
         <TableCell className="text-center">
           <Badge variant={student.is_active ? "default" : "destructive"}>
             {student.is_active ? "Hoạt động" : "Ngừng hoạt động"}

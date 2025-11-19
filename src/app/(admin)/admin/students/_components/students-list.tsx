@@ -21,11 +21,11 @@ import {
 import { StudentCard } from "./student-card";
 import { StudentTableRow } from "./student-table-row";
 import { getStudents } from "@/lib/services/admin-students-service";
-import type { Student } from "@/types";
+import type { StudentWithClassSummary } from "@/types";
 import { Loader2 } from "lucide-react";
 
 interface StudentsListProps {
-  initialData: Student[];
+  initialData: StudentWithClassSummary[];
   query: string;
   totalCount: number;
   pageSize: number;
@@ -38,7 +38,8 @@ export default function StudentsList({
   pageSize,
 }: StudentsListProps) {
   // State is automatically reset when component remounts (via key prop in parent)
-  const [allData, setAllData] = useState<Student[]>(initialData);
+  const [allData, setAllData] =
+    useState<StudentWithClassSummary[]>(initialData);
   const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
   const [isPending, startTransition] = useTransition();
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
@@ -59,7 +60,7 @@ export default function StudentsList({
   }, []);
 
   const handleUpdated = useCallback((e: Event) => {
-    const custom = e as CustomEvent<{ student?: Student }>;
+    const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
     const updated = custom.detail?.student;
     if (!updated) return;
     setAllData((prev) =>
@@ -87,10 +88,10 @@ export default function StudentsList({
 
     startTransition(async () => {
       try {
-        const nextBatch = await getStudents(query, {
+        const nextBatch = (await getStudents(query, {
           limit: pageSize,
           offset: displayedCount,
-        });
+        })) as StudentWithClassSummary[];
         setAllData((prev) => [...prev, ...nextBatch]);
       } catch (error) {
         console.error("Error loading more students:", error);
@@ -115,6 +116,10 @@ export default function StudentsList({
               <TableHeaderRow>
                 <TableHead>Họ và tên</TableHead>
                 <TableHead>Số điện thoại</TableHead>
+                <TableHead className="w-[220px]">Lớp / trạng thái</TableHead>
+                <TableHead>Ngày nhập học</TableHead>
+                <TableHead>Đóng học phí</TableHead>
+                <TableHead>Điểm danh hôm nay</TableHead>
                 <TableHead className="text-center">Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableHeaderRow>
@@ -122,7 +127,7 @@ export default function StudentsList({
             <TableBody>
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Chưa có học sinh nào
@@ -160,6 +165,10 @@ export default function StudentsList({
             <TableHeaderRow>
               <TableHead>Họ và tên</TableHead>
               <TableHead>Số điện thoại</TableHead>
+              <TableHead className="w-[220px]">Lớp / trạng thái</TableHead>
+              <TableHead>Ngày nhập học</TableHead>
+              <TableHead>Đóng học phí</TableHead>
+              <TableHead>Điểm danh hôm nay</TableHead>
               <TableHead className="text-center">Trạng thái</TableHead>
               <TableHead className="text-right">Thao tác</TableHead>
             </TableHeaderRow>

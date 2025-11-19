@@ -54,6 +54,32 @@ export interface Student {
   updated_at: string;
 }
 
+export interface StudentClassSummary {
+  classId: string;
+  className: string;
+  status: EnrollmentStatus;
+}
+
+export type StudentTuitionStatus =
+  | "paid"
+  | "partial"
+  | "unpaid"
+  | "not_created";
+
+export type StudentAttendanceTodayStatus =
+  | "present"
+  | "absent"
+  | "pending"
+  | "no_session";
+
+export type StudentWithClassSummary = Student & {
+  class_summary?: StudentClassSummary[];
+  first_enrollment_date?: string | null;
+  tuition_status?: StudentTuitionStatus;
+  attendance_today_status?: StudentAttendanceTodayStatus;
+  has_session_today?: boolean;
+};
+
 export interface CreateStudentData {
   full_name: string;
   phone: string | null;

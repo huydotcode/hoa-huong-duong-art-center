@@ -95,6 +95,17 @@ export function formatDateRange(startDate: string, endDate: string): string {
   }
 }
 
+export function formatDateShort(dateInput?: string | null): string {
+  if (!dateInput) return "-";
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString("vi-VN");
+  } catch {
+    return "-";
+  }
+}
+
 // Format enrollment status: "active" -> "Đang học", "trial" -> "Học thử", "inactive" -> "Ngừng học"
 export function formatEnrollmentStatus(
   status: "active" | "trial" | "inactive" | string
@@ -170,9 +181,9 @@ export function normalizePhone(value: string): string {
 }
 
 /**
- * Check if student was created in the current month
+ * Check if student was created within the last month (30 days)
  * @param createdAt ISO date string from database
- * @returns true if student was created in the current month
+ * @returns true if student was created less than or equal to 30 days ago
  */
 export function isNewStudent(createdAt: string): boolean {
   if (!createdAt) return false;
@@ -180,12 +191,11 @@ export function isNewStudent(createdAt: string): boolean {
   try {
     const createdDate = new Date(createdAt);
     const now = new Date();
+    if (isNaN(createdDate.getTime())) return false;
 
-    // Compare year and month (ignore time and day)
-    return (
-      createdDate.getFullYear() === now.getFullYear() &&
-      createdDate.getMonth() === now.getMonth()
-    );
+    const diff = now.getTime() - createdDate.getTime();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    return diff >= 0 && diff <= THIRTY_DAYS_MS;
   } catch {
     return false;
   }

@@ -1,22 +1,54 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
-import { Student } from "@/types";
+import {
+  EnrollmentStatus,
+  Student,
+  StudentAttendanceTodayStatus,
+  StudentClassSummary,
+  StudentTuitionStatus,
+  StudentWithClassSummary,
+} from "@/types";
 import { revalidatePath } from "next/cache";
 import { normalizePhone, toArray } from "@/lib/utils";
 
 export async function getStudents(
   query: string = "",
   opts: { limit?: number; offset?: number } = {}
-): Promise<Student[]> {
+): Promise<StudentWithClassSummary[]> {
   const supabase = await createClient();
+  const now = new Date();
+  const todayDayOfWeek = now.getDay();
+  const todayISO = now.toISOString().slice(0, 10);
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
 
   const limit = opts.limit ?? 30;
   const offset = opts.offset ?? 0;
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
 
-  const selectColumns =
-    "id, full_name, phone, parent_phone, is_active, created_at, updated_at";
+  const selectColumns = `
+    id,
+    full_name,
+    phone,
+    parent_phone,
+    is_active,
+    created_at,
+    updated_at,
+    student_class_enrollments:student_class_enrollments (
+      id,
+      status,
+      leave_date,
+      class_id,
+      enrollment_date,
+      classes (
+        id,
+        name,
+        is_active,
+        days_of_week
+      )
+    )
+  `;
 
   let request = supabase
     .from("students")
@@ -35,7 +67,195 @@ export async function getStudents(
   const { data, error } = await request;
   if (error) throw error;
 
-  return (data as Student[]) ?? [];
+  type RawEnrollment = {
+    id: string;
+    status: EnrollmentStatus;
+    leave_date: string | null;
+    class_id: string;
+    enrollment_date: string | null;
+    classes?:
+      | {
+          id?: string;
+          name?: string;
+          is_active?: boolean;
+          days_of_week?: unknown;
+        }
+      | Array<{
+          id?: string;
+          name?: string;
+          is_active?: boolean;
+          days_of_week?: unknown;
+        }>;
+  };
+
+  type RawStudent = Student & {
+    student_class_enrollments?: RawEnrollment | RawEnrollment[];
+  };
+
+  const students = ((data as RawStudent[]) ?? []).map(
+    ({ student_class_enrollments, ...rest }) => {
+      const enrollmentsRaw = Array.isArray(student_class_enrollments)
+        ? student_class_enrollments
+        : student_class_enrollments
+          ? [student_class_enrollments]
+          : [];
+
+      const class_summary: StudentClassSummary[] = [];
+      let firstEnrollmentDate: string | null = null;
+      let hasSessionToday = false;
+
+      for (const enrollment of enrollmentsRaw) {
+        const enrollmentDate = enrollment.enrollment_date;
+        if (enrollmentDate) {
+          if (!firstEnrollmentDate) {
+            firstEnrollmentDate = enrollmentDate;
+          } else {
+            const currentFirst = new Date(firstEnrollmentDate);
+            const candidate = new Date(enrollmentDate);
+            if (
+              !isNaN(candidate.getTime()) &&
+              (isNaN(currentFirst.getTime()) ||
+                candidate.getTime() < currentFirst.getTime())
+            ) {
+              firstEnrollmentDate = enrollmentDate;
+            }
+          }
+        }
+
+        const isActiveEnrollment =
+          !enrollment.leave_date &&
+          (enrollment.status === "active" || enrollment.status === "trial");
+
+        if (!isActiveEnrollment) {
+          continue;
+        }
+
+        const cls = Array.isArray(enrollment.classes)
+          ? enrollment.classes[0]
+          : enrollment.classes;
+
+        if (!hasSessionToday && cls?.days_of_week) {
+          const schedule = toArray<{ day?: number }>(cls.days_of_week);
+          hasSessionToday = schedule.some(
+            (item) => Number(item.day) === todayDayOfWeek
+          );
+        }
+
+        class_summary.push({
+          classId: cls?.id ?? enrollment.class_id,
+          className: cls?.name ?? "Lớp chưa đặt tên",
+          status: enrollment.status,
+        });
+      }
+
+      return {
+        ...rest,
+        class_summary,
+        first_enrollment_date: firstEnrollmentDate,
+        has_session_today: hasSessionToday,
+      } as StudentWithClassSummary;
+    }
+  );
+
+  if (students.length === 0) {
+    return students;
+  }
+
+  const studentIds = students.map((s) => s.id);
+
+  const [
+    { data: paymentData, error: paymentError },
+    { data: attendanceData, error: attendanceError },
+  ] = await Promise.all([
+    supabase
+      .from("payment_status")
+      .select("student_id, is_paid")
+      .eq("month", currentMonth)
+      .eq("year", currentYear)
+      .in("student_id", studentIds),
+    supabase
+      .from("attendance")
+      .select("student_id, is_present")
+      .eq("attendance_date", todayISO)
+      .in("student_id", studentIds)
+      .not("student_id", "is", null),
+  ]);
+
+  if (paymentError) throw paymentError;
+  if (attendanceError) throw attendanceError;
+
+  const paymentMap = new Map<
+    string,
+    Array<{
+      is_paid: boolean;
+    }>
+  >();
+  (
+    (paymentData as Array<{
+      student_id: string | null;
+      is_paid: boolean;
+    }> | null) ?? []
+  ).forEach((row) => {
+    if (!row.student_id) return;
+    if (!paymentMap.has(row.student_id)) {
+      paymentMap.set(row.student_id, []);
+    }
+    paymentMap.get(row.student_id)!.push({ is_paid: row.is_paid });
+  });
+
+  const attendanceMap = new Map<
+    string,
+    Array<{
+      is_present: boolean | null;
+    }>
+  >();
+  (
+    (attendanceData as Array<{
+      student_id: string | null;
+      is_present: boolean | null;
+    }> | null) ?? []
+  ).forEach((row) => {
+    if (!row.student_id) return;
+    if (!attendanceMap.has(row.student_id)) {
+      attendanceMap.set(row.student_id, []);
+    }
+    attendanceMap.get(row.student_id)!.push({ is_present: row.is_present });
+  });
+
+  const resolveTuitionStatus = (
+    payments: Array<{ is_paid: boolean }>
+  ): StudentTuitionStatus => {
+    if (!payments || payments.length === 0) return "not_created";
+    const paidCount = payments.filter((p) => p.is_paid).length;
+    if (paidCount === payments.length) return "paid";
+    if (paidCount === 0) return "unpaid";
+    return "partial";
+  };
+
+  const resolveAttendanceStatus = (
+    hasSessionToday: boolean | undefined,
+    records: Array<{ is_present: boolean | null }>
+  ): StudentAttendanceTodayStatus => {
+    if (!hasSessionToday) return "no_session";
+    if (!records || records.length === 0) return "pending";
+    if (records.some((r) => r.is_present === true)) return "present";
+    if (records.some((r) => r.is_present === false)) return "absent";
+    return "pending";
+  };
+
+  students.forEach((student) => {
+    const tuitionStatus = resolveTuitionStatus(
+      paymentMap.get(student.id) ?? []
+    );
+    const attendanceStatus = resolveAttendanceStatus(
+      student.has_session_today,
+      attendanceMap.get(student.id) ?? []
+    );
+    student.tuition_status = tuitionStatus;
+    student.attendance_today_status = attendanceStatus;
+  });
+
+  return students;
 }
 
 // Add function to get total count (for pagination)
