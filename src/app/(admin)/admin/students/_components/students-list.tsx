@@ -25,6 +25,7 @@ import { Loader2 } from "lucide-react";
 interface StudentsListProps {
   initialData: StudentWithClassSummary[];
   query: string;
+  subject?: string;
   totalCount: number;
   pageSize: number;
 }
@@ -32,6 +33,7 @@ interface StudentsListProps {
 export default function StudentsList({
   initialData,
   query,
+  subject = "",
   totalCount,
   pageSize,
 }: StudentsListProps) {
@@ -41,6 +43,10 @@ export default function StudentsList({
   const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
   const [isPending, startTransition] = useTransition();
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
+  const hasSubjectFilter = useMemo(
+    () => subject.trim().length > 0 && subject.toLowerCase() !== "all",
+    [subject]
+  );
   const displayedCount = allData.length;
   const hasMore = estimatedTotal > displayedCount;
 
@@ -57,20 +63,28 @@ export default function StudentsList({
     setEstimatedTotal((prev) => Math.max(prev - 1, 0));
   }, []);
 
-  const handleCreated = useCallback((e: Event) => {
-    const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
-    const created = custom.detail?.student;
-    if (!created) return;
-    let existed = false;
-    setAllData((prev) => {
-      existed = prev.some((s) => s.id === created.id);
-      const filtered = existed ? prev.filter((s) => s.id !== created.id) : prev;
-      return [created, ...filtered];
-    });
-    if (!existed) {
-      setEstimatedTotal((prev) => prev + 1);
-    }
-  }, []);
+  const handleCreated = useCallback(
+    (e: Event) => {
+      if (hasSubjectFilter) {
+        return;
+      }
+      const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
+      const created = custom.detail?.student;
+      if (!created) return;
+      let existed = false;
+      setAllData((prev) => {
+        existed = prev.some((s) => s.id === created.id);
+        const filtered = existed
+          ? prev.filter((s) => s.id !== created.id)
+          : prev;
+        return [created, ...filtered];
+      });
+      if (!existed) {
+        setEstimatedTotal((prev) => prev + 1);
+      }
+    },
+    [hasSubjectFilter]
+  );
 
   const handleUpdated = useCallback((e: Event) => {
     const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
@@ -109,13 +123,14 @@ export default function StudentsList({
         const nextBatch = (await getStudents(query, {
           limit: pageSize,
           offset: displayedCount,
+          subject,
         })) as StudentWithClassSummary[];
         setAllData((prev) => [...prev, ...nextBatch]);
       } catch (error) {
         console.error("Error loading more students:", error);
       }
     });
-  }, [isPending, hasMore, query, pageSize, displayedCount]);
+  }, [isPending, hasMore, query, subject, pageSize, displayedCount]);
 
   if (initialData.length === 0) {
     return (
@@ -154,12 +169,22 @@ export default function StudentsList({
 
   return (
     <>
-      {hasQuery && (
-        <p className="px-3 pb-2 text-sm text-muted-foreground">
-          Đang tìm danh sách học sinh theo:{" "}
-          <span className="font-medium text-foreground">
-            &quot;{query}&quot;
-          </span>
+      {(hasQuery || hasSubjectFilter) && (
+        <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
+          {hasQuery && (
+            <span>
+              Đang tìm theo{" "}
+              <span className="font-medium text-foreground">
+                &quot;{query}&quot;
+              </span>
+            </span>
+          )}
+          {hasSubjectFilter && (
+            <span>
+              Môn học:{" "}
+              <span className="font-medium text-foreground">{subject}</span>
+            </span>
+          )}
         </p>
       )}
 

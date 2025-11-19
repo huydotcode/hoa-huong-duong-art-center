@@ -9,11 +9,13 @@ import {
   StudentWithClassSummary,
 } from "@/types";
 import { revalidatePath } from "next/cache";
-import { normalizePhone, toArray } from "@/lib/utils";
+import { normalizePhone, normalizeText, toArray } from "@/lib/utils";
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export async function getStudents(
   query: string = "",
-  opts: { limit?: number; offset?: number } = {}
+  opts: { limit?: number; offset?: number; subject?: string } = {}
 ): Promise<StudentWithClassSummary[]> {
   const supabase = await createClient();
   const now = new Date();
@@ -24,6 +26,7 @@ export async function getStudents(
 
   const limit = opts.limit ?? 30;
   const offset = opts.offset ?? 0;
+  const subjectFilter = (opts.subject || "").trim();
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
 
@@ -50,11 +53,24 @@ export async function getStudents(
     )
   `;
 
+  const subjectStudentIds =
+    subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all"
+      ? await getStudentIdsBySubject(supabase, subjectFilter)
+      : null;
+
+  if (subjectStudentIds && subjectStudentIds.length === 0) {
+    return [];
+  }
+
   let request = supabase
     .from("students")
     .select(selectColumns)
     .order("full_name", { ascending: true })
     .range(offset, offset + limit - 1);
+
+  if (subjectStudentIds) {
+    request = request.in("id", subjectStudentIds);
+  }
 
   if (hasQuery) {
     const sanitized = trimmed.replace(/[%_]/g, "\\$&");
@@ -259,15 +275,32 @@ export async function getStudents(
 }
 
 // Add function to get total count (for pagination)
-export async function getStudentsCount(query: string = ""): Promise<number> {
+export async function getStudentsCount(
+  query: string = "",
+  opts: { subject?: string } = {}
+): Promise<number> {
   const supabase = await createClient();
 
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
 
+  const subjectFilter = (opts.subject || "").trim();
+  const subjectStudentIds =
+    subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all"
+      ? await getStudentIdsBySubject(supabase, subjectFilter)
+      : null;
+
+  if (subjectStudentIds && subjectStudentIds.length === 0) {
+    return 0;
+  }
+
   let request = supabase
     .from("students")
     .select("*", { count: "exact", head: true });
+
+  if (subjectStudentIds) {
+    request = request.in("id", subjectStudentIds);
+  }
 
   if (hasQuery) {
     const sanitized = trimmed.replace(/[%_]/g, "\\$&");
@@ -280,6 +313,54 @@ export async function getStudentsCount(query: string = ""): Promise<number> {
   const { count, error } = await request;
   if (error) throw error;
   return count ?? 0;
+}
+
+async function getStudentIdsBySubject(
+  supabase: SupabaseServerClient,
+  subject: string
+): Promise<string[]> {
+  const normalizedSubject = normalizeText(subject);
+  if (!normalizedSubject) return [];
+
+  const { data: classes, error: classesError } = await supabase
+    .from("classes")
+    .select("id,name,is_active");
+  if (classesError) throw classesError;
+
+  const matchingClassIds =
+    (classes ?? [])
+      .map((cls) => ({
+        id: cls?.id as string | undefined,
+        name: (cls as { name?: string }).name ?? "",
+      }))
+      .filter(
+        (cls): cls is { id: string; name: string } =>
+          Boolean(cls.id) &&
+          normalizeText(cls.name || "").includes(normalizedSubject)
+      )
+      .map((cls) => cls.id) ?? [];
+
+  if (matchingClassIds.length === 0) {
+    return [];
+  }
+
+  const { data: enrollments, error: enrollmentsError } = await supabase
+    .from("student_class_enrollments")
+    .select("student_id,status,leave_date")
+    .in("class_id", matchingClassIds)
+    .in("status", ["active", "trial"])
+    .is("leave_date", null)
+    .not("student_id", "is", null);
+  if (enrollmentsError) throw enrollmentsError;
+
+  const ids = new Set<string>();
+  (enrollments ?? []).forEach((row) => {
+    if (row.student_id) {
+      ids.add(row.student_id);
+    }
+  });
+
+  return Array.from(ids);
 }
 
 type CreateStudentData = Pick<
