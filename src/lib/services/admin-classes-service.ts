@@ -330,6 +330,41 @@ export async function getClassTeachers(
   return items;
 }
 
+/**
+ * Get lightweight teacher data for attendance (only id, full_name, phone)
+ */
+export async function getClassTeachersLite(
+  classId: string
+): Promise<Array<{ id: string; full_name: string; phone: string }>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("class_teachers")
+    .select("teachers(id, full_name, phone)")
+    .eq("class_id", classId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const teachers: Array<{ id: string; full_name: string; phone: string }> = [];
+  for (const row of (data || []) as unknown as Array<{
+    teachers:
+      | Teacher
+      | null
+      | { id: string; full_name: string; phone: string }
+      | null;
+  }>) {
+    const teacher = row.teachers;
+    if (teacher && typeof teacher === "object" && "id" in teacher) {
+      teachers.push({
+        id: teacher.id,
+        full_name: teacher.full_name,
+        phone: teacher.phone,
+      });
+    }
+  }
+
+  return teachers;
+}
+
 export async function setClassTeachers(
   classId: string,
   teacherIds: string[],
@@ -442,6 +477,52 @@ export async function getClassStudents(
       student: row.students,
     })) || [];
   return items;
+}
+
+/**
+ * Get lightweight student data for attendance (only id, full_name, phone)
+ */
+export async function getClassStudentsLite(
+  classId: string,
+  opts?: { status?: EnrollmentStatus }
+): Promise<Array<{ id: string; full_name: string; phone: string | null }>> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("student_class_enrollments")
+    .select("students(id, full_name, phone)")
+    .eq("class_id", classId)
+    .order("created_at", { ascending: true });
+
+  if (opts?.status) {
+    q = q.eq("status", opts.status);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  const students: Array<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+  }> = [];
+  for (const row of (data || []) as unknown as Array<{
+    students:
+      | Student
+      | null
+      | { id: string; full_name: string; phone: string | null }
+      | null;
+  }>) {
+    const student = row.students;
+    if (student && typeof student === "object" && "id" in student) {
+      students.push({
+        id: student.id,
+        full_name: student.full_name,
+        phone: student.phone,
+      });
+    }
+  }
+
+  return students;
 }
 
 export async function enrollStudent(

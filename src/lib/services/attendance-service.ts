@@ -223,3 +223,79 @@ export async function removeTeacherAttendance(params: {
     .eq("session_time", params.session_time);
   if (error) throw error;
 }
+
+/**
+ * Bulk upsert student attendance records (optimized for batch operations)
+ */
+export async function bulkUpsertStudentAttendance(params: {
+  classId: string;
+  date: string;
+  session_time: string;
+  entries: Array<{ studentId: string; is_present: boolean }>;
+  marked_by: "teacher" | "admin";
+}): Promise<void> {
+  const supabase = await createClient();
+  if (params.entries.length === 0) return;
+
+  const records = params.entries.map((entry) => ({
+    class_id: params.classId,
+    student_id: entry.studentId,
+    attendance_date: params.date,
+    session_time: params.session_time,
+    is_present: entry.is_present,
+    marked_by: params.marked_by,
+  }));
+
+  const { error } = await supabase.from("attendance").upsert(records, {
+    onConflict: "class_id,student_id,attendance_date,session_time",
+    ignoreDuplicates: false,
+  });
+
+  if (error) throw error;
+}
+
+/**
+ * Bulk upsert teacher attendance records (optimized for batch operations)
+ */
+export async function bulkUpsertTeacherAttendance(params: {
+  classId: string;
+  date: string;
+  session_time: string;
+  entries: Array<{ teacherId: string; is_present: boolean }>;
+  marked_by: "teacher" | "admin";
+}): Promise<void> {
+  const supabase = await createClient();
+  if (params.entries.length === 0) return;
+
+  // For teachers, we need to check existence first (due to different upsert logic)
+  // But for bulk, we can use a simpler approach: delete then insert
+  const teacherIds = params.entries.map((e) => e.teacherId);
+
+  // Delete existing records for these teachers in this session
+  const { error: deleteError } = await supabase
+    .from("attendance")
+    .delete()
+    .eq("class_id", params.classId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time)
+    .in("teacher_id", teacherIds)
+    .not("teacher_id", "is", null);
+
+  if (deleteError) throw deleteError;
+
+  // Insert new records
+  const records = params.entries.map((entry) => ({
+    class_id: params.classId,
+    teacher_id: entry.teacherId,
+    attendance_date: params.date,
+    session_time: params.session_time,
+    is_present: entry.is_present,
+    marked_by: params.marked_by,
+  }));
+
+  const { error: insertError } = await supabase
+    .from("attendance")
+    .insert(records);
+
+  if (insertError) throw insertError;
+}

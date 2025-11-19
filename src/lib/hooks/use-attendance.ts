@@ -7,23 +7,37 @@ import {
   upsertStudentAttendance,
   removeStudentAttendance,
   upsertTeacherAttendance,
+  bulkUpsertStudentAttendance,
+  bulkUpsertTeacherAttendance,
   type AttendanceMap,
   type TeacherAttendanceMap,
   getStudentAttendanceCell,
   getTeacherAttendanceCell,
 } from "@/lib/services/attendance-service";
 
-export function useAttendanceQuery(classId: string, date: string) {
+export function useAttendanceQuery(
+  classId: string,
+  date: string,
+  options?: { initialData?: AttendanceMap }
+) {
   return useQuery<AttendanceMap>({
     queryKey: ["attendance", classId, date],
     queryFn: () => listAttendanceByClassDate(classId, date),
+    initialData: options?.initialData,
+    staleTime: 1000 * 60 * 5, // 5 minutes - attendance data doesn't change frequently
   });
 }
 
-export function useTeacherAttendanceQuery(classId: string, date: string) {
+export function useTeacherAttendanceQuery(
+  classId: string,
+  date: string,
+  options?: { initialData?: TeacherAttendanceMap }
+) {
   return useQuery<TeacherAttendanceMap>({
     queryKey: ["teacher-attendance", classId, date],
     queryFn: () => listTeacherAttendanceByClassDate(classId, date),
+    initialData: options?.initialData,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
 
@@ -396,6 +410,132 @@ export function useTeacherAttendanceMutation(
 
   return {
     toggle: toggleMutation,
+  };
+}
+
+/**
+ * Bulk upsert attendance for multiple students/teachers across sessions
+ * Optimized for batch operations
+ */
+export function useBulkAttendanceMutation(classId: string, date: string) {
+  const queryClient = useQueryClient();
+
+  const bulkStudentMutation = useMutation({
+    mutationFn: async ({
+      sessionTime,
+      entries,
+    }: {
+      sessionTime: string;
+      entries: Array<{ studentId: string; is_present: boolean }>;
+    }) => {
+      await bulkUpsertStudentAttendance({
+        classId,
+        date,
+        session_time: sessionTime,
+        entries,
+        marked_by: "admin",
+      });
+    },
+    onMutate: async ({ sessionTime, entries }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["attendance", classId, date],
+      });
+
+      const previousData = queryClient.getQueryData<AttendanceMap>([
+        "attendance",
+        classId,
+        date,
+      ]);
+
+      queryClient.setQueryData<AttendanceMap>(
+        ["attendance", classId, date],
+        (old) => {
+          const newData = { ...(old || {}) } as AttendanceMap;
+          if (!newData[sessionTime]) newData[sessionTime] = {};
+          entries.forEach((entry) => {
+            newData[sessionTime][entry.studentId] = entry.is_present;
+          });
+          return newData;
+        }
+      );
+
+      return { previousData };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previousData) {
+        queryClient.setQueryData(
+          ["attendance", classId, date],
+          ctx.previousData
+        );
+      }
+    },
+    onSuccess: async () => {
+      // Refetch to ensure consistency
+      await queryClient.invalidateQueries({
+        queryKey: ["attendance", classId, date],
+      });
+    },
+  });
+
+  const bulkTeacherMutation = useMutation({
+    mutationFn: async ({
+      sessionTime,
+      entries,
+    }: {
+      sessionTime: string;
+      entries: Array<{ teacherId: string; is_present: boolean }>;
+    }) => {
+      await bulkUpsertTeacherAttendance({
+        classId,
+        date,
+        session_time: sessionTime,
+        entries,
+        marked_by: "admin",
+      });
+    },
+    onMutate: async ({ sessionTime, entries }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["teacher-attendance", classId, date],
+      });
+
+      const previousData = queryClient.getQueryData<TeacherAttendanceMap>([
+        "teacher-attendance",
+        classId,
+        date,
+      ]);
+
+      queryClient.setQueryData<TeacherAttendanceMap>(
+        ["teacher-attendance", classId, date],
+        (old) => {
+          const newData = { ...(old || {}) } as TeacherAttendanceMap;
+          if (!newData[sessionTime]) newData[sessionTime] = {};
+          entries.forEach((entry) => {
+            newData[sessionTime][entry.teacherId] = entry.is_present;
+          });
+          return newData;
+        }
+      );
+
+      return { previousData };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previousData) {
+        queryClient.setQueryData(
+          ["teacher-attendance", classId, date],
+          ctx.previousData
+        );
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["teacher-attendance", classId, date],
+      });
+    },
+  });
+
+  return {
+    bulkStudents: bulkStudentMutation,
+    bulkTeachers: bulkTeacherMutation,
   };
 }
 

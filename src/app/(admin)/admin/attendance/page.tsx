@@ -58,11 +58,10 @@ export default async function AdminAttendancePage({
     classSessionTimes[classId] = sessions[0];
   });
 
-  const { classes, rows } = await getParticipantsForClasses(classIds);
-  const attendanceState = await getAttendanceStateForSessions(
-    dateISO,
-    classSessions
-  );
+  const [{ classes, rows }, attendanceState] = await Promise.all([
+    getParticipantsForClasses(classIds),
+    getAttendanceStateForSessions(dateISO, classSessions),
+  ]);
 
   return (
     <div className="space-y-6">

@@ -120,6 +120,21 @@ export default function AdminAttendanceClient({
     return stats;
   }, [rows]);
 
+  const classMap = useMemo(() => {
+    return new Map(classes.map((cls) => [cls.id, cls]));
+  }, [classes]);
+
+  const sessionsByClass = useMemo(() => {
+    const map = new Map<string, AdminClassSession[]>();
+    classSessions.forEach((session) => {
+      if (!map.has(session.classId)) {
+        map.set(session.classId, []);
+      }
+      map.get(session.classId)!.push(session);
+    });
+    return map;
+  }, [classSessions]);
+
   const grouped = useMemo(() => {
     // When showAllClasses is true, group by classId + sessionTime (each session is a separate group)
     // When false, group by classId only (one group per class)
@@ -137,21 +152,22 @@ export default function AdminAttendanceClient({
     >();
 
     if (showAllClasses) {
-      // Group by classId + sessionTime combination
-      classSessions.forEach((session) => {
-        const classInfo = classes.find((c) => c.id === session.classId);
-        const groupKey = `${session.classId}::${session.sessionTime}`;
-        if (!map.has(groupKey)) {
-          map.set(groupKey, {
-            classId: session.classId,
-            className: classInfo?.name || "",
-            sessionTime: session.sessionTime,
-            endTime: session.endTime,
-            rows: [],
-            allRows: [],
-            initialState: {},
-          });
-        }
+      sessionsByClass.forEach((sessions, classId) => {
+        const classInfo = classMap.get(classId);
+        sessions.forEach((session) => {
+          const groupKey = `${classId}::${session.sessionTime}`;
+          if (!map.has(groupKey)) {
+            map.set(groupKey, {
+              classId,
+              className: classInfo?.name || "",
+              sessionTime: session.sessionTime,
+              endTime: session.endTime,
+              rows: [],
+              allRows: [],
+              initialState: {},
+            });
+          }
+        });
       });
     } else {
       // Group by classId only (original behavior)
@@ -172,16 +188,16 @@ export default function AdminAttendanceClient({
     // Add all rows to groups
     rows.forEach((row) => {
       if (showAllClasses) {
-        // Find all sessions for this class and add rows to each matching session group
-        classSessions
-          .filter((s) => s.classId === row.classId)
-          .forEach((session) => {
+        const sessions = sessionsByClass.get(row.classId);
+        if (sessions) {
+          sessions.forEach((session) => {
             const groupKey = `${row.classId}::${session.sessionTime}`;
             const group = map.get(groupKey);
             if (group && !group.allRows.find((r) => r.key === row.key)) {
               group.allRows.push(row);
             }
           });
+        }
       } else {
         const group = map.get(row.classId);
         if (group) {
@@ -193,14 +209,15 @@ export default function AdminAttendanceClient({
     // Add filtered rows to groups
     filteredRows.forEach((row) => {
       if (showAllClasses) {
-        // Add to all matching session groups
-        classSessions
-          .filter((s) => s.classId === row.classId)
-          .forEach((session) => {
+        const sessions = sessionsByClass.get(row.classId);
+        if (sessions) {
+          sessions.forEach((session) => {
             const groupKey = `${row.classId}::${session.sessionTime}`;
             let group = map.get(groupKey);
             if (!group) {
-              const classInfo = classes.find((c) => c.id === row.classId);
+              const classInfo =
+                classMap.get(row.classId) ||
+                ({ name: row.className } as AdminAttendanceClass);
               group = {
                 classId: row.classId,
                 className: classInfo?.name || row.className,
@@ -211,12 +228,11 @@ export default function AdminAttendanceClient({
                 initialState: {},
               };
               map.set(groupKey, group);
-            } else {
-              if (!group.rows.find((r) => r.key === row.key)) {
-                group.rows.push(row);
-              }
+            } else if (!group.rows.find((r) => r.key === row.key)) {
+              group.rows.push(row);
             }
           });
+        }
       } else {
         if (!map.has(row.classId)) {
           const info = classSessionTimes[row.classId];
@@ -270,10 +286,11 @@ export default function AdminAttendanceClient({
     });
   }, [
     classes,
+    classMap,
     filteredRows,
     rows,
     classSessionTimes,
-    classSessions,
+    sessionsByClass,
     sessionLabel,
     initialState,
     showAllClasses,

@@ -21,12 +21,10 @@ import {
   useAttendanceQuery,
   useTeacherAttendanceQuery,
 } from "@/lib/hooks/use-attendance";
-import { useClassQuery, useClassStudentsQuery } from "@/lib/hooks/use-class";
-import { getClassTeachers } from "@/lib/services/admin-classes-service";
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { AttendanceLoadingSkeleton } from "./attendance-loading-skeleton";
+import { useEffect, useRef, useState, useMemo, startTransition } from "react";
+import type { AttendancePageData } from "@/lib/services/attendance-data-service";
 
 type DayItem = { day: number; start_time: string; end_time?: string };
 
@@ -45,60 +43,129 @@ function getSessionsForDate(daysOfWeek: unknown, date: string): string[] {
   }
 }
 
-export default function AttendancePageClient({ classId }: { classId: string }) {
+export default function AttendancePageClient({
+  classId,
+  initialData,
+  date: initialDate,
+}: {
+  classId: string;
+  initialData: AttendancePageData;
+  date: string;
+}) {
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const dateParam = searchParams.get("date");
-  // session param is ignored in this view (show all sessions)
 
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
   const defaultDate = `${yyyy}-${mm}-${dd}`;
-  const date = dateParam || defaultDate;
+  const date = dateParam || initialDate || defaultDate;
 
-  const { data: cls, isLoading: classLoading } = useClassQuery(classId);
-  const { data: studentItems, isLoading: studentsLoading } =
-    useClassStudentsQuery(classId);
-  const { data: attendanceMapBySession } = useAttendanceQuery(classId, date);
+  // Check if current date matches initial date
+  const isInitialDate = date === initialDate;
+
+  // Initialize React Query cache with server data ONLY for initial date
+  useEffect(() => {
+    // Only set cache for class data (doesn't change by date)
+    if (initialData.class) {
+      queryClient.setQueryData(["class", classId], initialData.class);
+    }
+
+    // Only set attendance cache if date matches initial date
+    if (isInitialDate) {
+      queryClient.setQueryData(
+        ["attendance", classId, date],
+        initialData.attendanceMap
+      );
+      queryClient.setQueryData(
+        ["teacher-attendance", classId, date],
+        initialData.teacherAttendanceMap
+      );
+    }
+  }, [classId, date, initialData, queryClient, isInitialDate]);
+
+  // Use queries - only use initialData if date matches initialDate
+  // React Query will automatically refetch when date changes (queryKey changes)
+  const { data: attendanceMapBySession } = useAttendanceQuery(classId, date, {
+    initialData: isInitialDate ? initialData.attendanceMap : undefined,
+  });
   const { data: teacherAttendanceMapBySession } = useTeacherAttendanceQuery(
     classId,
-    date
+    date,
+    {
+      initialData: isInitialDate ? initialData.teacherAttendanceMap : undefined,
+    }
   );
 
-  const { data: teacherItems, isLoading: teachersLoading } = useQuery({
-    queryKey: ["class-teachers", classId],
-    queryFn: () => getClassTeachers(classId),
-    enabled: !!classId,
-  });
+  // Use lightweight data directly from initialData
+  const students = useMemo(() => initialData.students, [initialData.students]);
+  const teachers = useMemo(() => initialData.teachers, [initialData.teachers]);
+  const cls = useMemo(() => initialData.class, [initialData.class]);
 
   // Collapsible teacher matrix (legacy; reserved for future use)
   // Filter: all/teacher/student for combined matrix
   const [filterMode, setFilterMode] = useState<"all" | "teacher" | "student">(
     "all"
   );
-  // Session filter: "all" or a specific session_time
-  const [sessionFilter, setSessionFilter] = useState<string>("all");
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
-  }, []);
-
-  // Always show all sessions
+  // Session filter: must be a specific session_time (no "all" option to reduce queries)
+  const [sessionFilter, setSessionFilter] = useState<string>("");
 
   // External bulk buttons control (from combined matrix)
   const externalBulkMarkRef = useRef<(present: boolean) => void>(() => {});
   const [externalBulkDisabled, setExternalBulkDisabled] = useState(true);
 
-  if (classLoading || studentsLoading || teachersLoading) {
-    return <AttendanceLoadingSkeleton />;
-  }
+  // Memoize sessions calculation (must be before conditional return)
+  const sessions = useMemo(() => {
+    if (!cls) return [];
+    return getSessionsForDate(cls.days_of_week, date);
+  }, [cls, date]);
+
+  // Track previous sessions to detect changes
+  const prevSessionsRef = useRef<string[]>([]);
+
+  // Initialize sessionFilter with first session when sessions change
+  // Use startTransition to make state update non-blocking and avoid cascading renders
+  useEffect(() => {
+    const sessionsChanged =
+      prevSessionsRef.current.length !== sessions.length ||
+      prevSessionsRef.current.some((s, i) => s !== sessions[i]);
+
+    if (sessionsChanged && sessions.length > 0) {
+      prevSessionsRef.current = sessions;
+      startTransition(() => {
+        setSessionFilter((current) => {
+          // Only update if current is empty or not in sessions
+          if (!current || !sessions.includes(current)) {
+            return sessions[0];
+          }
+          return current;
+        });
+      });
+    } else if (!sessionsChanged) {
+      prevSessionsRef.current = sessions;
+    }
+  }, [sessions]);
+
+  // Only show the selected session (no "all" option to reduce queries)
+  const visibleSessions = useMemo(() => {
+    if (!sessionFilter || !sessions.includes(sessionFilter)) {
+      return sessions.length > 0 ? [sessions[0]] : [];
+    }
+    return [sessionFilter];
+  }, [sessionFilter, sessions]);
+
+  // Calculate present students count for the selected session only
+  // Must be before conditional return to satisfy React Hooks rules
+  const presentCount = useMemo(() => {
+    if (!attendanceMapBySession || visibleSessions.length === 0) return 0;
+    const sessionTime = visibleSessions[0];
+    const sessionMap = attendanceMapBySession[sessionTime];
+    if (!sessionMap) return 0;
+    return Object.values(sessionMap).filter((isPresent) => isPresent).length;
+  }, [attendanceMapBySession, visibleSessions]);
+  const totalStudents = students.length;
 
   if (!cls) {
     return (
@@ -111,48 +178,6 @@ export default function AttendancePageClient({ classId }: { classId: string }) {
       </div>
     );
   }
-
-  const sessions = getSessionsForDate(cls.days_of_week, date);
-  const visibleSessions = (() => {
-    const base =
-      sessionFilter === "all"
-        ? sessions
-        : sessions.filter((s) => s === sessionFilter);
-    if (isMobile) {
-      return base.slice(0, 1);
-    }
-    return base;
-  })();
-
-  const students =
-    studentItems?.map((i) => ({
-      id: i.student.id,
-      full_name: i.student.full_name,
-      phone: i.student.phone,
-    })) || [];
-
-  const teachers =
-    teacherItems?.map((i) => ({
-      id: i.teacher.id,
-      full_name: i.teacher.full_name,
-      phone: i.teacher.phone,
-    })) || [];
-
-  // Calculate present students count (across all sessions for the day)
-  const presentStudentIds = new Set<string>();
-  if (attendanceMapBySession) {
-    Object.values(attendanceMapBySession).forEach((sessionMap) => {
-      Object.entries(sessionMap).forEach(([studentId, isPresent]) => {
-        if (isPresent) {
-          presentStudentIds.add(studentId);
-        }
-      });
-    });
-  }
-  const presentCount = presentStudentIds.size;
-  const totalStudents = students.length;
-
-  // We will render all sessions; per-session maps will be pulled during render
 
   return (
     <div className="px-0">
@@ -174,9 +199,7 @@ export default function AttendancePageClient({ classId }: { classId: string }) {
           <div className="flex items-center gap-2 lg:hidden">
             <span className="text-xs text-muted-foreground">Ca</span>
             <Select
-              value={
-                sessionFilter === "all" ? (sessions[0] ?? "") : sessionFilter
-              }
+              value={sessionFilter || (sessions[0] ?? "")}
               onValueChange={(v) => setSessionFilter(v)}
             >
               <SelectTrigger className="w-[140px]">
@@ -244,14 +267,13 @@ export default function AttendancePageClient({ classId }: { classId: string }) {
           <div className="hidden lg:flex items-center gap-2 lg:ml-auto">
             <span className="text-xs text-muted-foreground">Ca</span>
             <Select
-              value={sessionFilter}
+              value={sessionFilter || (sessions[0] ?? "")}
               onValueChange={(v) => setSessionFilter(v)}
             >
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
                 {sessions.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
