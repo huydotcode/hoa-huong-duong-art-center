@@ -452,10 +452,8 @@ async function getStudentIdsBySubject(
 
   const { data: enrollments, error: enrollmentsError } = await supabase
     .from("student_class_enrollments")
-    .select("student_id,status,leave_date")
+    .select("student_id")
     .in("class_id", matchingClassIds)
-    .in("status", ["active", "trial"])
-    .is("leave_date", null)
     .not("student_id", "is", null);
   if (enrollmentsError) throw enrollmentsError;
 
