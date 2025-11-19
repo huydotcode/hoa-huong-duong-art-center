@@ -297,12 +297,17 @@ export async function getParticipantsForClasses(
   return { classes, rows };
 }
 
+export type AttendanceStateResult = {
+  states: Record<string, boolean>;
+  notes: Record<string, string | null>;
+};
+
 export async function getAttendanceStateForSessions(
   dateISO: string,
   classSessions: AdminClassSession[]
-): Promise<Record<string, boolean>> {
+): Promise<AttendanceStateResult> {
   if (classSessions.length === 0) {
-    return {};
+    return { states: {}, notes: {} };
   }
 
   const supabase = await createClient();
@@ -321,7 +326,7 @@ export async function getAttendanceStateForSessions(
 
   const { data, error } = await supabase
     .from("attendance")
-    .select("class_id, student_id, teacher_id, session_time, is_present")
+    .select("class_id, student_id, teacher_id, session_time, is_present, notes")
     .eq("attendance_date", dateISO)
     .in("class_id", classIds)
     .in("session_time", sessionTimes);
@@ -330,7 +335,8 @@ export async function getAttendanceStateForSessions(
     throw error;
   }
 
-  const map: Record<string, boolean> = {};
+  const states: Record<string, boolean> = {};
+  const notes: Record<string, string | null> = {};
   for (const row of (data as
     | {
         class_id: string | number | null;
@@ -357,9 +363,20 @@ export async function getAttendanceStateForSessions(
     if (!baseKey) continue;
     const key = `${baseKey}@@${session}`;
     if (typeof row.is_present === "boolean") {
-      map[key] = row.is_present;
+      states[key] = row.is_present;
+    }
+    if (row.notes !== undefined && row.notes !== null) {
+      const noteValue =
+        typeof row.notes === "string" && row.notes.trim().length > 0
+          ? row.notes
+          : null;
+      if (noteValue !== null) {
+        notes[key] = noteValue;
+      } else {
+        delete notes[key];
+      }
     }
   }
 
-  return map;
+  return { states, notes };
 }

@@ -168,6 +168,7 @@ Quản lý điểm danh học sinh và giáo viên.
 | **session_time**    | CHAR(5)      | NOT NULL                           | Giờ ca học dạng `HH:MM` (24h), ví dụ `08:00`                  |
 | **is_present**      | BOOLEAN      | NOT NULL                           | true = có mặt, false = vắng mặt                               |
 | **marked_by**       | VARCHAR(50)  | NOT NULL, DEFAULT 'teacher'        | Người điểm danh: `teacher` hoặc `admin`                       |
+| **notes**           | TEXT         |                                    | Ghi chú chi tiết cho buổi điểm danh                           |
 | **created_at**      | TIMESTAMP    | DEFAULT NOW()                      | Thời điểm điểm danh                                           |
 
 **Mô tả:**

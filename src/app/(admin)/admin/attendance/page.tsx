@@ -75,7 +75,8 @@ export default async function AdminAttendancePage({
         classSessions={classSessions}
         classes={classes}
         rows={rows}
-        initialState={attendanceState}
+        initialState={attendanceState.states}
+        initialNotes={attendanceState.notes}
         showAllClasses={showAllClasses}
       />
     </div>

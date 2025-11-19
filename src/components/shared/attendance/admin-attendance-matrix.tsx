@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectTrigger,
@@ -13,8 +14,11 @@ import type { AdminAttendanceRow } from "@/lib/services/admin-attendance-service
 import {
   upsertStudentAttendance,
   upsertTeacherAttendance,
+  updateStudentAttendanceNote,
+  updateTeacherAttendanceNote,
 } from "@/lib/services/attendance-service";
 import { toast } from "sonner";
+import { StickyNote, Pencil } from "lucide-react";
 
 export default function AdminAttendanceMatrix({
   dateISO,
@@ -23,6 +27,7 @@ export default function AdminAttendanceMatrix({
   showClassColumn = true,
   sessionTime,
   initialState = {},
+  initialNotes = {},
   onStatsChange,
   statsRows,
   onBulkActionsReady,
@@ -34,6 +39,7 @@ export default function AdminAttendanceMatrix({
   showClassColumn?: boolean;
   sessionTime?: string;
   initialState?: Record<string, boolean>;
+  initialNotes?: Record<string, string | null>;
   onStatsChange?: (stats: {
     presentStudents: number;
     totalStudents: number;
@@ -55,12 +61,20 @@ export default function AdminAttendanceMatrix({
   );
   const [cellStates, setCellStates] =
     useState<Record<string, boolean>>(initialState);
+  const [cellNotes, setCellNotes] = useState<Record<string, string | null>>(
+    initialNotes || {}
+  );
+  const [pendingNoteKeys, setPendingNoteKeys] = useState<Set<string>>(
+    new Set()
+  );
 
   useEffect(() => {
     setCellStates(initialState);
     setSelectedCellKeys(new Set());
     setPendingCellKeys(new Set());
-  }, [initialState, sessionLabel, sessionTime]);
+    setCellNotes(initialNotes || {});
+    setPendingNoteKeys(new Set());
+  }, [initialState, initialNotes, sessionLabel, sessionTime]);
 
   const effectiveSession = sessionTime ?? sessionLabel;
 
@@ -168,6 +182,57 @@ export default function AdminAttendanceMatrix({
     });
   };
 
+  const handleNoteSave = async (row: AdminAttendanceRow, rawValue: string) => {
+    const cellKey = `${row.key}@@${effectiveSession}`;
+    const trimmed = rawValue.trim();
+    const normalized = trimmed.length > 0 ? trimmed : null;
+    setPendingNoteKeys((prev) => new Set(prev).add(cellKey));
+    const personLabel = row.kind === "student" ? "Học sinh" : "Giáo viên";
+    try {
+      if (row.kind === "student") {
+        await updateStudentAttendanceNote({
+          classId: row.classId,
+          studentId: row.id,
+          date: dateISO,
+          session_time: effectiveSession,
+          notes: normalized,
+        });
+      } else {
+        await updateTeacherAttendanceNote({
+          classId: row.classId,
+          teacherId: row.id,
+          date: dateISO,
+          session_time: effectiveSession,
+          notes: normalized,
+        });
+      }
+      setCellNotes((prev) => {
+        const next = { ...prev };
+        if (normalized) {
+          next[cellKey] = normalized;
+        } else {
+          delete next[cellKey];
+        }
+        return next;
+      });
+      toast.success(
+        normalized
+          ? `Đã lưu ghi chú cho ${personLabel.toLowerCase()} ${row.full_name}`
+          : `Đã xóa ghi chú cho ${personLabel.toLowerCase()} ${row.full_name}`
+      );
+    } catch (error) {
+      console.error("Attendance note update failed", error);
+      toast.error("Lưu ghi chú thất bại");
+      throw error;
+    } finally {
+      setPendingNoteKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(cellKey);
+        return next;
+      });
+    }
+  };
+
   const handleBulk = async (present: boolean) => {
     const targets: AdminAttendanceRow[] = [];
     selectedCellKeys.forEach((k) => {
@@ -231,13 +296,14 @@ export default function AdminAttendanceMatrix({
                 <th className="px-3 py-2 text-center min-w-[240px]">
                   <span className="font-medium">Trạng thái</span>
                 </th>
+                <th className="px-3 py-2 text-left min-w-[200px]">Ghi chú</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={(showClassColumn ? 1 : 0) + 3}
+                    colSpan={(showClassColumn ? 1 : 0) + 4}
                     className="px-3 py-6 text-center text-muted-foreground"
                   >
                     Không có dữ liệu
@@ -249,6 +315,9 @@ export default function AdminAttendanceMatrix({
                   const isSelected = selectedCellKeys.has(cellKey);
                   const pending = pendingCellKeys.has(cellKey);
                   const status = cellStates[cellKey];
+                  const noteValue = cellNotes[cellKey] ?? null;
+                  const notePending = pendingNoteKeys.has(cellKey);
+                  const canEditNote = typeof status === "boolean";
                   return (
                     <tr
                       key={row.key}
@@ -282,7 +351,7 @@ export default function AdminAttendanceMatrix({
                         {row.phone || "-"}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex flex-wrap items-center justify-center gap-2">
                           {status === undefined ? (
                             <>
                               <Button
@@ -342,6 +411,17 @@ export default function AdminAttendanceMatrix({
                           )}
                         </div>
                       </td>
+                      <td className="px-3 py-2">
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <AttendanceNoteEditorControl
+                            note={noteValue}
+                            pending={notePending}
+                            canEdit={canEditNote}
+                            fullWidth
+                            onSave={(value) => handleNoteSave(row, value)}
+                          />
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -382,6 +462,9 @@ export default function AdminAttendanceMatrix({
               const isSelected = selectedCellKeys.has(cellKey);
               const pending = pendingCellKeys.has(cellKey);
               const status = cellStates[cellKey];
+              const noteValue = cellNotes[cellKey] ?? null;
+              const notePending = pendingNoteKeys.has(cellKey);
+              const canEditNote = typeof status === "boolean";
               return (
                 <div
                   key={`m-${row.key}`}
@@ -467,12 +550,117 @@ export default function AdminAttendanceMatrix({
                       )}
                     </div>
                   </div>
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs font-medium">Ghi chú</p>
+                    <div onClick={(event) => event.stopPropagation()}>
+                      <AttendanceNoteEditorControl
+                        note={noteValue}
+                        pending={notePending}
+                        canEdit={canEditNote}
+                        fullWidth
+                        onSave={(value) => handleNoteSave(row, value)}
+                      />
+                    </div>
+                  </div>
                 </div>
               );
             })}
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function AttendanceNoteEditorControl({
+  note,
+  pending,
+  canEdit,
+  inline,
+  fullWidth,
+  onSave,
+}: {
+  note: string | null;
+  pending: boolean;
+  canEdit: boolean;
+  inline?: boolean;
+  fullWidth?: boolean;
+  onSave: (value: string) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [value, setValue] = useState(note ?? "");
+
+  const handleSubmit = async () => {
+    try {
+      await onSave(value);
+      setIsEditing(false);
+    } catch {
+      // Keep editor open for retry
+    }
+  };
+
+  const normalizedOriginal = (note ?? "").trim();
+  const normalizedDraft = value.trim();
+  const isDirty = normalizedDraft !== normalizedOriginal;
+
+  return (
+    <div
+      className={`text-left text-xs space-y-1 ${
+        fullWidth ? "w-full" : inline ? "min-w-[120px]" : "w-full"
+      }`}
+    >
+      {isEditing ? (
+        <div className="flex items-center gap-2">
+          <Input
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="Nhập ghi chú..."
+            disabled={pending}
+            className={`flex-1 ${fullWidth ? "" : "min-w-[200px]"}`}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsEditing(false)}
+            disabled={pending}
+          >
+            Hủy
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={pending || !isDirty}
+          >
+            {pending ? "Đang lưu..." : "Lưu"}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-1 text-sm text-muted-foreground">
+            <StickyNote className="h-4 w-4 text-primary" />
+            <span className="truncate">{note || "Chưa có ghi chú"}</span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={!canEdit || pending}
+            onClick={() => {
+              setValue(note ?? "");
+              setIsEditing(true);
+            }}
+            title={note ? "Sửa ghi chú" : "Thêm ghi chú"}
+          >
+            <Pencil className="h-4 w-4" />
+            <span className="sr-only">
+              {note ? "Sửa ghi chú" : "Thêm ghi chú"}
+            </span>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

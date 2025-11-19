@@ -210,6 +210,7 @@ export interface Attendance {
   attendance_date: string;
   is_present: boolean;
   marked_by: AttendanceMarkedBy;
+  notes?: string | null;
   created_at: string;
 }
 
@@ -220,10 +221,12 @@ export interface CreateAttendanceData {
   attendance_date: string;
   is_present: boolean;
   marked_by: AttendanceMarkedBy;
+  notes?: string | null;
 }
 
 export interface UpdateAttendanceData {
   is_present?: boolean;
+  notes?: string | null;
 }
 
 // ========== PAYMENT_STATUS ==========

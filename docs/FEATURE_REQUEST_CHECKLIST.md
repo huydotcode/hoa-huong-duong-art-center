@@ -31,8 +31,8 @@ Tài liệu này tổng hợp các yêu cầu mới từ khách hàng, giúp tea
 
 ## 3. Nhận xét ngay khi điểm danh
 
-- [ ] Thêm cột `comment` cho bảng `attendance`
-- [ ] Mở dialog/comment box ở Attendance matrix
+- [x] Thêm cột `comment` cho bảng `attendance`
+- [x] Mở dialog/comment box ở Attendance matrix
 - [ ] Lưu kèm người nhập + timestamp
 - [ ] Hiển thị biểu tượng nếu có nhận xét
 

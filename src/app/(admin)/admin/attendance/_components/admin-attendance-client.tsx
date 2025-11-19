@@ -29,6 +29,7 @@ export default function AdminAttendanceClient({
   classes,
   rows,
   initialState,
+  initialNotes = {},
   showAllClasses = false,
 }: {
   dateISO: string;
@@ -38,6 +39,7 @@ export default function AdminAttendanceClient({
   classes: AdminAttendanceClass[];
   rows: AdminAttendanceRow[];
   initialState: Record<string, boolean>;
+  initialNotes?: Record<string, string | null>;
   showAllClasses?: boolean;
 }) {
   const router = useRouter();
@@ -148,6 +150,7 @@ export default function AdminAttendanceClient({
         rows: AdminAttendanceRow[];
         allRows: AdminAttendanceRow[];
         initialState: Record<string, boolean>;
+        initialNotes: Record<string, string | null>;
       }
     >();
 
@@ -165,6 +168,7 @@ export default function AdminAttendanceClient({
               rows: [],
               allRows: [],
               initialState: {},
+              initialNotes: {},
             });
           }
         });
@@ -181,6 +185,7 @@ export default function AdminAttendanceClient({
           rows: [],
           allRows: [],
           initialState: {},
+          initialNotes: {},
         });
       });
     }
@@ -226,6 +231,7 @@ export default function AdminAttendanceClient({
                 rows: [row],
                 allRows: [row],
                 initialState: {},
+                initialNotes: {},
               };
               map.set(groupKey, group);
             } else if (!group.rows.find((r) => r.key === row.key)) {
@@ -244,6 +250,7 @@ export default function AdminAttendanceClient({
             rows: [row],
             allRows: [row],
             initialState: {},
+            initialNotes: {},
           });
         } else {
           const group = map.get(row.classId);
@@ -276,6 +283,28 @@ export default function AdminAttendanceClient({
       }
     });
 
+    if (initialNotes) {
+      Object.entries(initialNotes).forEach(([key, value]) => {
+        const [baseKey, sessionTime] = key.split("@@");
+        if (!baseKey) return;
+        const [, , classId] = baseKey.split(":");
+        if (!classId) return;
+
+        if (showAllClasses) {
+          const groupKey = `${classId}::${sessionTime}`;
+          const group = map.get(groupKey);
+          if (group) {
+            group.initialNotes[key] = value ?? null;
+          }
+        } else {
+          const group = map.get(classId);
+          if (group) {
+            group.initialNotes[key] = value ?? null;
+          }
+        }
+      });
+    }
+
     return Array.from(map.values()).sort((a, b) => {
       // Sort by sessionTime first (ascending), then by className
       const timeCompare = a.sessionTime.localeCompare(b.sessionTime);
@@ -293,6 +322,7 @@ export default function AdminAttendanceClient({
     sessionsByClass,
     sessionLabel,
     initialState,
+    initialNotes,
     showAllClasses,
   ]);
 
@@ -374,6 +404,7 @@ export default function AdminAttendanceClient({
             const sessionTime = group.sessionTime;
             const sessionEnd = group.endTime;
             const stateForGroup = group.initialState;
+            const notesForGroup = group.initialNotes;
 
             // Create unique key for each group (classId + sessionTime when showing all)
             const groupKey = showAllClasses
@@ -454,6 +485,7 @@ export default function AdminAttendanceClient({
                     rows={group.rows}
                     showClassColumn={false}
                     initialState={stateForGroup}
+                    initialNotes={notesForGroup}
                     statsRows={group.allRows}
                     onStatsChange={(statsSummary) =>
                       setAttendanceSummaries((prev) => {

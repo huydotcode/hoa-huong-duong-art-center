@@ -125,22 +125,33 @@ export async function upsertStudentAttendance(params: {
   session_time: string; // HH:MM
   is_present: boolean;
   marked_by: "teacher" | "admin";
+  notes?: string | null;
 }): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase.from("attendance").upsert(
-    {
-      class_id: params.classId,
-      student_id: params.studentId,
-      attendance_date: params.date,
-      session_time: params.session_time,
-      is_present: params.is_present,
-      marked_by: params.marked_by,
-    },
-    {
-      onConflict: "class_id,student_id,attendance_date,session_time",
-      ignoreDuplicates: false,
-    }
-  );
+  const normalizedNotes =
+    params.notes !== undefined && params.notes !== null
+      ? params.notes.trim().length > 0
+        ? params.notes.trim()
+        : null
+      : undefined;
+
+  const payload: Record<string, unknown> = {
+    class_id: params.classId,
+    student_id: params.studentId,
+    attendance_date: params.date,
+    session_time: params.session_time,
+    is_present: params.is_present,
+    marked_by: params.marked_by,
+  };
+
+  if (normalizedNotes !== undefined) {
+    payload.notes = normalizedNotes;
+  }
+
+  const { error } = await supabase.from("attendance").upsert(payload, {
+    onConflict: "class_id,student_id,attendance_date,session_time",
+    ignoreDuplicates: false,
+  });
   if (error) throw error;
 }
 
@@ -168,8 +179,15 @@ export async function upsertTeacherAttendance(params: {
   session_time: string; // HH:MM
   is_present: boolean;
   marked_by: "teacher" | "admin";
+  notes?: string | null;
 }): Promise<void> {
   const supabase = await createClient();
+  const normalizedNotes =
+    params.notes !== undefined && params.notes !== null
+      ? params.notes.trim().length > 0
+        ? params.notes.trim()
+        : null
+      : undefined;
 
   // Check if record exists
   const { data: existing, error: checkError } = await supabase
@@ -185,26 +203,78 @@ export async function upsertTeacherAttendance(params: {
 
   if (existing) {
     // Update existing record
+    const updatePayload: Record<string, unknown> = {
+      is_present: params.is_present,
+      marked_by: params.marked_by,
+    };
+    if (normalizedNotes !== undefined) {
+      updatePayload.notes = normalizedNotes;
+    }
     const { error } = await supabase
       .from("attendance")
-      .update({
-        is_present: params.is_present,
-        marked_by: params.marked_by,
-      })
+      .update(updatePayload)
       .eq("id", existing.id);
     if (error) throw error;
   } else {
     // Insert new record
-    const { error } = await supabase.from("attendance").insert({
+    const insertPayload: Record<string, unknown> = {
       class_id: params.classId,
       teacher_id: params.teacherId,
       attendance_date: params.date,
       session_time: params.session_time,
       is_present: params.is_present,
       marked_by: params.marked_by,
-    });
+    };
+    if (normalizedNotes !== undefined) {
+      insertPayload.notes = normalizedNotes;
+    }
+    const { error } = await supabase.from("attendance").insert(insertPayload);
     if (error) throw error;
   }
+}
+
+export async function updateStudentAttendanceNote(params: {
+  classId: string;
+  studentId: string;
+  date: string;
+  session_time: string;
+  notes: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const normalized =
+    params.notes && params.notes.trim().length > 0 ? params.notes.trim() : null;
+
+  const { error } = await supabase
+    .from("attendance")
+    .update({ notes: normalized })
+    .eq("class_id", params.classId)
+    .eq("student_id", params.studentId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time);
+
+  if (error) throw error;
+}
+
+export async function updateTeacherAttendanceNote(params: {
+  classId: string;
+  teacherId: string;
+  date: string;
+  session_time: string;
+  notes: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const normalized =
+    params.notes && params.notes.trim().length > 0 ? params.notes.trim() : null;
+
+  const { error } = await supabase
+    .from("attendance")
+    .update({ notes: normalized })
+    .eq("class_id", params.classId)
+    .eq("teacher_id", params.teacherId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time);
+
+  if (error) throw error;
 }
 
 export async function removeTeacherAttendance(params: {
