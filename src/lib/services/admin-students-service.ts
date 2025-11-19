@@ -21,6 +21,7 @@ export async function getStudents(
     offset?: number;
     subject?: string;
     learningStatus?: StudentLearningStatus | string | null;
+    recentOnly?: boolean;
   } = {}
 ): Promise<StudentWithClassSummary[]> {
   const supabase = await createClient();
@@ -37,6 +38,7 @@ export async function getStudents(
     .toString()
     .trim()
     .toLowerCase();
+  const recentOnly = Boolean(opts.recentOnly);
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
   const includeInactiveClasses = learningStatusFilter === "inactive";
@@ -85,6 +87,13 @@ export async function getStudents(
     : null;
   if (learningStatusIds) {
     filterIdGroups.push(learningStatusIds);
+  }
+
+  const recentStudentIds = recentOnly
+    ? await getRecentStudentIds(supabase)
+    : null;
+  if (recentStudentIds) {
+    filterIdGroups.push(recentStudentIds);
   }
 
   const idsToFilter = mergeIdFilters(filterIdGroups);
@@ -341,6 +350,7 @@ export async function getStudentsCount(
   opts: {
     subject?: string;
     learningStatus?: StudentLearningStatus | string | null;
+    recentOnly?: boolean;
   } = {}
 ): Promise<number> {
   const supabase = await createClient();
@@ -353,6 +363,7 @@ export async function getStudentsCount(
     .toString()
     .trim()
     .toLowerCase();
+  const recentOnly = Boolean(opts.recentOnly);
 
   const filterIdGroups: string[][] = [];
 
@@ -374,6 +385,13 @@ export async function getStudentsCount(
     : null;
   if (learningStatusIds) {
     filterIdGroups.push(learningStatusIds);
+  }
+
+  const recentStudentIds = recentOnly
+    ? await getRecentStudentIds(supabase)
+    : null;
+  if (recentStudentIds) {
+    filterIdGroups.push(recentStudentIds);
   }
 
   const idsToFilter = mergeIdFilters(filterIdGroups);
@@ -577,6 +595,32 @@ async function getStudentsWithoutClass(
     .map((student) => student.id as string | null)
     .filter((id): id is string => Boolean(id))
     .filter((id) => !enrolledIds.has(id));
+}
+
+async function getRecentStudentIds(
+  supabase: SupabaseServerClient
+): Promise<string[]> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffISO = cutoff.toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from("student_class_enrollments")
+    .select("student_id, enrollment_date")
+    .gte("enrollment_date", cutoffISO)
+    .not("student_id", "is", null);
+
+  if (error) throw error;
+
+  const ids = new Set<string>();
+  (data ?? []).forEach((row) => {
+    const studentId = row.student_id as string | null;
+    if (studentId) {
+      ids.add(studentId);
+    }
+  });
+
+  return Array.from(ids);
 }
 
 type CreateStudentData = Pick<

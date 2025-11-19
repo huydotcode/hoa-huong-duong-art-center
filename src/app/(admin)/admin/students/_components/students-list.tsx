@@ -28,6 +28,7 @@ interface StudentsListProps {
   query: string;
   subject?: string;
   learningStatus?: string;
+  recentOnly?: boolean;
   totalCount: number;
   pageSize: number;
 }
@@ -37,6 +38,7 @@ export default function StudentsList({
   query,
   subject = "",
   learningStatus = "",
+  recentOnly = false,
   totalCount,
   pageSize,
 }: StudentsListProps) {
@@ -55,6 +57,7 @@ export default function StudentsList({
     () => normalizedLearningStatus.length > 0,
     [normalizedLearningStatus]
   );
+  const hasRecentFilter = recentOnly;
   const learningStatusLabel = useMemo(() => {
     if (!hasLearningStatusFilter) return "";
     return (
@@ -83,7 +86,8 @@ export default function StudentsList({
     (e: Event) => {
       const shouldSkipOptimistic =
         hasSubjectFilter ||
-        (hasLearningStatusFilter && normalizedLearningStatus !== "no_class");
+        (hasLearningStatusFilter && normalizedLearningStatus !== "no_class") ||
+        hasRecentFilter;
       if (shouldSkipOptimistic) {
         return;
       }
@@ -102,7 +106,12 @@ export default function StudentsList({
         setEstimatedTotal((prev) => prev + 1);
       }
     },
-    [hasSubjectFilter, hasLearningStatusFilter, normalizedLearningStatus]
+    [
+      hasSubjectFilter,
+      hasLearningStatusFilter,
+      normalizedLearningStatus,
+      hasRecentFilter,
+    ]
   );
 
   const handleUpdated = useCallback((e: Event) => {
@@ -144,6 +153,7 @@ export default function StudentsList({
           offset: displayedCount,
           subject,
           learningStatus: normalizedLearningStatus,
+          recentOnly,
         })) as StudentWithClassSummary[];
         setAllData((prev) => [...prev, ...nextBatch]);
       } catch (error) {
@@ -158,6 +168,7 @@ export default function StudentsList({
     pageSize,
     displayedCount,
     normalizedLearningStatus,
+    recentOnly,
   ]);
 
   if (initialData.length === 0) {
@@ -199,7 +210,10 @@ export default function StudentsList({
 
   return (
     <>
-      {(hasQuery || hasSubjectFilter || hasLearningStatusFilter) && (
+      {(hasQuery ||
+        hasSubjectFilter ||
+        hasLearningStatusFilter ||
+        hasRecentFilter) && (
         <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
           {hasQuery && (
             <span>
@@ -220,6 +234,14 @@ export default function StudentsList({
               Trạng thái học:{" "}
               <span className="font-medium text-foreground">
                 {learningStatusLabel}
+              </span>
+            </span>
+          )}
+          {hasRecentFilter && (
+            <span>
+              Bộ lọc:{" "}
+              <span className="font-medium text-foreground">
+                Học sinh mới (30 ngày)
               </span>
             </span>
           )}

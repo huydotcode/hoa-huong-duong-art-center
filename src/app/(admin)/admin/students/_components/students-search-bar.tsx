@@ -26,7 +26,10 @@ export default function StudentsSearchBar() {
   const q = searchParams.get("q") || "";
   const subject = searchParams.get("subject") || "";
   const learningStatus = searchParams.get("learningStatus") || "";
-  const activeFilterCount = [subject, learningStatus].filter(Boolean).length;
+  const recent = searchParams.get("recent") === "true";
+  const activeFilterCount = [subject, learningStatus, recent ? "1" : ""].filter(
+    Boolean
+  ).length;
   const hasFilters = activeFilterCount > 0;
 
   const updateSearchParams = (updater: (params: URLSearchParams) => void) => {
@@ -54,6 +57,7 @@ export default function StudentsSearchBar() {
       params.delete("q");
       params.delete("subject");
       params.delete("learningStatus");
+      params.delete("recent");
     });
   };
 
@@ -61,6 +65,7 @@ export default function StudentsSearchBar() {
     updateSearchParams((params) => {
       params.delete("subject");
       params.delete("learningStatus");
+      params.delete("recent");
     });
   };
 
@@ -73,6 +78,16 @@ export default function StudentsSearchBar() {
       }
     });
     setIsFilterOpen(false);
+  };
+
+  const handleRecentToggle = () => {
+    updateSearchParams((params) => {
+      if (recent) {
+        params.delete("recent");
+      } else {
+        params.set("recent", "true");
+      }
+    });
   };
 
   const handleLearningStatusSelect = (value: string) => {
@@ -192,6 +207,41 @@ export default function StudentsSearchBar() {
                 ))}
               </div>
             </div>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">Khung thời gian</p>
+                {recent && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleRecentToggle}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Xóa
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleRecentToggle}
+                  className={cn(
+                    "w-full rounded border px-3 py-2 text-left text-sm transition",
+                    recent
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/60 hover:border-primary"
+                  )}
+                >
+                  <p className="font-medium">Học sinh mới (30 ngày)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Chỉ hiển thị học sinh có ngày ghi danh trong 30 ngày gần
+                    nhất
+                  </p>
+                </button>
+              </div>
+            </div>
           </PopoverContent>
         </Popover>
         {hasFilters && (
@@ -230,7 +280,7 @@ export default function StudentsSearchBar() {
         </Button>
       </form>
 
-      {(q.length > 0 || subject || learningStatus) && (
+      {(q.length > 0 || subject || learningStatus || recent) && (
         <Button
           type="button"
           variant="outline"

@@ -11,6 +11,7 @@ interface SearchProps {
     q?: string;
     subject?: string;
     learningStatus?: string;
+    recent?: string;
   }>;
 }
 
@@ -19,6 +20,7 @@ export default async function StudentsPage(props: SearchProps) {
   const q = searchParams?.q || "";
   const subject = searchParams?.subject?.trim() || "";
   const learningStatus = searchParams?.learningStatus?.trim() || "";
+  const recent = searchParams?.recent === "true";
 
   const [initialData, totalCount] = await Promise.all([
     getStudents(q, {
@@ -26,17 +28,19 @@ export default async function StudentsPage(props: SearchProps) {
       offset: 0,
       subject,
       learningStatus,
+      recentOnly: recent,
     }),
-    getStudentsCount(q, { subject, learningStatus }),
+    getStudentsCount(q, { subject, learningStatus, recentOnly: recent }),
   ]);
 
   return (
     <StudentsList
-      key={`${q}-${subject}-${learningStatus}`}
+      key={`${q}-${subject}-${learningStatus}-${recent}`}
       initialData={initialData}
       query={q}
       subject={subject}
       learningStatus={learningStatus}
+      recentOnly={recent}
       totalCount={totalCount}
       pageSize={STUDENTS_PAGE_SIZE}
     />
