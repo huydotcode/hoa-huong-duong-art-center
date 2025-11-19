@@ -49,6 +49,7 @@ export interface Student {
   full_name: string;
   phone: string | null;
   parent_phone: string | null;
+  notes: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -84,12 +85,14 @@ export interface CreateStudentData {
   full_name: string;
   phone: string | null;
   parent_phone: string | null;
+  notes?: string | null;
 }
 
 export interface UpdateStudentData {
   full_name?: string;
   phone?: string | null;
   parent_phone?: string | null;
+  notes?: string | null;
   is_active?: boolean;
 }
 

@@ -17,7 +17,6 @@ import {
   getAttendanceStatusBadge,
   getTuitionStatusBadge,
 } from "./student-status-utils";
-import { Loader2 } from "lucide-react";
 
 // Lazy load heavy dialog component
 const StudentClassScheduleDialog = lazy(() =>
@@ -99,6 +98,15 @@ function StudentTableRowComponent({
           <Badge variant={attendanceBadge.variant}>
             {attendanceBadge.label}
           </Badge>
+        </TableCell>
+        <TableCell className="max-w-[200px] truncate">
+          {student.notes ? (
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {student.notes}
+            </p>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
         </TableCell>
         <TableCell className="text-center">
           <Badge variant={student.is_active ? "default" : "destructive"}>

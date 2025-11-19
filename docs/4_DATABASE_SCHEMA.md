@@ -73,6 +73,7 @@ Quản lý thông tin cơ bản của học sinh.
 | **full_name**    | VARCHAR(255) | NOT NULL              | Họ và tên đầy đủ của học sinh                  |
 | **phone**        | VARCHAR(20)  | NOT NULL              | Số điện thoại của học sinh (để tra cứu)        |
 | **parent_phone** | VARCHAR(20)  | NOT NULL              | Số điện thoại phụ huynh (để tra cứu)           |
+| **notes**        | TEXT         |                       | Ghi chú nội bộ về học sinh                     |
 | **is_active**    | BOOLEAN      | DEFAULT true          | Trạng thái hoạt động (soft-delete khi = false) |
 | **created_at**   | TIMESTAMP    | DEFAULT NOW()         | Thời điểm tạo                                  |
 | **updated_at**   | TIMESTAMP    | DEFAULT NOW()         | Thời điểm cập nhật                             |

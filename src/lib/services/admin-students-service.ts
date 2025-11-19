@@ -35,6 +35,7 @@ export async function getStudents(
     full_name,
     phone,
     parent_phone,
+    notes,
     is_active,
     created_at,
     updated_at,
@@ -365,7 +366,7 @@ async function getStudentIdsBySubject(
 
 type CreateStudentData = Pick<
   Student,
-  "full_name" | "phone" | "parent_phone" | "is_active"
+  "full_name" | "phone" | "parent_phone" | "is_active" | "notes"
 >;
 
 export async function createStudent(
@@ -392,11 +393,15 @@ export async function createStudent(
       : normalizePhone(data.parent_phone)
     : normalizedPhone;
 
+  const normalizedNotes =
+    data.notes && data.notes.trim().length > 0 ? data.notes.trim() : null;
+
   const payload = {
     full_name: data.full_name.trim(),
     phone: normalizedPhone,
     parent_phone: normalizedParentPhone,
     is_active: data.is_active ?? true,
+    notes: normalizedNotes,
   };
 
   const { data: inserted, error } = await supabase
@@ -411,7 +416,7 @@ export async function createStudent(
 }
 
 type UpdateStudentData = Partial<
-  Pick<Student, "full_name" | "phone" | "parent_phone" | "is_active">
+  Pick<Student, "full_name" | "phone" | "parent_phone" | "is_active" | "notes">
 >;
 
 export async function updateStudent(
@@ -450,6 +455,11 @@ export async function updateStudent(
     updatePayload.is_active = data.is_active;
   }
 
+  if (data.notes !== undefined) {
+    updatePayload.notes =
+      data.notes && data.notes.trim().length > 0 ? data.notes.trim() : null;
+  }
+
   const { error } = await supabase
     .from("students")
     .update(updatePayload)
@@ -470,6 +480,7 @@ export async function updateStudentFromForm(formData: FormData) {
   const id = String(formData.get("id") || "").trim();
   const full_name = String(formData.get("full_name") || "").trim();
   const phone = String(formData.get("phone") || "").trim();
+  const notes = String(formData.get("notes") || "").trim();
   const is_active_raw = String(formData.get("is_active") || "");
   const path = String(formData.get("path") || "/admin/students");
 
@@ -478,6 +489,7 @@ export async function updateStudentFromForm(formData: FormData) {
   const payload: UpdateStudentData = {};
   if (full_name) payload.full_name = full_name;
   if (phone) payload.phone = phone;
+  payload.notes = notes || null;
   if (is_active_raw) payload.is_active = is_active_raw === "true";
 
   await updateStudent(id, payload, path);

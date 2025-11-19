@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,7 @@ export function UpdateStudentForm({ student, children }: Props) {
       full_name: student.full_name,
       phone: student.phone || "",
       is_active: student.is_active,
+      notes: student.notes || "",
     },
   });
 
@@ -66,6 +68,7 @@ export function UpdateStudentForm({ student, children }: Props) {
         full_name: student.full_name,
         phone: student.phone || "",
         is_active: student.is_active,
+        notes: student.notes || "",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +95,7 @@ export function UpdateStudentForm({ student, children }: Props) {
                 full_name: values.full_name,
                 phone: values.phone?.trim() || null,
                 is_active: values.is_active,
+                notes: values.notes?.trim() || null,
                 updated_at: new Date().toISOString(),
               },
             },
@@ -193,6 +197,25 @@ export function UpdateStudentForm({ student, children }: Props) {
             />
 
             {/* SĐT phụ huynh tạm thời không sử dụng */}
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ghi chú</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={4}
+                      placeholder="Nhập ghi chú (tùy chọn)"
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter>
               <Button

@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -25,6 +25,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { createStudent } from "@/lib/services/admin-students-service";
 import {
   createStudentSchema,
@@ -40,6 +41,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const path = usePathname();
+  const dialogContentId = useId();
 
   const form = useForm<CreateStudentSchema>({
     resolver: zodResolver(createStudentSchema),
@@ -47,6 +49,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
       full_name: "",
       phone: "",
       is_active: true,
+      notes: "",
     },
   });
 
@@ -60,6 +63,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
           phone: values.phone || null,
           parent_phone: values.parent_phone || null,
           is_active: values.is_active,
+          notes: values.notes?.trim() || null,
         },
         path
       );
@@ -72,6 +76,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
           tuition_status: "not_created",
           attendance_today_status: "no_session",
           has_session_today: false,
+          notes: values.notes?.trim() || null,
         };
         window.dispatchEvent(
           new CustomEvent("student-created", {
@@ -97,7 +102,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent id={dialogContentId} className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Thêm học sinh mới</DialogTitle>
           <DialogDescription>
@@ -151,6 +156,25 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
             />
 
             {/* Bỏ field SĐT phụ huynh khi tạo mới theo yêu cầu */}
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ghi chú</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Nhập ghi chú (tùy chọn)"
+                      rows={4}
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter>
               <Button

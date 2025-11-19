@@ -23,12 +23,22 @@ export const createStudentSchema = z.object({
   phone: phoneSchema,
   parent_phone: phoneSchema,
   is_active: z.boolean().optional(),
+  notes: z
+    .string()
+    .max(1000, "Ghi chú tối đa 1000 ký tự.")
+    .optional()
+    .nullable(),
 });
 
 export const updateStudentSchema = z.object({
   full_name: z.string().min(1, "Vui lòng nhập họ và tên.").optional(),
   phone: phoneSchema,
   parent_phone: phoneSchema,
+  notes: z
+    .string()
+    .max(1000, "Ghi chú tối đa 1000 ký tự.")
+    .optional()
+    .nullable(),
   is_active: z.boolean().optional(),
 });
 

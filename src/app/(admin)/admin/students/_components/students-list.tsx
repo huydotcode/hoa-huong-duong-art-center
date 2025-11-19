@@ -147,6 +147,7 @@ export default function StudentsList({
                 <TableHead>Ngày nhập học</TableHead>
                 <TableHead>Đóng học phí</TableHead>
                 <TableHead>Điểm danh hôm nay</TableHead>
+                <TableHead>Ghi chú</TableHead>
                 <TableHead className="text-center">Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableHeaderRow>
@@ -154,7 +155,7 @@ export default function StudentsList({
             <TableBody>
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Chưa có học sinh nào
@@ -202,6 +203,7 @@ export default function StudentsList({
                 <TableHead>Ngày nhập học</TableHead>
                 <TableHead>Đóng học phí</TableHead>
                 <TableHead>Điểm danh hôm nay</TableHead>
+                <TableHead>Ghi chú</TableHead>
                 <TableHead className="text-center">Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableHeaderRow>
