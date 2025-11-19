@@ -37,10 +37,21 @@ import {
   createPaymentStatus,
   updatePaymentStatus,
   getStudentClassesInMonth,
+  activateStudentEnrollment,
 } from "@/lib/services/admin-payment-service";
 import type { TuitionItem } from "@/lib/services/admin-payment-service";
 import { formatCurrencyVNDots, formatEnrollmentStatus } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const paymentFormSchema = z.object({
   classId: z.string().min(1, "Vui lòng chọn lớp"),
@@ -82,6 +93,9 @@ export function PaymentForm({
     }>
   >([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
+  const [showActivateDialog, setShowActivateDialog] = useState(false);
+  const [pendingPaymentData, setPendingPaymentData] =
+    useState<PaymentFormSchema | null>(null);
   const router = useRouter();
   const path = usePathname();
 
@@ -199,6 +213,27 @@ export function PaymentForm({
   async function onSubmit(values: PaymentFormSchema) {
     if (!payment) return;
 
+    // Nếu học sinh trial hoặc inactive đóng học phí, hiện dialog confirm
+    if (
+      values.isPaid &&
+      (payment.enrollmentStatus === "trial" ||
+        payment.enrollmentStatus === "inactive")
+    ) {
+      setPendingPaymentData(values);
+      setShowActivateDialog(true);
+      return;
+    }
+
+    // Nếu không phải trial/inactive hoặc chưa đóng, xử lý bình thường
+    await processPayment(values);
+  }
+
+  async function processPayment(
+    values: PaymentFormSchema,
+    skipUIUpdate = false
+  ): Promise<string> {
+    if (!payment) throw new Error("Payment is required");
+
     setIsLoading(true);
     try {
       let paymentStatusId: string;
@@ -215,7 +250,9 @@ export function PaymentForm({
           path
         );
         paymentStatusId = payment.paymentStatusId;
-        toast.success("Cập nhật học phí thành công!");
+        if (!skipUIUpdate) {
+          toast.success("Cập nhật học phí thành công!");
+        }
       } else {
         // Create new payment status
         paymentStatusId = await createPaymentStatus(
@@ -230,11 +267,13 @@ export function PaymentForm({
           },
           path
         );
-        toast.success("Tạo học phí thành công!");
+        if (!skipUIUpdate) {
+          toast.success("Tạo học phí thành công!");
+        }
       }
 
-      // Optimistic update: cập nhật UI ngay lập tức
-      if (onPaymentUpdate) {
+      // Optimistic update: cập nhật UI ngay lập tức (chỉ khi không skip)
+      if (!skipUIUpdate && onPaymentUpdate) {
         // Tìm className từ studentClasses nếu có, hoặc dùng từ payment
         const selectedClass = studentClasses.find(
           (c) => c.classId === values.classId
@@ -255,12 +294,16 @@ export function PaymentForm({
         onPaymentUpdate(updatedItem);
       }
 
-      form.reset();
-      onOpenChange(false);
-      if (onSuccess) onSuccess();
+      if (!skipUIUpdate) {
+        form.reset();
+        onOpenChange(false);
+        if (onSuccess) onSuccess();
+      }
 
       // Refresh data ở background (không block UI)
       router.refresh();
+
+      return paymentStatusId;
     } catch (error) {
       console.error("Error saving payment:", error);
       toast.error(
@@ -270,190 +313,310 @@ export function PaymentForm({
             error instanceof Error ? error.message : "Vui lòng thử lại sau.",
         }
       );
+      throw error; // Re-throw để caller có thể handle
     } finally {
       setIsLoading(false);
     }
   }
 
+  async function handleConfirmActivate() {
+    if (!payment || !pendingPaymentData) return;
+
+    setIsLoading(true);
+    try {
+      // Xử lý payment trước (skip UI update vì sẽ update sau với enrollmentStatus mới)
+      const paymentStatusId = await processPayment(pendingPaymentData, true);
+
+      // Sau đó activate enrollment
+      await activateStudentEnrollment(payment.enrollmentId, path);
+
+      // Cập nhật UI với enrollmentStatus mới
+      if (onPaymentUpdate) {
+        const selectedClass = studentClasses.find(
+          (c) => c.classId === pendingPaymentData.classId
+        );
+        const className = selectedClass
+          ? selectedClass.className
+          : payment.className;
+
+        const updatedItem: TuitionItem = {
+          ...payment,
+          paymentStatusId,
+          classId: pendingPaymentData.classId,
+          className,
+          amount: pendingPaymentData.amount,
+          isPaid: pendingPaymentData.isPaid,
+          paidAt:
+            pendingPaymentData.isPaid && pendingPaymentData.paidAt
+              ? pendingPaymentData.paidAt
+              : null,
+          enrollmentStatus: "active", // Cập nhật status
+        };
+        onPaymentUpdate(updatedItem);
+      }
+
+      toast.success("Đã chuyển học sinh sang trạng thái đang học");
+      setShowActivateDialog(false);
+      setPendingPaymentData(null);
+      form.reset();
+      onOpenChange(false);
+      if (onSuccess) onSuccess();
+    } catch (error) {
+      console.error("Error activating student:", error);
+      toast.error("Lỗi khi chuyển trạng thái học sinh", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleCancelActivate() {
+    if (!pendingPaymentData) {
+      setShowActivateDialog(false);
+      return;
+    }
+
+    // Vẫn xử lý payment nhưng không activate enrollment
+    try {
+      await processPayment(pendingPaymentData, false);
+      setShowActivateDialog(false);
+      setPendingPaymentData(null);
+    } catch (error) {
+      console.error("Error processing payment:", error);
+      // Error đã được xử lý trong processPayment
+    }
+  }
+
   if (!payment) return null;
 
+  const enrollmentStatusLabel =
+    payment.enrollmentStatus === "trial"
+      ? "học thử"
+      : payment.enrollmentStatus === "inactive"
+        ? "ngừng học"
+        : "";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? "Chỉnh sửa học phí" : "Tạo học phí mới"}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {isEdit ? "Chỉnh sửa học phí" : "Tạo học phí mới"}
+            </DialogTitle>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4"
-            autoComplete="off"
-          >
-            {payment.enrollmentStatus === "trial" && (
-              <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
-                <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
-                <div className="text-yellow-800">
-                  <strong>Lưu ý:</strong> Học sinh đang có trạng thái{" "}
-                  {formatEnrollmentStatus(payment.enrollmentStatus)}. Vui lòng
-                  kiểm tra kỹ trước khi tạo học phí.
-                </div>
-              </div>
-            )}
-
-            <FormField
-              control={form.control}
-              name="classId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Lớp học</FormLabel>
-                  {isEdit ? (
-                    <FormControl>
-                      <Input value={payment.className} disabled />
-                    </FormControl>
-                  ) : hasMultipleClasses ? (
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={loadingClasses}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Chọn lớp" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {studentClasses.map((c) => (
-                          <SelectItem key={c.classId} value={c.classId}>
-                            {c.className} {c.isLastClass && "(Lớp cuối tháng)"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <FormControl>
-                      <Input value={payment.className} disabled />
-                    </FormControl>
-                  )}
-                  {!isEdit && hasMultipleClasses && (
-                    <FormDescription>
-                      Học sinh có nhiều lớp trong tháng. Chọn lớp để tạo học
-                      phí.
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="space-y-2">
-              <FormLabel>Tháng/Năm</FormLabel>
-              <Input value={`Tháng ${month}/${year}`} disabled />
-            </div>
-
-            <div className="space-y-2">
-              <FormLabel>Học sinh</FormLabel>
-              <Input value={payment.studentName} disabled />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => {
-                const displayValue =
-                  field.value && field.value > 0 ? field.value / 1000 : "";
-                return (
-                  <FormItem>
-                    <FormLabel>Số tiền (VNĐ)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="Nhập số tiền (nghìn)"
-                        value={displayValue || ""}
-                        onChange={(e) => {
-                          const rawValue = e.target.value.replace(/\D/g, "");
-                          if (rawValue === "") {
-                            field.onChange(0);
-                            return;
-                          }
-                          const numValue = Number(rawValue);
-                          if (!isNaN(numValue)) {
-                            const maxInput = 999000000;
-                            const limitedValue = Math.min(numValue, maxInput);
-                            const actualValue = limitedValue * 1000;
-                            field.onChange(actualValue);
-                          }
-                        }}
-                        onBlur={field.onBlur}
-                        ref={field.ref}
-                      />
-                    </FormControl>
-                    {displayValue && field.value && field.value > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        {formatCurrencyVNDots(field.value)}
-                      </div>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                );
-              }}
-            />
-
-            <FormField
-              control={form.control}
-              name="isPaid"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Đã đóng học phí</FormLabel>
-                    <FormDescription>
-                      Đánh dấu nếu học sinh đã đóng học phí
-                    </FormDescription>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-4"
+              autoComplete="off"
+            >
+              {payment.enrollmentStatus === "trial" && (
+                <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+                  <div className="text-yellow-800">
+                    <strong>Lưu ý:</strong> Học sinh đang có trạng thái{" "}
+                    {formatEnrollmentStatus(payment.enrollmentStatus)}. Vui lòng
+                    kiểm tra kỹ trước khi tạo học phí.
                   </div>
-                </FormItem>
+                </div>
               )}
-            />
 
-            {watchedIsPaid && (
               <FormField
                 control={form.control}
-                name="paidAt"
+                name="classId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Ngày đóng</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} value={field.value || ""} />
-                    </FormControl>
+                    <FormLabel>Lớp học</FormLabel>
+                    {isEdit ? (
+                      <FormControl>
+                        <Input value={payment.className} disabled />
+                      </FormControl>
+                    ) : hasMultipleClasses ? (
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={loadingClasses}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Chọn lớp" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {studentClasses.map((c) => (
+                            <SelectItem key={c.classId} value={c.classId}>
+                              {c.className}{" "}
+                              {c.isLastClass && "(Lớp cuối tháng)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <FormControl>
+                        <Input value={payment.className} disabled />
+                      </FormControl>
+                    )}
+                    {!isEdit && hasMultipleClasses && (
+                      <FormDescription>
+                        Học sinh có nhiều lớp trong tháng. Chọn lớp để tạo học
+                        phí.
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading}
-              >
-                Hủy
-              </Button>
-              <Button type="submit" disabled={isLoading || loadingClasses}>
-                {isLoading ? "Đang lưu..." : isEdit ? "Cập nhật" : "Tạo mới"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+              <div className="space-y-2">
+                <FormLabel>Tháng/Năm</FormLabel>
+                <Input value={`Tháng ${month}/${year}`} disabled />
+              </div>
+
+              <div className="space-y-2">
+                <FormLabel>Học sinh</FormLabel>
+                <Input value={payment.studentName} disabled />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => {
+                  const displayValue =
+                    field.value && field.value > 0 ? field.value / 1000 : "";
+                  return (
+                    <FormItem>
+                      <FormLabel>Số tiền (VNĐ)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="Nhập số tiền (nghìn)"
+                          value={displayValue || ""}
+                          onChange={(e) => {
+                            const rawValue = e.target.value.replace(/\D/g, "");
+                            if (rawValue === "") {
+                              field.onChange(0);
+                              return;
+                            }
+                            const numValue = Number(rawValue);
+                            if (!isNaN(numValue)) {
+                              const maxInput = 999000000;
+                              const limitedValue = Math.min(numValue, maxInput);
+                              const actualValue = limitedValue * 1000;
+                              field.onChange(actualValue);
+                            }
+                          }}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      {displayValue && field.value && field.value > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          {formatCurrencyVNDots(field.value)}
+                        </div>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
+
+              <FormField
+                control={form.control}
+                name="isPaid"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Đã đóng học phí</FormLabel>
+                      <FormDescription>
+                        Đánh dấu nếu học sinh đã đóng học phí
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {watchedIsPaid && (
+                <FormField
+                  control={form.control}
+                  name="paidAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ngày đóng</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isLoading}
+                >
+                  Hủy
+                </Button>
+                <Button type="submit" disabled={isLoading || loadingClasses}>
+                  {isLoading ? "Đang lưu..." : isEdit ? "Cập nhật" : "Tạo mới"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={showActivateDialog}
+        onOpenChange={setShowActivateDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Xác nhận chuyển trạng thái học sinh
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Học sinh <strong>{payment.studentName}</strong> đang ở trạng thái{" "}
+              <strong>{enrollmentStatusLabel}</strong> và đã đóng học phí.
+              <br />
+              <br />
+              Bạn có muốn chuyển trạng thái học sinh sang{" "}
+              <strong>đang học (chính thức)</strong> không?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={handleCancelActivate}
+              disabled={isLoading}
+            >
+              Hủy
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmActivate}
+              disabled={isLoading}
+            >
+              {isLoading ? "Đang xử lý..." : "Xác nhận"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

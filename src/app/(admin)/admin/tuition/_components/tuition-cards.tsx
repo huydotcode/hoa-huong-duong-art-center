@@ -123,7 +123,9 @@ export default function TuitionCards({
                       Đã đóng:
                     </span>
                     <span className="text-sm font-semibold">
-                      {item.amount !== null ? formatVND(item.amount) : "-"}
+                      {item.isPaid === true && item.amount !== null
+                        ? formatVND(item.amount)
+                        : "-"}
                     </span>
                   </div>
                 </div>

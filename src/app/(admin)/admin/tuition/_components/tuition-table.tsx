@@ -190,7 +190,9 @@ export default function TuitionTable({
                       {formatVND(item.monthlyFee)}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      {item.amount !== null ? formatVND(item.amount) : "-"}
+                      {item.isPaid === true && item.amount !== null
+                        ? formatVND(item.amount)
+                        : "-"}
                     </TableCell>
                     <TableCell>{getStatusBadge(item)}</TableCell>
                     <TableCell className="text-right">

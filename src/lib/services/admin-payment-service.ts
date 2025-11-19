@@ -721,9 +721,9 @@ export async function syncTuitionPaymentStatus(
 }
 
 /**
- * Chuyển học sinh từ trial sang active sau khi đóng học phí
+ * Chuyển học sinh từ trial hoặc inactive sang active sau khi đóng học phí
  */
-export async function activateTrialStudent(
+export async function activateStudentEnrollment(
   enrollmentId: string,
   path?: string
 ): Promise<void> {
@@ -736,4 +736,14 @@ export async function activateTrialStudent(
     },
     path
   );
+}
+
+/**
+ * @deprecated Use activateStudentEnrollment instead
+ */
+export async function activateTrialStudent(
+  enrollmentId: string,
+  path?: string
+): Promise<void> {
+  return activateStudentEnrollment(enrollmentId, path);
 }
