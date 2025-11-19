@@ -21,11 +21,13 @@ import { StudentTableRow } from "./student-table-row";
 import { getStudents } from "@/lib/services/admin-students-service";
 import type { StudentWithClassSummary } from "@/types";
 import { Loader2 } from "lucide-react";
+import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
 
 interface StudentsListProps {
   initialData: StudentWithClassSummary[];
   query: string;
   subject?: string;
+  learningStatus?: string;
   totalCount: number;
   pageSize: number;
 }
@@ -34,6 +36,7 @@ export default function StudentsList({
   initialData,
   query,
   subject = "",
+  learningStatus = "",
   totalCount,
   pageSize,
 }: StudentsListProps) {
@@ -47,6 +50,19 @@ export default function StudentsList({
     () => subject.trim().length > 0 && subject.toLowerCase() !== "all",
     [subject]
   );
+  const normalizedLearningStatus = learningStatus.trim().toLowerCase();
+  const hasLearningStatusFilter = useMemo(
+    () => normalizedLearningStatus.length > 0,
+    [normalizedLearningStatus]
+  );
+  const learningStatusLabel = useMemo(() => {
+    if (!hasLearningStatusFilter) return "";
+    return (
+      STUDENT_LEARNING_STATUS_FILTERS.find(
+        (item) => item.value === normalizedLearningStatus
+      )?.label ?? learningStatus
+    );
+  }, [hasLearningStatusFilter, learningStatus, normalizedLearningStatus]);
   const displayedCount = allData.length;
   const hasMore = estimatedTotal > displayedCount;
 
@@ -65,7 +81,10 @@ export default function StudentsList({
 
   const handleCreated = useCallback(
     (e: Event) => {
-      if (hasSubjectFilter) {
+      const shouldSkipOptimistic =
+        hasSubjectFilter ||
+        (hasLearningStatusFilter && normalizedLearningStatus !== "no_class");
+      if (shouldSkipOptimistic) {
         return;
       }
       const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
@@ -83,7 +102,7 @@ export default function StudentsList({
         setEstimatedTotal((prev) => prev + 1);
       }
     },
-    [hasSubjectFilter]
+    [hasSubjectFilter, hasLearningStatusFilter, normalizedLearningStatus]
   );
 
   const handleUpdated = useCallback((e: Event) => {
@@ -124,13 +143,22 @@ export default function StudentsList({
           limit: pageSize,
           offset: displayedCount,
           subject,
+          learningStatus: normalizedLearningStatus,
         })) as StudentWithClassSummary[];
         setAllData((prev) => [...prev, ...nextBatch]);
       } catch (error) {
         console.error("Error loading more students:", error);
       }
     });
-  }, [isPending, hasMore, query, subject, pageSize, displayedCount]);
+  }, [
+    isPending,
+    hasMore,
+    query,
+    subject,
+    pageSize,
+    displayedCount,
+    normalizedLearningStatus,
+  ]);
 
   if (initialData.length === 0) {
     return (
@@ -148,14 +176,15 @@ export default function StudentsList({
                 <TableHead>Đóng học phí</TableHead>
                 <TableHead>Điểm danh hôm nay</TableHead>
                 <TableHead>Ghi chú</TableHead>
-                <TableHead className="text-center">Trạng thái</TableHead>
+                <TableHead className="text-center">Trạng thái học</TableHead>
+                <TableHead className="text-center">Tài khoản</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableHeaderRow>
             </TableHeader>
             <TableBody>
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Chưa có học sinh nào
@@ -170,7 +199,7 @@ export default function StudentsList({
 
   return (
     <>
-      {(hasQuery || hasSubjectFilter) && (
+      {(hasQuery || hasSubjectFilter || hasLearningStatusFilter) && (
         <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
           {hasQuery && (
             <span>
@@ -184,6 +213,14 @@ export default function StudentsList({
             <span>
               Môn học:{" "}
               <span className="font-medium text-foreground">{subject}</span>
+            </span>
+          )}
+          {hasLearningStatusFilter && (
+            <span>
+              Trạng thái học:{" "}
+              <span className="font-medium text-foreground">
+                {learningStatusLabel}
+              </span>
             </span>
           )}
         </p>
@@ -204,13 +241,22 @@ export default function StudentsList({
                 <TableHead>Đóng học phí</TableHead>
                 <TableHead>Điểm danh hôm nay</TableHead>
                 <TableHead>Ghi chú</TableHead>
-                <TableHead className="text-center">Trạng thái</TableHead>
+                <TableHead className="text-center">Trạng thái học</TableHead>
+                <TableHead className="text-center">Tài khoản</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableHeaderRow>
             </TableHeader>
             <TableBody>
               {allData.map((s) => (
-                <StudentTableRow key={s.id} student={s} />
+                <StudentTableRow
+                  key={s.id}
+                  student={s}
+                  activeLearningStatus={
+                    hasLearningStatusFilter
+                      ? normalizedLearningStatus
+                      : undefined
+                  }
+                />
               ))}
             </TableBody>
           </Table>

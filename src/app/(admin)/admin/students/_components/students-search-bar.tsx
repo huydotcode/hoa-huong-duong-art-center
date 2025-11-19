@@ -13,6 +13,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { SUBJECTS } from "@/lib/constants/subjects";
+import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
 import { cn } from "@/lib/utils";
 
 export default function StudentsSearchBar() {
@@ -24,7 +25,9 @@ export default function StudentsSearchBar() {
 
   const q = searchParams.get("q") || "";
   const subject = searchParams.get("subject") || "";
-  const activeFilterCount = subject ? 1 : 0;
+  const learningStatus = searchParams.get("learningStatus") || "";
+  const activeFilterCount = [subject, learningStatus].filter(Boolean).length;
+  const hasFilters = activeFilterCount > 0;
 
   const updateSearchParams = (updater: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -50,6 +53,14 @@ export default function StudentsSearchBar() {
     updateSearchParams((params) => {
       params.delete("q");
       params.delete("subject");
+      params.delete("learningStatus");
+    });
+  };
+
+  const handleClearFilters = () => {
+    updateSearchParams((params) => {
+      params.delete("subject");
+      params.delete("learningStatus");
     });
   };
 
@@ -63,6 +74,26 @@ export default function StudentsSearchBar() {
     });
     setIsFilterOpen(false);
   };
+
+  const handleLearningStatusSelect = (value: string) => {
+    updateSearchParams((params) => {
+      if (value) {
+        params.set("learningStatus", value);
+      } else {
+        params.delete("learningStatus");
+      }
+    });
+    setIsFilterOpen(false);
+  };
+
+  const statusFilterOptions = [
+    {
+      value: "",
+      label: "Tất cả trạng thái",
+      description: "Bao gồm mọi học sinh",
+    },
+    ...STUDENT_LEARNING_STATUS_FILTERS,
+  ];
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:w-auto">
@@ -84,41 +115,96 @@ export default function StudentsSearchBar() {
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-64" align="end">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium">Lọc theo môn học</p>
-              {subject && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => handleSubjectSelect("")}
-                >
-                  <X className="mr-1 h-3 w-3" />
-                  Xóa
-                </Button>
-              )}
+          <PopoverContent
+            className="w-72 space-y-5 max-h-[60vh] overflow-y-auto"
+            align="end"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">Lọc theo môn học</p>
+                {subject && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handleSubjectSelect("")}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Xóa
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {["", ...SUBJECTS].map((item) => (
+                  <button
+                    key={item || "all"}
+                    type="button"
+                    onClick={() => handleSubjectSelect(item)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-sm transition",
+                      (item || "") === subject
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/60 hover:border-primary"
+                    )}
+                  >
+                    {item || "Tất cả môn"}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {["", ...SUBJECTS].map((item) => (
-                <button
-                  key={item || "all"}
-                  type="button"
-                  onClick={() => handleSubjectSelect(item)}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-sm transition",
-                    (item || "") === subject
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted/60 hover:border-primary"
-                  )}
-                >
-                  {item || "Tất cả môn"}
-                </button>
-              ))}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">Trạng thái học</p>
+                {learningStatus && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handleLearningStatusSelect("")}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Xóa
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                {statusFilterOptions.map((option) => (
+                  <button
+                    key={option.value || "all-status"}
+                    type="button"
+                    onClick={() => handleLearningStatusSelect(option.value)}
+                    className={cn(
+                      "w-full rounded border px-3 py-2 text-left text-sm transition",
+                      option.value === learningStatus
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/60 hover:border-primary"
+                    )}
+                  >
+                    <p className="font-medium">{option.label}</p>
+                    {option.description && (
+                      <p className="text-xs text-muted-foreground">
+                        {option.description}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </PopoverContent>
         </Popover>
+        {hasFilters && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full sm:w-auto"
+            onClick={handleClearFilters}
+            disabled={isPending}
+          >
+            Xóa lọc
+          </Button>
+        )}
       </div>
 
       <form
@@ -144,7 +230,7 @@ export default function StudentsSearchBar() {
         </Button>
       </form>
 
-      {(q.length > 0 || subject) && (
+      {(q.length > 0 || subject || learningStatus) && (
         <Button
           type="button"
           variant="outline"

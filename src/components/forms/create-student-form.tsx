@@ -77,6 +77,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
           attendance_today_status: "no_session",
           has_session_today: false,
           notes: values.notes?.trim() || null,
+          learning_status: "no_class",
         };
         window.dispatchEvent(
           new CustomEvent("student-created", {

@@ -73,12 +73,19 @@ export type StudentAttendanceTodayStatus =
   | "pending"
   | "no_session";
 
+export type StudentLearningStatus =
+  | "active"
+  | "trial"
+  | "inactive"
+  | "no_class";
+
 export type StudentWithClassSummary = Student & {
   class_summary?: StudentClassSummary[];
   first_enrollment_date?: string | null;
   tuition_status?: StudentTuitionStatus;
   attendance_today_status?: StudentAttendanceTodayStatus;
   has_session_today?: boolean;
+  learning_status?: StudentLearningStatus;
 };
 
 export interface CreateStudentData {

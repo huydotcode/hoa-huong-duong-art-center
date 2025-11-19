@@ -5,6 +5,7 @@ import {
   Student,
   StudentAttendanceTodayStatus,
   StudentClassSummary,
+  StudentLearningStatus,
   StudentTuitionStatus,
   StudentWithClassSummary,
 } from "@/types";
@@ -15,7 +16,12 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export async function getStudents(
   query: string = "",
-  opts: { limit?: number; offset?: number; subject?: string } = {}
+  opts: {
+    limit?: number;
+    offset?: number;
+    subject?: string;
+    learningStatus?: StudentLearningStatus | string | null;
+  } = {}
 ): Promise<StudentWithClassSummary[]> {
   const supabase = await createClient();
   const now = new Date();
@@ -27,8 +33,13 @@ export async function getStudents(
   const limit = opts.limit ?? 30;
   const offset = opts.offset ?? 0;
   const subjectFilter = (opts.subject || "").trim();
+  const learningStatusFilter = (opts.learningStatus || "")
+    .toString()
+    .trim()
+    .toLowerCase();
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
+  const includeInactiveClasses = learningStatusFilter === "inactive";
 
   const selectColumns = `
     id,
@@ -54,12 +65,30 @@ export async function getStudents(
     )
   `;
 
+  const filterIdGroups: string[][] = [];
+
   const subjectStudentIds =
     subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all"
       ? await getStudentIdsBySubject(supabase, subjectFilter)
       : null;
+  if (subjectStudentIds) {
+    filterIdGroups.push(subjectStudentIds);
+  }
 
-  if (subjectStudentIds && subjectStudentIds.length === 0) {
+  const shouldFilterByLearningStatus =
+    isValidLearningStatus(learningStatusFilter);
+  const learningStatusIds = shouldFilterByLearningStatus
+    ? await getStudentIdsByLearningStatus(
+        supabase,
+        learningStatusFilter as StudentLearningStatus
+      )
+    : null;
+  if (learningStatusIds) {
+    filterIdGroups.push(learningStatusIds);
+  }
+
+  const idsToFilter = mergeIdFilters(filterIdGroups);
+  if (idsToFilter && idsToFilter.length === 0) {
     return [];
   }
 
@@ -69,8 +98,8 @@ export async function getStudents(
     .order("full_name", { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (subjectStudentIds) {
-    request = request.in("id", subjectStudentIds);
+  if (idsToFilter) {
+    request = request.in("id", idsToFilter);
   }
 
   if (hasQuery) {
@@ -120,6 +149,10 @@ export async function getStudents(
       const class_summary: StudentClassSummary[] = [];
       let firstEnrollmentDate: string | null = null;
       let hasSessionToday = false;
+      let hasActiveEnrollment = false;
+      let hasTrialEnrollment = false;
+      const hasAnyEnrollment = enrollmentsRaw.length > 0;
+      let hasInactiveOrLeft = false;
 
       for (const enrollment of enrollmentsRaw) {
         const enrollmentDate = enrollment.enrollment_date;
@@ -139,17 +172,34 @@ export async function getStudents(
           }
         }
 
+        const leaveDate = enrollment.leave_date;
+        const status = enrollment.status;
         const isActiveEnrollment =
-          !enrollment.leave_date &&
-          (enrollment.status === "active" || enrollment.status === "trial");
-
-        if (!isActiveEnrollment) {
-          continue;
-        }
-
+          !leaveDate && (status === "active" || status === "trial");
         const cls = Array.isArray(enrollment.classes)
           ? enrollment.classes[0]
           : enrollment.classes;
+
+        if (!isActiveEnrollment) {
+          if (leaveDate || status === "inactive") {
+            hasInactiveOrLeft = true;
+            if (includeInactiveClasses) {
+              class_summary.push({
+                classId: cls?.id ?? enrollment.class_id,
+                className: cls?.name ?? "Lớp chưa đặt tên",
+                status: "inactive",
+              });
+            }
+          }
+          continue;
+        }
+
+        if (status === "active") {
+          hasActiveEnrollment = true;
+        }
+        if (status === "trial") {
+          hasTrialEnrollment = true;
+        }
 
         if (!hasSessionToday && cls?.days_of_week) {
           const schedule = toArray<{ day?: number }>(cls.days_of_week);
@@ -165,11 +215,21 @@ export async function getStudents(
         });
       }
 
+      let learningStatus: StudentLearningStatus = "no_class";
+      if (hasActiveEnrollment) {
+        learningStatus = "active";
+      } else if (hasTrialEnrollment) {
+        learningStatus = "trial";
+      } else if (hasAnyEnrollment || hasInactiveOrLeft) {
+        learningStatus = "inactive";
+      }
+
       return {
         ...rest,
         class_summary,
         first_enrollment_date: firstEnrollmentDate,
         has_session_today: hasSessionToday,
+        learning_status: learningStatus,
       } as StudentWithClassSummary;
     }
   );
@@ -278,7 +338,10 @@ export async function getStudents(
 // Add function to get total count (for pagination)
 export async function getStudentsCount(
   query: string = "",
-  opts: { subject?: string } = {}
+  opts: {
+    subject?: string;
+    learningStatus?: StudentLearningStatus | string | null;
+  } = {}
 ): Promise<number> {
   const supabase = await createClient();
 
@@ -286,12 +349,36 @@ export async function getStudentsCount(
   const hasQuery = trimmed.length > 0;
 
   const subjectFilter = (opts.subject || "").trim();
+  const learningStatusFilter = (opts.learningStatus || "")
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  const filterIdGroups: string[][] = [];
+
   const subjectStudentIds =
     subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all"
       ? await getStudentIdsBySubject(supabase, subjectFilter)
       : null;
+  if (subjectStudentIds) {
+    filterIdGroups.push(subjectStudentIds);
+  }
 
-  if (subjectStudentIds && subjectStudentIds.length === 0) {
+  const shouldFilterByLearningStatus =
+    isValidLearningStatus(learningStatusFilter);
+  const learningStatusIds = shouldFilterByLearningStatus
+    ? await getStudentIdsByLearningStatus(
+        supabase,
+        learningStatusFilter as StudentLearningStatus
+      )
+    : null;
+  if (learningStatusIds) {
+    filterIdGroups.push(learningStatusIds);
+  }
+
+  const idsToFilter = mergeIdFilters(filterIdGroups);
+
+  if (idsToFilter && idsToFilter.length === 0) {
     return 0;
   }
 
@@ -299,8 +386,8 @@ export async function getStudentsCount(
     .from("students")
     .select("*", { count: "exact", head: true });
 
-  if (subjectStudentIds) {
-    request = request.in("id", subjectStudentIds);
+  if (idsToFilter) {
+    request = request.in("id", idsToFilter);
   }
 
   if (hasQuery) {
@@ -362,6 +449,134 @@ async function getStudentIdsBySubject(
   });
 
   return Array.from(ids);
+}
+
+const VALID_LEARNING_STATUSES: StudentLearningStatus[] = [
+  "active",
+  "trial",
+  "inactive",
+  "no_class",
+];
+
+function isValidLearningStatus(
+  status: string
+): status is StudentLearningStatus {
+  return VALID_LEARNING_STATUSES.includes(status as StudentLearningStatus);
+}
+
+function mergeIdFilters(groups: string[][]): string[] | null {
+  if (groups.length === 0) return null;
+  if (groups.length === 1) {
+    return Array.from(new Set(groups[0]));
+  }
+  let intersection = new Set(groups[0]);
+  for (let i = 1; i < groups.length; i += 1) {
+    const current = new Set(groups[i]);
+    intersection = new Set([...intersection].filter((id) => current.has(id)));
+    if (intersection.size === 0) {
+      break;
+    }
+  }
+  return Array.from(intersection);
+}
+
+async function getStudentIdsByLearningStatus(
+  supabase: SupabaseServerClient,
+  status: StudentLearningStatus
+): Promise<string[]> {
+  switch (status) {
+    case "active":
+    case "trial":
+      return getStudentIdsByEnrollmentStatus(supabase, status);
+    case "inactive":
+      return getInactiveStudentIds(supabase);
+    case "no_class":
+      return getStudentsWithoutClass(supabase);
+    default:
+      return [];
+  }
+}
+
+async function getStudentIdsByEnrollmentStatus(
+  supabase: SupabaseServerClient,
+  status: Extract<StudentLearningStatus, "active" | "trial">
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("student_class_enrollments")
+    .select("student_id")
+    .eq("status", status === "active" ? "active" : "trial")
+    .is("leave_date", null)
+    .not("student_id", "is", null);
+  if (error) throw error;
+
+  const ids = new Set<string>();
+  (data ?? []).forEach((row) => {
+    const studentId = row.student_id as string | null;
+    if (studentId) {
+      ids.add(studentId);
+    }
+  });
+  return Array.from(ids);
+}
+
+async function getInactiveStudentIds(
+  supabase: SupabaseServerClient
+): Promise<string[]> {
+  const [activeIds, trialIds, { data, error }] = await Promise.all([
+    getStudentIdsByEnrollmentStatus(supabase, "active"),
+    getStudentIdsByEnrollmentStatus(supabase, "trial"),
+    supabase
+      .from("student_class_enrollments")
+      .select("student_id,status,leave_date")
+      .not("student_id", "is", null),
+  ]);
+
+  if (error) throw error;
+
+  const currentIds = new Set([...activeIds, ...trialIds]);
+  const inactiveCandidates = new Set<string>();
+
+  (data ?? []).forEach((row) => {
+    const studentId = row.student_id as string | null;
+    if (!studentId) return;
+    if (currentIds.has(studentId)) {
+      return;
+    }
+    if (row.leave_date || row.status === "inactive") {
+      inactiveCandidates.add(studentId);
+    }
+  });
+
+  return Array.from(inactiveCandidates);
+}
+
+async function getStudentsWithoutClass(
+  supabase: SupabaseServerClient
+): Promise<string[]> {
+  const [
+    { data: students, error: studentsError },
+    { data: enrollmentData, error: enrollmentError },
+  ] = await Promise.all([
+    supabase.from("students").select("id"),
+    supabase
+      .from("student_class_enrollments")
+      .select("student_id")
+      .not("student_id", "is", null),
+  ]);
+
+  if (studentsError) throw studentsError;
+  if (enrollmentError) throw enrollmentError;
+
+  const enrolledIds = new Set(
+    (enrollmentData ?? [])
+      .map((row) => row.student_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  );
+
+  return (students ?? [])
+    .map((student) => student.id as string | null)
+    .filter((id): id is string => Boolean(id))
+    .filter((id) => !enrolledIds.has(id));
 }
 
 type CreateStudentData = Pick<

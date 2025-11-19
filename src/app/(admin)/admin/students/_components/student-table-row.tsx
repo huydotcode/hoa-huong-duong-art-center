@@ -15,6 +15,7 @@ import {
 import { DeleteStudentButton } from "./delete-student-button";
 import {
   getAttendanceStatusBadge,
+  getLearningStatusBadge,
   getTuitionStatusBadge,
 } from "./student-status-utils";
 
@@ -27,16 +28,39 @@ const StudentClassScheduleDialog = lazy(() =>
 
 function StudentTableRowComponent({
   student,
+  activeLearningStatus,
 }: {
   student: StudentWithClassSummary;
+  activeLearningStatus?: string;
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
   );
-  const classSummary = student.class_summary ?? [];
-  const visibleClasses = classSummary.slice(0, 2);
+  const classSummary = useMemo(
+    () => student.class_summary ?? [],
+    [student.class_summary]
+  );
+  const orderedClasses = useMemo(() => {
+    if (!activeLearningStatus || classSummary.length <= 1) {
+      return classSummary;
+    }
+    const preferred: typeof classSummary = [];
+    const others: typeof classSummary = [];
+    classSummary.forEach((cls) => {
+      if (cls.status === activeLearningStatus) {
+        preferred.push(cls);
+      } else {
+        others.push(cls);
+      }
+    });
+    if (preferred.length === 0) {
+      return classSummary;
+    }
+    return [...preferred, ...others];
+  }, [classSummary, activeLearningStatus]);
+  const visibleClasses = orderedClasses.slice(0, 2);
   const remainingClasses = classSummary.length - visibleClasses.length;
   const enrollmentDate = useMemo(
     () => formatDateShort(student.first_enrollment_date),
@@ -46,6 +70,7 @@ function StudentTableRowComponent({
   const attendanceBadge = getAttendanceStatusBadge(
     student.attendance_today_status
   );
+  const learningBadge = getLearningStatusBadge(student.learning_status);
 
   return (
     <>
@@ -69,19 +94,26 @@ function StudentTableRowComponent({
             <span className="text-sm text-muted-foreground">Chưa xếp lớp</span>
           ) : (
             <div className="flex flex-col gap-1">
-              {visibleClasses.map((cls) => (
-                <div
-                  key={`${student.id}-${cls.classId}`}
-                  className="flex items-center gap-2"
-                >
-                  <span className="text-sm font-medium truncate">
-                    {cls.className}
-                  </span>
-                  <Badge variant="outline" className="text-xs">
-                    {formatEnrollmentStatus(cls.status)}
-                  </Badge>
-                </div>
-              ))}
+              {visibleClasses.map((cls) => {
+                const isPreferred =
+                  !!activeLearningStatus && cls.status === activeLearningStatus;
+                return (
+                  <div
+                    key={`${student.id}-${cls.classId}`}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="text-sm font-medium truncate">
+                      {cls.className}
+                    </span>
+                    <Badge
+                      variant={isPreferred ? "default" : "outline"}
+                      className="text-xs"
+                    >
+                      {formatEnrollmentStatus(cls.status)}
+                    </Badge>
+                  </div>
+                );
+              })}
               {remainingClasses > 0 && (
                 <span className="text-xs text-muted-foreground">
                   +{remainingClasses} lớp khác
@@ -107,6 +139,9 @@ function StudentTableRowComponent({
           ) : (
             <span className="text-sm text-muted-foreground">-</span>
           )}
+        </TableCell>
+        <TableCell className="text-center">
+          <Badge variant={learningBadge.variant}>{learningBadge.label}</Badge>
         </TableCell>
         <TableCell className="text-center">
           <Badge variant={student.is_active ? "default" : "destructive"}>
