@@ -23,7 +23,7 @@ export default function AdminLayout({
         <AdminSidebar />
         <main className="w-full lg:ml-64 lg:max-w-[calc(100vw-280px)] max-w-[100vw] overflow-x-hidden">
           <div className="p-4 sm:p-6 mx-auto w-full lg:w-[calc(100vw-256px)] overflow-x-hidden">
-            <div className="max-w-[1500px] mx-auto">{children}</div>
+            <div className="max-w-[1800px] mx-auto">{children}</div>
           </div>
         </main>
       </div>

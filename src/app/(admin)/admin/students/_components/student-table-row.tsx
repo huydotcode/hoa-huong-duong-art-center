@@ -128,13 +128,7 @@ function StudentTableRowComponent({
         </TableCell>
       </TableRow>
       {scheduleDialogOpen && (
-        <Suspense
-          fallback={
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          }
-        >
+        <Suspense fallback={null}>
           <StudentClassScheduleDialog
             student={student}
             open={scheduleDialogOpen}

@@ -30,6 +30,7 @@ import {
   createStudentSchema,
   type CreateStudentSchema,
 } from "@/lib/validations/student";
+import type { StudentWithClassSummary } from "@/types";
 
 interface CreateStudentFormProps {
   children: React.ReactNode;
@@ -53,7 +54,7 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
     setIsLoading(true);
 
     try {
-      await createStudent(
+      const newStudent = await createStudent(
         {
           full_name: values.full_name,
           phone: values.phone || null,
@@ -63,6 +64,23 @@ export function CreateStudentForm({ children }: CreateStudentFormProps) {
         path
       );
       toast.success("Thêm học sinh thành công!");
+      try {
+        const enriched: StudentWithClassSummary = {
+          ...newStudent,
+          class_summary: [],
+          first_enrollment_date: null,
+          tuition_status: "not_created",
+          attendance_today_status: "no_session",
+          has_session_today: false,
+        };
+        window.dispatchEvent(
+          new CustomEvent("student-created", {
+            detail: { student: enriched },
+          })
+        );
+      } catch (eventError) {
+        console.error("student-created event error:", eventError);
+      }
       form.reset();
       setOpen(false);
     } catch (error) {

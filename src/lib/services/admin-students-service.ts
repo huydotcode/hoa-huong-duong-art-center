@@ -318,9 +318,15 @@ export async function createStudent(
     is_active: data.is_active ?? true,
   };
 
-  const { error } = await supabase.from("students").insert(payload);
+  const { data: inserted, error } = await supabase
+    .from("students")
+    .insert(payload)
+    .select("*")
+    .single();
   if (error) throw error;
   if (path) revalidatePath(path);
+
+  return inserted as Student;
 }
 
 type UpdateStudentData = Partial<

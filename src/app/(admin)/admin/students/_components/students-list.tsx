@@ -8,7 +8,6 @@ import {
   useMemo,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -18,7 +17,6 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { StudentCard } from "./student-card";
 import { StudentTableRow } from "./student-table-row";
 import { getStudents } from "@/lib/services/admin-students-service";
 import type { StudentWithClassSummary } from "@/types";
@@ -59,6 +57,21 @@ export default function StudentsList({
     setEstimatedTotal((prev) => Math.max(prev - 1, 0));
   }, []);
 
+  const handleCreated = useCallback((e: Event) => {
+    const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
+    const created = custom.detail?.student;
+    if (!created) return;
+    let existed = false;
+    setAllData((prev) => {
+      existed = prev.some((s) => s.id === created.id);
+      const filtered = existed ? prev.filter((s) => s.id !== created.id) : prev;
+      return [created, ...filtered];
+    });
+    if (!existed) {
+      setEstimatedTotal((prev) => prev + 1);
+    }
+  }, []);
+
   const handleUpdated = useCallback((e: Event) => {
     const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
     const updated = custom.detail?.student;
@@ -69,9 +82,14 @@ export default function StudentsList({
   }, []);
 
   useEffect(() => {
+    window.addEventListener("student-created", handleCreated as EventListener);
     window.addEventListener("student-deleted", handleDeleted as EventListener);
     window.addEventListener("student-updated", handleUpdated as EventListener);
     return () => {
+      window.removeEventListener(
+        "student-created",
+        handleCreated as EventListener
+      );
       window.removeEventListener(
         "student-deleted",
         handleDeleted as EventListener
@@ -81,7 +99,7 @@ export default function StudentsList({
         handleUpdated as EventListener
       );
     };
-  }, [handleDeleted, handleUpdated]);
+  }, [handleCreated, handleDeleted, handleUpdated]);
 
   const handleLoadMore = useCallback(() => {
     if (isPending || !hasMore) return;
@@ -101,22 +119,16 @@ export default function StudentsList({
 
   if (initialData.length === 0) {
     return (
-      <>
-        {/* Mobile: Card view */}
-        <div className="grid gap-2 px-3 md:hidden">
-          <p className="text-center text-sm text-muted-foreground">
-            Chưa có học sinh nào
-          </p>
-        </div>
-
-        {/* Desktop: Table view */}
-        <CardContent className="hidden p-0 md:block">
+      <div className="px-3">
+        <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableHeaderRow>
                 <TableHead>Họ và tên</TableHead>
                 <TableHead>Số điện thoại</TableHead>
-                <TableHead className="w-[220px]">Lớp / trạng thái</TableHead>
+                <TableHead className="min-w-[220px]">
+                  Lớp / trạng thái
+                </TableHead>
                 <TableHead>Ngày nhập học</TableHead>
                 <TableHead>Đóng học phí</TableHead>
                 <TableHead>Điểm danh hôm nay</TableHead>
@@ -135,8 +147,8 @@ export default function StudentsList({
               </TableRow>
             </TableBody>
           </Table>
-        </CardContent>
-      </>
+        </div>
+      </div>
     );
   }
 
@@ -151,35 +163,32 @@ export default function StudentsList({
         </p>
       )}
 
-      {/* Mobile: Card view */}
-      <div className="grid gap-2 px-3 md:hidden">
-        {allData.map((s) => (
-          <StudentCard key={s.id} student={s} />
-        ))}
+      {/* Responsive Table view with horizontal scroll */}
+      <div className="px-3">
+        <div className="overflow-x-auto rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableHeaderRow>
+                <TableHead>Họ và tên</TableHead>
+                <TableHead>Số điện thoại</TableHead>
+                <TableHead className="min-w-[220px]">
+                  Lớp / trạng thái
+                </TableHead>
+                <TableHead>Ngày nhập học</TableHead>
+                <TableHead>Đóng học phí</TableHead>
+                <TableHead>Điểm danh hôm nay</TableHead>
+                <TableHead className="text-center">Trạng thái</TableHead>
+                <TableHead className="text-right">Thao tác</TableHead>
+              </TableHeaderRow>
+            </TableHeader>
+            <TableBody>
+              {allData.map((s) => (
+                <StudentTableRow key={s.id} student={s} />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-
-      {/* Desktop: Table view */}
-      <CardContent className="hidden p-0 md:block">
-        <Table>
-          <TableHeader>
-            <TableHeaderRow>
-              <TableHead>Họ và tên</TableHead>
-              <TableHead>Số điện thoại</TableHead>
-              <TableHead className="w-[220px]">Lớp / trạng thái</TableHead>
-              <TableHead>Ngày nhập học</TableHead>
-              <TableHead>Đóng học phí</TableHead>
-              <TableHead>Điểm danh hôm nay</TableHead>
-              <TableHead className="text-center">Trạng thái</TableHead>
-              <TableHead className="text-right">Thao tác</TableHead>
-            </TableHeaderRow>
-          </TableHeader>
-          <TableBody>
-            {allData.map((s) => (
-              <StudentTableRow key={s.id} student={s} />
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
 
       {/* Load More Button */}
       {hasMore && (

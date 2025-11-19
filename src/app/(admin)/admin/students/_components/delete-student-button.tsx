@@ -82,11 +82,7 @@ export function DeleteStudentButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
+          <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
             {isDeleting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
