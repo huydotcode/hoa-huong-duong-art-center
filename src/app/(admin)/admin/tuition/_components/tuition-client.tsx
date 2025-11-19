@@ -37,6 +37,7 @@ interface TuitionClientProps {
   initialQuery: string;
   initialStatus: "all" | "paid" | "unpaid" | "not_created";
   initialSubject?: string;
+  initialLearningStatus?: "all" | "enrolled" | "active" | "trial" | "inactive";
   initialSummary: TuitionSummary;
   classes: Array<{ id: string; name: string }>;
 }
@@ -49,6 +50,7 @@ export default function TuitionClient({
   initialQuery,
   initialStatus,
   initialSubject,
+  initialLearningStatus,
   initialSummary,
   classes,
 }: TuitionClientProps) {
@@ -264,6 +266,7 @@ export default function TuitionClient({
         query={initialQuery}
         status={initialStatus}
         subject={initialSubject}
+        learningStatus={initialLearningStatus || "enrolled"}
         classes={classes}
         onRefreshStart={() => setIsRefreshing(true)}
         onRefreshEnd={() => {

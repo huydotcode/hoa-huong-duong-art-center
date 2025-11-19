@@ -44,6 +44,7 @@ interface TuitionFilterProps {
   query: string;
   status: "all" | "paid" | "unpaid" | "not_created";
   subject?: string;
+  learningStatus?: "all" | "enrolled" | "active" | "trial" | "inactive";
   classes: Array<{ id: string; name: string }>;
   onRefreshStart?: () => void;
   onRefreshEnd?: () => void;
@@ -57,6 +58,7 @@ export default function TuitionFilter({
   query,
   status,
   subject,
+  learningStatus,
   classes,
   onRefreshStart,
   onRefreshEnd,
@@ -74,6 +76,9 @@ export default function TuitionFilter({
   const [queryState, setQueryState] = useState<string>(query);
   const [statusState, setStatusState] = useState<string>(status);
   const [subjectState, setSubjectState] = useState<string>(subject || "all");
+  const [learningStatusState, setLearningStatusState] = useState<string>(
+    learningStatus || "enrolled"
+  );
 
   // Sync state với props khi props thay đổi (từ URL params)
   useEffect(() => {
@@ -83,7 +88,8 @@ export default function TuitionFilter({
     setQueryState(query);
     setStatusState(status);
     setSubjectState(subject || "all");
-  }, [month, year, classId, query, status, subject]);
+    setLearningStatusState(learningStatus || "enrolled");
+  }, [month, year, classId, query, status, subject, learningStatus]);
 
   const updateParams = useCallback(
     (
@@ -92,7 +98,8 @@ export default function TuitionFilter({
       newClassId: string,
       newQuery: string,
       newStatus: string,
-      newSubject: string
+      newSubject: string,
+      newLearningStatus: string
     ) => {
       const params = new URLSearchParams(searchParams?.toString());
       if (newMonth) params.set("month", newMonth);
@@ -107,6 +114,9 @@ export default function TuitionFilter({
       else params.delete("status");
       if (newSubject && newSubject !== "all") params.set("subject", newSubject);
       else params.delete("subject");
+      if (newLearningStatus && newLearningStatus !== "enrolled")
+        params.set("learningStatus", newLearningStatus);
+      else params.delete("learningStatus");
 
       startTransition(() => {
         router.replace(
@@ -125,7 +135,8 @@ export default function TuitionFilter({
       classIdState,
       queryState,
       statusState,
-      subjectState
+      subjectState,
+      learningStatusState
     );
   };
 
@@ -137,7 +148,8 @@ export default function TuitionFilter({
       classIdState,
       queryState,
       statusState,
-      subjectState
+      subjectState,
+      learningStatusState
     );
   };
 
@@ -150,7 +162,8 @@ export default function TuitionFilter({
       value,
       queryState,
       statusState,
-      subjectState
+      subjectState,
+      learningStatusState
     );
   };
 
@@ -162,7 +175,8 @@ export default function TuitionFilter({
       classIdState,
       queryState,
       value,
-      subjectState
+      subjectState,
+      learningStatusState
     );
   };
 
@@ -174,6 +188,20 @@ export default function TuitionFilter({
       classIdState,
       queryState,
       statusState,
+      value,
+      learningStatusState
+    );
+  };
+
+  const handleLearningStatusChange = (value: string) => {
+    setLearningStatusState(value);
+    updateParams(
+      monthState,
+      yearState,
+      classIdState,
+      queryState,
+      statusState,
+      subjectState,
       value
     );
   };
@@ -182,7 +210,16 @@ export default function TuitionFilter({
     setClassIdState("all");
     setStatusState("all");
     setSubjectState("all");
-    updateParams(monthState, yearState, "all", queryState, "all", "all");
+    setLearningStatusState("enrolled");
+    updateParams(
+      monthState,
+      yearState,
+      "all",
+      queryState,
+      "all",
+      "all",
+      "enrolled"
+    );
   };
 
   const handleSearch = () => {
@@ -192,7 +229,8 @@ export default function TuitionFilter({
       classIdState,
       queryState,
       statusState,
-      subjectState
+      subjectState,
+      learningStatusState
     );
   };
 
@@ -206,7 +244,16 @@ export default function TuitionFilter({
     setQueryState("");
     setStatusState("all");
     setSubjectState("all");
-    updateParams(defaultMonth, defaultYear, "all", "", "all", "all");
+    setLearningStatusState("enrolled");
+    updateParams(
+      defaultMonth,
+      defaultYear,
+      "all",
+      "",
+      "all",
+      "all",
+      "enrolled"
+    );
     setIsFilterPopoverOpen(false);
   };
 
@@ -265,11 +312,12 @@ export default function TuitionFilter({
   const currentYear = now.getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
-  // Tính số filter đang active (chỉ tính lớp, môn học, trạng thái - không tính tháng/năm và tìm kiếm)
+  // Tính số filter đang active (chỉ tính lớp, môn học, trạng thái, trạng thái học - không tính tháng/năm và tìm kiếm)
   const activeFilterCount =
     (classIdState !== "all" ? 1 : 0) +
     (subjectState !== "all" ? 1 : 0) +
-    (statusState !== "all" ? 1 : 0);
+    (statusState !== "all" ? 1 : 0) +
+    (learningStatusState !== "enrolled" ? 1 : 0);
 
   const hasFilter =
     monthState !== String(now.getMonth() + 1) ||
@@ -277,7 +325,8 @@ export default function TuitionFilter({
     classIdState !== "all" ||
     queryState.trim().length > 0 ||
     statusState !== "all" ||
-    subjectState !== "all";
+    subjectState !== "all" ||
+    learningStatusState !== "enrolled";
 
   return (
     <div className="space-y-4">
@@ -407,6 +456,26 @@ export default function TuitionFilter({
                         <SelectItem value="paid">Đã đóng</SelectItem>
                         <SelectItem value="unpaid">Chưa đóng</SelectItem>
                         <SelectItem value="not_created">Chưa tạo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Trạng thái học */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Trạng thái học</label>
+                    <Select
+                      value={learningStatusState}
+                      onValueChange={handleLearningStatusChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn trạng thái học" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="enrolled">Đang học</SelectItem>
+                        <SelectItem value="active">Đang học (chính thức)</SelectItem>
+                        <SelectItem value="trial">Học thử</SelectItem>
+                        <SelectItem value="inactive">Ngừng học</SelectItem>
+                        <SelectItem value="all">Tất cả</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

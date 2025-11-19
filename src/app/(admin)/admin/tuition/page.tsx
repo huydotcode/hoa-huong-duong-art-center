@@ -15,6 +15,7 @@ interface SearchProps {
     q?: string;
     status?: string;
     subject?: string;
+    learningStatus?: string;
   }>;
 }
 
@@ -28,6 +29,13 @@ export default async function TuitionPage(props: SearchProps) {
     (searchParams?.status as "all" | "paid" | "unpaid" | "not_created") ||
     "all";
   const subject = searchParams?.subject || "all";
+  const learningStatus =
+    (searchParams?.learningStatus as
+      | "all"
+      | "enrolled"
+      | "active"
+      | "trial"
+      | "inactive") || "enrolled";
 
   // Default to current month/year if not provided
   const now = new Date();
@@ -40,7 +48,15 @@ export default async function TuitionPage(props: SearchProps) {
 
   // Fetch data
   const [tuitionData, summary, classes] = await Promise.all([
-    getTuitionData(validMonth, validYear, classId, query, status, subject),
+    getTuitionData(
+      validMonth,
+      validYear,
+      classId,
+      query,
+      status,
+      subject,
+      learningStatus
+    ),
     getTuitionSummary(validMonth, validYear),
     getClasses(),
   ]);
@@ -60,6 +76,7 @@ export default async function TuitionPage(props: SearchProps) {
         initialQuery={query}
         initialStatus={status}
         initialSubject={subject}
+        initialLearningStatus={learningStatus}
         initialSummary={summary}
         classes={classes.map((c) => ({ id: c.id, name: c.name }))}
       />

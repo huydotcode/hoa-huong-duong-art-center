@@ -44,7 +44,8 @@ export async function getTuitionData(
   classId?: string,
   studentQuery?: string,
   status?: "all" | "paid" | "unpaid" | "not_created",
-  subject?: string
+  subject?: string,
+  learningStatus?: "all" | "enrolled" | "active" | "trial" | "inactive"
 ): Promise<TuitionItem[]> {
   const supabase = await createClient();
 
@@ -71,7 +72,7 @@ export async function getTuitionData(
       classes(id, name, monthly_fee, is_active, start_date, end_date)
     `
     )
-    .in("status", ["active", "trial"]);
+    .in("status", ["active", "trial", "inactive"]);
 
   // Filter by class if provided
   if (classId) {
@@ -135,6 +136,19 @@ export async function getTuitionData(
         ? normalizeText(classData.name)
         : "";
       if (!normalizedClassName.includes(normalizedSubject)) {
+        return false;
+      }
+    }
+
+    // Filter by learning status if provided
+    if (learningStatus && learningStatus !== "all") {
+      const enrollmentStatus = e.status as "active" | "trial" | "inactive";
+      if (learningStatus === "enrolled") {
+        // "enrolled" means active or trial (students currently enrolled)
+        if (enrollmentStatus !== "active" && enrollmentStatus !== "trial") {
+          return false;
+        }
+      } else if (learningStatus !== enrollmentStatus) {
         return false;
       }
     }
