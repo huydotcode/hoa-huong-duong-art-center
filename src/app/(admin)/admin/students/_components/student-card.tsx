@@ -74,7 +74,7 @@ function StudentCardComponent({
                 {student.phone || "Chưa có"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -144,12 +144,26 @@ function StudentCardComponent({
                 {visibleClasses.map((cls) => (
                   <div
                     key={`${student.id}-${cls.classId}`}
-                    className="flex items-center gap-2 text-sm"
+                    className="space-y-0.5 text-sm"
                   >
-                    <span className="font-medium">{cls.className}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {formatEnrollmentStatus(cls.status)}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{cls.className}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {formatEnrollmentStatus(cls.status)}
+                      </Badge>
+                    </div>
+                    {cls.status === "inactive" &&
+                      (cls.leaveDate || cls.leaveReason) && (
+                        <p className="text-xs text-muted-foreground">
+                          {cls.leaveDate && (
+                            <span>
+                              Ngừng từ {formatDateShort(cls.leaveDate)}
+                              {cls.leaveReason ? " • " : ""}
+                            </span>
+                          )}
+                          {cls.leaveReason && <span>Lý do: {cls.leaveReason}</span>}
+                        </p>
+                      )}
                   </div>
                 ))}
                 {remainingClasses > 0 && (

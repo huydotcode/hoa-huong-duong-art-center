@@ -145,17 +145,31 @@ function StudentTableRowComponent({
                 return (
                   <div
                     key={`${student.id}-${cls.classId}`}
-                    className="flex items-center gap-2"
+                    className="flex flex-col gap-0.5"
                   >
-                    <span className="text-sm font-medium truncate">
-                      {cls.className}
-                    </span>
-                    <Badge
-                      variant={isPreferred ? "default" : "outline"}
-                      className="text-xs"
-                    >
-                      {formatEnrollmentStatus(cls.status)}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">
+                        {cls.className}
+                      </span>
+                      <Badge
+                        variant={isPreferred ? "default" : "outline"}
+                        className="text-xs"
+                      >
+                        {formatEnrollmentStatus(cls.status)}
+                      </Badge>
+                    </div>
+                    {cls.status === "inactive" &&
+                      (cls.leaveDate || cls.leaveReason) && (
+                        <div className="text-xs text-muted-foreground">
+                          {cls.leaveDate && (
+                            <span>
+                              Ngừng từ {formatDateShort(cls.leaveDate)}
+                              {cls.leaveReason ? " • " : ""}
+                            </span>
+                          )}
+                          {cls.leaveReason && <span>Lý do: {cls.leaveReason}</span>}
+                        </div>
+                      )}
                   </div>
                 );
               })}

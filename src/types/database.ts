@@ -59,6 +59,8 @@ export interface StudentClassSummary {
   classId: string;
   className: string;
   status: EnrollmentStatus;
+  leaveDate?: string | null;
+  leaveReason?: string | null;
 }
 
 export type StudentTuitionStatus =

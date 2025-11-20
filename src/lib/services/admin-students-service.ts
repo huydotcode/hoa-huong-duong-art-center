@@ -210,6 +210,8 @@ export async function getStudents(
                 classId: cls?.id ?? enrollment.class_id,
                 className: cls?.name ?? "Lớp chưa đặt tên",
                 status: "inactive",
+                leaveDate: leaveDate ?? null,
+                leaveReason: enrollment.leave_reason ?? null,
               });
             }
           }
