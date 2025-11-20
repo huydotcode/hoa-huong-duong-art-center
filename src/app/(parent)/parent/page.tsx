@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -11,10 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { normalizeText, formatEnrollmentStatus, toArray } from "@/lib/utils";
+import { formatEnrollmentStatus, toArray } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -22,53 +22,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  getActiveClasses,
+  getStudentById,
+  searchStudent,
+  type ParentStudentInfo,
+  type ClassOption,
+} from "@/lib/services/parent-service";
 
-interface StudentInfo {
-  id: string;
-  full_name: string;
-  phone: string | null;
-  parent_phone: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  enrollments?: Array<{
-    class_id: string;
-    status: "trial" | "active" | "inactive";
-    score_1?: number | null;
-    score_2?: number | null;
-    score_3?: number | null;
-    classes?:
-      | {
-          name: string;
-          start_date: string;
-          end_date: string;
-          days_of_week: unknown;
-        }
-      | {
-          name: string;
-          start_date: string;
-          end_date: string;
-          days_of_week: unknown;
-        }[];
-  }>;
-  payments?: Array<{
-    class_id: string;
-    month: number;
-    year: number;
-    is_paid: boolean;
-    amount: number | null;
-  }>;
-  attendanceStats?: Record<string, { present: number; total: number }>;
-}
+const STORAGE_KEY = "parent_last_student_id";
 
 export default function SearchPage() {
+  const searchParams = useSearchParams();
   const [studentName, setStudentName] = useState("");
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-  const [classOptions, setClassOptions] = useState<
-    Array<{ id: string; name: string }>
-  >([]);
+  const [studentInfo, setStudentInfo] = useState<ParentStudentInfo | null>(
+    null
+  );
+  const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
 
   // Typed helpers for relation arrays
@@ -92,27 +64,12 @@ export default function SearchPage() {
           days_of_week: unknown;
         }[];
   };
-  // Payment removed per request
 
   useEffect(() => {
     const fetchClasses = async () => {
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("classes")
-          .select("id, name")
-          .eq("is_active", true)
-          .order("name", { ascending: true });
-
-        if (error) {
-          console.error("Fetch classes error:", error);
-          toast.error("Không thể tải danh sách lớp. Vui lòng thử lại sau.");
-          return;
-        }
-
-        setClassOptions(
-          (data ?? []).map((cls) => ({ id: cls.id, name: cls.name }))
-        );
+        const classes = await getActiveClasses();
+        setClassOptions(classes);
       } catch (err) {
         console.error("Fetch classes error:", err);
         toast.error("Không thể tải danh sách lớp. Vui lòng thử lại sau.");
@@ -123,6 +80,58 @@ export default function SearchPage() {
 
     fetchClasses();
   }, []);
+
+  // Function để load thông tin học sinh theo ID (load tất cả enrollments)
+  const loadStudentById = async (studentId: string, saveToStorage = true) => {
+    setLoading(true);
+    try {
+      const student = await getStudentById(studentId);
+      if (!student) {
+        toast.error("Không tìm thấy học sinh.");
+        setStudentInfo(null);
+        // Xóa localStorage nếu học sinh không tồn tại
+        if (saveToStorage) {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+        return;
+      }
+      setStudentInfo(student);
+      // Lưu vào localStorage
+      if (saveToStorage) {
+        localStorage.setItem(STORAGE_KEY, studentId);
+      }
+      toast.success("Tìm thấy thông tin học sinh!");
+    } catch (error) {
+      console.error("Load student error:", error);
+      toast.error("Đã xảy ra lỗi khi tải thông tin học sinh");
+      setStudentInfo(null);
+      // Xóa localStorage nếu có lỗi
+      if (saveToStorage) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Tự động load khi có studentId trong URL hoặc localStorage
+  useEffect(() => {
+    const urlStudentId = searchParams.get("studentId");
+
+    // Ưu tiên studentId từ URL
+    if (urlStudentId) {
+      loadStudentById(urlStudentId);
+      return;
+    }
+
+    // Nếu không có trong URL, kiểm tra localStorage
+    if (typeof window !== "undefined") {
+      const savedStudentId = localStorage.getItem(STORAGE_KEY);
+      if (savedStudentId && savedStudentId.trim()) {
+        loadStudentById(savedStudentId);
+      }
+    }
+  }, [searchParams]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,145 +148,18 @@ export default function SearchPage() {
     }
     setLoading(true);
 
-    const supabase = createClient();
-
     try {
-      // Query toàn bộ, sau đó filter client-side với normalizeText
-      const { data, error } = await supabase
-        .from("students")
-        .select(
-          `
-            id,
-            full_name,
-            phone,
-            parent_phone,
-            is_active,
-            created_at,
-            updated_at,
-            enrollments:student_class_enrollments!inner(
-              class_id,
-              status,
-              classes(
-                name,
-                start_date,
-                end_date,
-                days_of_week
-              )
-            )
-          `
-        )
-        .eq("student_class_enrollments.class_id", selectedClassId);
-
-      if (error) {
-        console.error("Search error:", error);
-        toast.error("Đã xảy ra lỗi khi tìm kiếm");
-        setStudentInfo(null);
-        return;
-      }
-
-      if (!data || data.length === 0) {
+      const student = await searchStudent(trimmedQuery, selectedClassId);
+      if (!student) {
         toast.error(
           "Không tìm thấy học sinh. Vui lòng kiểm tra lại thông tin."
         );
         setStudentInfo(null);
         return;
       }
-
-      const normalizedQuery = normalizeText(trimmedQuery);
-      // Lọc client-side theo tên không dấu
-      const filtered = data.filter((s) =>
-        normalizeText(s.full_name || "").includes(normalizedQuery)
-      );
-      const preferred = filtered[0] || null;
-
-      if (!preferred) {
-        toast.error(
-          "Không tìm thấy học sinh. Vui lòng kiểm tra lại thông tin."
-        );
-        setStudentInfo(null);
-        return;
-      }
-
-      const studentId = preferred.id;
-
-      const [enrollmentsRes] = await Promise.all([
-        supabase
-          .from("student_class_enrollments")
-          .select(
-            `
-            class_id,
-            status,
-            score_1,
-            score_2,
-            score_3,
-            classes(
-              name,
-              start_date,
-              end_date,
-              days_of_week
-            )
-          `
-          )
-          .eq("student_id", studentId)
-          .eq("class_id", selectedClassId),
-      ]);
-
-      console.log({ enrollmentsRes });
-
-      if (enrollmentsRes.error) {
-        console.error("Fetch enrollments error:", enrollmentsRes.error);
-        toast.warning("Không thể tải thông tin lớp học của học sinh.");
-      }
-
-      // Attendance stats for current month
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const startISO = monthStart.toISOString().slice(0, 10);
-      const endISO = nextMonthStart.toISOString().slice(0, 10);
-
-      const { data: attendanceRows, error: attendanceError } = await supabase
-        .from("attendance")
-        .select("class_id, is_present, attendance_date")
-        .eq("student_id", studentId)
-        .gte("attendance_date", startISO)
-        .lt("attendance_date", endISO);
-
-      if (attendanceError) {
-        console.error("Fetch attendance error:", attendanceError);
-      }
-
-      const attendanceStats: Record<
-        string,
-        { present: number; total: number }
-      > = {};
-      (attendanceRows || []).forEach(
-        (row: { class_id: string; is_present: boolean }) => {
-          const classId = String(row.class_id || "");
-          if (!attendanceStats[classId]) {
-            attendanceStats[classId] = { present: 0, total: 0 };
-          }
-          attendanceStats[classId].total += 1;
-          if (row.is_present === true) {
-            attendanceStats[classId].present += 1;
-          }
-        }
-      );
-
-      const enriched: StudentInfo = {
-        id: preferred.id as string,
-        full_name: String(preferred.full_name || ""),
-        phone: preferred.phone ?? null,
-        parent_phone: preferred.parent_phone ?? null,
-        is_active: Boolean(preferred.is_active),
-        created_at: String(preferred.created_at),
-        updated_at: String(preferred.updated_at),
-        enrollments: (enrollmentsRes.data ?? []) as EnrollmentItem[],
-        payments: [], // not used
-        attendanceStats,
-      };
-
-      setStudentInfo(enriched);
+      setStudentInfo(student);
+      // Lưu studentId vào localStorage
+      localStorage.setItem(STORAGE_KEY, student.id);
       toast.success("Tìm thấy thông tin học sinh!");
     } catch (error) {
       console.error("Search error:", error);
@@ -286,6 +168,13 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearAndSearchNew = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setStudentInfo(null);
+    setStudentName("");
+    setSelectedClassId("");
   };
 
   return (
@@ -352,7 +241,17 @@ export default function SearchPage() {
       {studentInfo && (
         <Card className="mt-6 w-full">
           <CardHeader>
-            <CardTitle>Thông tin học sinh</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Thông tin học sinh</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAndSearchNew}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Tìm học sinh khác
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
