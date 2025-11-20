@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -78,14 +79,27 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
     );
   };
 
+  const handleCommentChange = (enrollmentId: string, value: string) => {
+    setRows((prev) =>
+      prev.map((row) => {
+        if (row.enrollment_id !== enrollmentId) return row;
+        // Giữ nguyên giá trị khi đang gõ, chỉ trim khi lưu
+        return { ...row, teacher_notes: value || null };
+      })
+    );
+  };
+
   const handleSaveRow = async (row: GradeRow) => {
     try {
+      // Trim nhận xét khi lưu
+      const trimmedNotes = row.teacher_notes?.trim() || null;
       await updateEnrollmentScores(row.enrollment_id, {
         score_1: row.score_1 ?? null,
         score_2: row.score_2 ?? null,
         score_3: row.score_3 ?? null,
+        teacher_notes: trimmedNotes,
       });
-      toast.success(`Đã lưu điểm cho ${row.student_name}`);
+      toast.success(`Đã lưu điểm và nhận xét cho ${row.student_name}`);
     } catch (error) {
       console.error("handleSaveRow error:", error);
       toast.error(`Lưu điểm thất bại cho ${row.student_name}`);
@@ -114,10 +128,11 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
               score_1: row.score_1 ?? null,
               score_2: row.score_2 ?? null,
               score_3: row.score_3 ?? null,
+              teacher_notes: row.teacher_notes?.trim() || null,
             }))
           );
         }
-        toast.success("Đã lưu tất cả điểm của tất cả các lớp.");
+        toast.success("Đã lưu tất cả điểm và nhận xét của tất cả các lớp.");
       } else if (selectedClassId) {
         await bulkUpdateScores(
           selectedClassId,
@@ -126,9 +141,10 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
             score_1: row.score_1 ?? null,
             score_2: row.score_2 ?? null,
             score_3: row.score_3 ?? null,
+            teacher_notes: row.teacher_notes?.trim() || null,
           }))
         );
-        toast.success("Đã lưu tất cả điểm của lớp.");
+        toast.success("Đã lưu tất cả điểm và nhận xét của lớp.");
       }
     } catch (error) {
       console.error("handleSaveAll error:", error);
@@ -164,43 +180,66 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
 
         return {
           STT: idx + 1,
-          "Lớp": showAllClasses ? row.class_name : "",
+          Lớp: showAllClasses ? row.class_name : "",
           "Họ Tên": row.student_name,
           SĐT: row.phone || "",
           "Điểm 1": row.score_1 ?? "",
           "Điểm 2": row.score_2 ?? "",
           "Điểm 3": row.score_3 ?? "",
           "Điểm TB": avg,
+          "Nhận xét": row.teacher_notes || "",
         };
       });
 
       const headers = showAllClasses
-        ? ["STT", "Lớp", "Họ Tên", "SĐT", "Điểm 1", "Điểm 2", "Điểm 3", "Điểm TB"]
-        : ["STT", "Họ Tên", "SĐT", "Điểm 1", "Điểm 2", "Điểm 3", "Điểm TB"];
+        ? [
+            "STT",
+            "Lớp",
+            "Họ Tên",
+            "SĐT",
+            "Điểm 1",
+            "Điểm 2",
+            "Điểm 3",
+            "Điểm TB",
+            "Nhận xét",
+          ]
+        : [
+            "STT",
+            "Họ Tên",
+            "SĐT",
+            "Điểm 1",
+            "Điểm 2",
+            "Điểm 3",
+            "Điểm TB",
+            "Nhận xét",
+          ];
 
       const ws = XLSX.utils.json_to_sheet(data, { header: headers });
 
       // Set column widths
-      (ws as unknown as { ["!cols"]?: Array<{ wch: number }> })["!cols"] = showAllClasses
-        ? [
-            { wch: 6 },
-            { wch: 20 },
-            { wch: 28 },
-            { wch: 14 },
-            { wch: 10 },
-            { wch: 10 },
-            { wch: 10 },
-            { wch: 10 },
-          ]
-        : [
-            { wch: 6 },
-            { wch: 28 },
-            { wch: 14 },
-            { wch: 10 },
-            { wch: 10 },
-            { wch: 10 },
-            { wch: 10 },
-          ];
+      (ws as unknown as { ["!cols"]?: Array<{ wch: number }> })["!cols"] =
+        showAllClasses
+          ? [
+              { wch: 6 },
+              { wch: 20 },
+              { wch: 28 },
+              { wch: 14 },
+              { wch: 10 },
+              { wch: 10 },
+              { wch: 10 },
+              { wch: 10 },
+              { wch: 40 },
+            ]
+          : [
+              { wch: 6 },
+              { wch: 28 },
+              { wch: 14 },
+              { wch: 10 },
+              { wch: 10 },
+              { wch: 10 },
+              { wch: 10 },
+              { wch: 40 },
+            ];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Grades");
@@ -302,6 +341,9 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
                     <th className="px-3 py-2 text-center w-[120px]">Điểm 2</th>
                     <th className="px-3 py-2 text-center w-[120px]">Điểm 3</th>
                     <th className="px-3 py-2 text-center w-[120px]">Điểm TB</th>
+                    <th className="px-3 py-2 text-left min-w-[200px]">
+                      Nhận xét
+                    </th>
                     <th className="px-3 py-2 text-right w-[120px]">Thao tác</th>
                   </tr>
                 </thead>
@@ -388,6 +430,19 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
                             scores.length;
                           return avg.toFixed(1);
                         })()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Textarea
+                          className="min-h-[60px] text-sm resize-none"
+                          value={row.teacher_notes || ""}
+                          onChange={(event) =>
+                            handleCommentChange(
+                              row.enrollment_id,
+                              event.target.value
+                            )
+                          }
+                          placeholder="Nhập nhận xét..."
+                        />
                       </td>
                       <td className="px-3 py-2 text-right">
                         <Button

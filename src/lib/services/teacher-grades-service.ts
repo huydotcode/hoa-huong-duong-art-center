@@ -12,6 +12,7 @@ export type GradeRow = {
   score_1: number | null;
   score_2: number | null;
   score_3: number | null;
+  teacher_notes: string | null;
 };
 
 export async function getTeacherClassesForGrades(): Promise<
@@ -90,7 +91,8 @@ export async function getEnrollmentsByClassForGrades(
       student:students(id, full_name, phone),
       score_1,
       score_2,
-      score_3
+      score_3,
+      teacher_notes
     `
     )
     .eq("class_id", classId)
@@ -117,6 +119,7 @@ export async function getEnrollmentsByClassForGrades(
       score_1: number | null;
       score_2: number | null;
       score_3: number | null;
+      teacher_notes: string | null;
     }) => {
       const student = Array.isArray(row.student) ? row.student[0] : row.student;
       if (!student) return;
@@ -131,6 +134,7 @@ export async function getEnrollmentsByClassForGrades(
         score_1: row.score_1 ?? null,
         score_2: row.score_2 ?? null,
         score_3: row.score_3 ?? null,
+        teacher_notes: row.teacher_notes ? String(row.teacher_notes) : null,
       });
     }
   );
@@ -175,7 +179,8 @@ export async function getAllEnrollmentsForTeacher(): Promise<GradeRow[]> {
       student:students(id, full_name, phone),
       score_1,
       score_2,
-      score_3
+      score_3,
+      teacher_notes
     `
     )
     .in("class_id", classIds)
@@ -207,6 +212,7 @@ export async function getAllEnrollmentsForTeacher(): Promise<GradeRow[]> {
       score_1: number | null;
       score_2: number | null;
       score_3: number | null;
+      teacher_notes: string | null;
     }) => {
       const student = Array.isArray(row.student) ? row.student[0] : row.student;
       const classData = Array.isArray(row.class) ? row.class[0] : row.class;
@@ -222,6 +228,7 @@ export async function getAllEnrollmentsForTeacher(): Promise<GradeRow[]> {
         score_1: row.score_1 ?? null,
         score_2: row.score_2 ?? null,
         score_3: row.score_3 ?? null,
+        teacher_notes: row.teacher_notes ? String(row.teacher_notes) : null,
       });
     }
   );
@@ -235,16 +242,19 @@ export async function updateEnrollmentScores(
     score_1?: number | null;
     score_2?: number | null;
     score_3?: number | null;
+    teacher_notes?: string | null;
   }
 ) {
   if (!enrollmentId) return;
 
   const supabase = await createClient();
-  const payload: Record<string, number | null> = {};
+  const payload: Record<string, number | null | string> = {};
 
   if (scores.score_1 !== undefined) payload.score_1 = scores.score_1;
   if (scores.score_2 !== undefined) payload.score_2 = scores.score_2;
   if (scores.score_3 !== undefined) payload.score_3 = scores.score_3;
+  if (scores.teacher_notes !== undefined)
+    payload.teacher_notes = scores.teacher_notes;
 
   const { error } = await supabase
     .from("student_class_enrollments")
@@ -264,6 +274,7 @@ export async function bulkUpdateScores(
     score_1?: number | null;
     score_2?: number | null;
     score_3?: number | null;
+    teacher_notes?: string | null;
   }>
 ) {
   if (!classId || rows.length === 0) return;
@@ -271,10 +282,12 @@ export async function bulkUpdateScores(
   const supabase = await createClient();
 
   for (const row of rows) {
-    const payload: Record<string, number | null> = {};
+    const payload: Record<string, number | null | string> = {};
     if (row.score_1 !== undefined) payload.score_1 = row.score_1;
     if (row.score_2 !== undefined) payload.score_2 = row.score_2;
     if (row.score_3 !== undefined) payload.score_3 = row.score_3;
+    if (row.teacher_notes !== undefined)
+      payload.teacher_notes = row.teacher_notes;
 
     const { error } = await supabase
       .from("student_class_enrollments")
