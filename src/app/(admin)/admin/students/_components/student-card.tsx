@@ -1,28 +1,32 @@
 "use client";
 
-import { useState, memo, useMemo, lazy, Suspense } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { UpdateStudentForm } from "@/components/forms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Calendar } from "lucide-react";
-import { UpdateStudentForm } from "@/components/forms";
-import type { StudentWithClassSummary } from "@/types";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   formatDateShort,
   formatEnrollmentStatus,
   isNewStudent,
 } from "@/lib/utils";
+import type { StudentWithClassSummary } from "@/types";
+import { Book, Calendar, Loader2, Pencil } from "lucide-react";
+import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { DeleteStudentButton } from "./delete-student-button";
-import { Loader2 } from "lucide-react";
 import {
   getAttendanceStatusBadge,
   getTuitionStatusBadge,
 } from "./student-status-utils";
 
-// Lazy load heavy dialog component
+// Lazy load heavy dialog components
 const StudentClassScheduleDialog = lazy(() =>
   import("./student-class-schedule-dialog").then((mod) => ({
     default: mod.StudentClassScheduleDialog,
+  }))
+);
+const ManageStudentClassesDialog = lazy(() =>
+  import("./manage-student-classes-dialog").then((mod) => ({
+    default: mod.ManageStudentClassesDialog,
   }))
 );
 
@@ -32,6 +36,7 @@ function StudentCardComponent({
   student: StudentWithClassSummary;
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [manageClassesDialogOpen, setManageClassesDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
@@ -70,6 +75,18 @@ function StudentCardComponent({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setManageClassesDialogOpen(true);
+                }}
+                title="Quản lý lớp học"
+              >
+                <Book className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -157,6 +174,21 @@ function StudentCardComponent({
             student={student}
             open={scheduleDialogOpen}
             onOpenChange={setScheduleDialogOpen}
+          />
+        </Suspense>
+      )}
+      {manageClassesDialogOpen && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          }
+        >
+          <ManageStudentClassesDialog
+            student={student}
+            open={manageClassesDialogOpen}
+            onOpenChange={setManageClassesDialogOpen}
           />
         </Suspense>
       )}

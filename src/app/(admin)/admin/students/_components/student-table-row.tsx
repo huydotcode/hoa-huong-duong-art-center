@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, memo, useMemo, lazy, Suspense } from "react";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { UpdateStudentForm } from "@/components/forms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Calendar } from "lucide-react";
-import { UpdateStudentForm } from "@/components/forms";
-import type { StudentWithClassSummary } from "@/types";
+import { TableCell, TableRow } from "@/components/ui/table";
 import {
   formatDateShort,
   formatEnrollmentStatus,
   isNewStudent,
 } from "@/lib/utils";
+import type { StudentWithClassSummary } from "@/types";
+import { Book, Calendar, Pencil } from "lucide-react";
+import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { DeleteStudentButton } from "./delete-student-button";
 import {
   getAttendanceStatusBadge,
@@ -19,10 +19,15 @@ import {
   getTuitionStatusBadge,
 } from "./student-status-utils";
 
-// Lazy load heavy dialog component
+// Lazy load heavy dialog components
 const StudentClassScheduleDialog = lazy(() =>
   import("./student-class-schedule-dialog").then((mod) => ({
     default: mod.StudentClassScheduleDialog,
+  }))
+);
+const ManageStudentClassesDialog = lazy(() =>
+  import("./manage-student-classes-dialog").then((mod) => ({
+    default: mod.ManageStudentClassesDialog,
   }))
 );
 
@@ -34,6 +39,7 @@ function StudentTableRowComponent({
   activeLearningStatus?: string;
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [manageClassesDialogOpen, setManageClassesDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
@@ -153,6 +159,14 @@ function StudentTableRowComponent({
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => setManageClassesDialogOpen(true)}
+              title="Quản lý lớp học"
+            >
+              <Book className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setScheduleDialogOpen(true)}
               title="Xem lịch học"
             >
@@ -176,6 +190,15 @@ function StudentTableRowComponent({
             student={student}
             open={scheduleDialogOpen}
             onOpenChange={setScheduleDialogOpen}
+          />
+        </Suspense>
+      )}
+      {manageClassesDialogOpen && (
+        <Suspense fallback={null}>
+          <ManageStudentClassesDialog
+            student={student}
+            open={manageClassesDialogOpen}
+            onOpenChange={setManageClassesDialogOpen}
           />
         </Suspense>
       )}
