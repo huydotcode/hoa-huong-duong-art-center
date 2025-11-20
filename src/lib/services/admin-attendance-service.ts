@@ -25,9 +25,11 @@ export async function getAdminClassesInSession(
     .select("id, start_date, end_date, duration_minutes, days_of_week")
     .eq("is_active", true);
 
-  // Convert sessionLabel (e.g., "13:40") to minutes for comparison
+  // Convert sessionLabel (e.g., "18:00") to minutes for comparison
+  // Khi chọn ca 18:00, hiển thị tất cả các lớp bắt đầu từ 18:00 đến trước 19:00
   const [currentHour, currentMinute] = sessionLabel.split(":").map(Number);
   const currentMinutes = (currentHour || 0) * 60 + (currentMinute || 0);
+  const nextHourMinutes = currentMinutes + 60; // Giờ tiếp theo (ví dụ 18:00 -> 19:00)
 
   const matchedSessions = new Map<string, string>();
   (Array.isArray(classesData)
@@ -66,15 +68,9 @@ export async function getAdminClassesInSession(
           .map(Number);
         const startMinutes = (startHour || 0) * 60 + (startMin || 0);
 
-        let endMinutes: number;
-        if (s.end_time) {
-          const [endHour, endMin] = String(s.end_time).split(":").map(Number);
-          endMinutes = (endHour || 0) * 60 + (endMin || 0);
-        } else {
-          endMinutes = startMinutes + Number(c.duration_minutes || 60);
-        }
-
-        return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+        // Match nếu lớp bắt đầu trong khoảng từ giờ được chọn đến giờ tiếp theo
+        // Ví dụ: chọn 18:00 -> hiển thị lớp bắt đầu từ 18:00 đến trước 19:00
+        return startMinutes >= currentMinutes && startMinutes < nextHourMinutes;
       }
     );
 

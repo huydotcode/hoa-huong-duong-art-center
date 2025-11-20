@@ -237,9 +237,11 @@ export async function getTeacherClassesInSessionWithTimes(
     .in("id", classIds)
     .eq("is_active", true);
 
-  // Convert sessionLabel (e.g., "13:40") to minutes for comparison
+  // Convert sessionLabel (e.g., "18:00") to minutes for comparison
+  // Khi chọn ca 18:00, hiển thị tất cả các lớp bắt đầu từ 18:00 đến trước 19:00
   const [currentHour, currentMinute] = sessionLabel.split(":").map(Number);
   const currentMinutes = (currentHour || 0) * 60 + (currentMinute || 0);
+  const nextHourMinutes = currentMinutes + 60; // Giờ tiếp theo (ví dụ 18:00 -> 19:00)
 
   const matchedSessions: TeacherClassSession[] = [];
   (Array.isArray(classesData)
@@ -278,15 +280,9 @@ export async function getTeacherClassesInSessionWithTimes(
           .map(Number);
         const startMinutes = (startHour || 0) * 60 + (startMin || 0);
 
-        let endMinutes: number;
-        if (s.end_time) {
-          const [endHour, endMin] = String(s.end_time).split(":").map(Number);
-          endMinutes = (endHour || 0) * 60 + (endMin || 0);
-        } else {
-          endMinutes = startMinutes + Number(c.duration_minutes || 60);
-        }
-
-        return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+        // Match nếu lớp bắt đầu trong khoảng từ giờ được chọn đến giờ tiếp theo
+        // Ví dụ: chọn 18:00 -> hiển thị lớp bắt đầu từ 18:00 đến trước 19:00
+        return startMinutes >= currentMinutes && startMinutes < nextHourMinutes;
       }
     );
 
@@ -320,11 +316,16 @@ export async function getTeacherClassesInSessionWithTimes(
   return matchedSessions;
 }
 
+export type TeacherAttendanceStateResult = {
+  states: Record<string, boolean>;
+  notes: Record<string, string | null>;
+};
+
 export async function getAttendanceStateForTeacherSessions(
   dateISO: string,
   classSessions: TeacherClassSession[]
-): Promise<Record<string, boolean>> {
-  if (classSessions.length === 0) return {};
+): Promise<TeacherAttendanceStateResult> {
+  if (classSessions.length === 0) return { states: {}, notes: {} };
   const supabase = await createClient();
 
   const classIds = classSessions.map((s) => s.classId);
@@ -334,27 +335,41 @@ export async function getAttendanceStateForTeacherSessions(
 
   const { data: attendanceData } = await supabase
     .from("attendance")
-    .select("class_id, student_id, session_time, is_present")
+    .select("class_id, student_id, session_time, is_present, notes")
     .eq("attendance_date", dateISO)
     .in("class_id", classIds)
     .in("session_time", sessionTimes)
-    .eq("is_present", true);
+    .not("student_id", "is", null);
 
-  const state: Record<string, boolean> = {};
+  const states: Record<string, boolean> = {};
+  const notes: Record<string, string | null> = {};
+
   (Array.isArray(attendanceData)
     ? (attendanceData as {
         class_id: string;
         student_id: string;
         session_time: string;
-        is_present: boolean;
+        is_present: boolean | null;
+        notes: string | null;
       }[])
     : []
   ).forEach((a) => {
     const key = `student:${a.student_id}:${a.class_id}@@${a.session_time}`;
-    state[key] = a.is_present === true;
+    if (typeof a.is_present === "boolean") {
+      states[key] = a.is_present === true;
+    }
+    if (a.notes !== undefined && a.notes !== null) {
+      const noteValue =
+        typeof a.notes === "string" && a.notes.trim().length > 0
+          ? a.notes
+          : null;
+      if (noteValue !== null) {
+        notes[key] = noteValue;
+      }
+    }
   });
 
-  return state;
+  return { states, notes };
 }
 
 export type TeacherAttendanceClass = {
@@ -385,7 +400,7 @@ export async function getClassesAndStudentsForTeacher(
     supabase
       .from("student_class_enrollments")
       .select("class_id, student:students(id, full_name, phone)")
-      .eq("status", "active")
+      .in("status", ["trial", "active"]) // Thay đổi từ .eq("status", "active")
       .in("class_id", classIds),
   ]);
 

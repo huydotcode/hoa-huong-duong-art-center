@@ -59,7 +59,8 @@ export default async function TeacherAttendancePage({
         classSessionTimes={classSessionTimes}
         classes={classes}
         rows={rows}
-        initialState={attendanceState}
+        initialState={attendanceState.states}
+        initialNotes={attendanceState.notes}
       />
     </div>
   );
