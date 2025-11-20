@@ -7,6 +7,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import {
   formatDateShort,
   formatEnrollmentStatus,
+  formatScheduleSlots,
   isNewStudent,
   normalizeText,
 } from "@/lib/utils";
@@ -158,6 +159,11 @@ function StudentTableRowComponent({
                         {formatEnrollmentStatus(cls.status)}
                       </Badge>
                     </div>
+                    {cls.schedule && cls.schedule.length > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        {formatScheduleSlots(cls.schedule)}
+                      </div>
+                    )}
                     {cls.status === "inactive" &&
                       (cls.leaveDate || cls.leaveReason) && (
                         <div className="text-xs text-muted-foreground">
@@ -167,7 +173,9 @@ function StudentTableRowComponent({
                               {cls.leaveReason ? " • " : ""}
                             </span>
                           )}
-                          {cls.leaveReason && <span>Lý do: {cls.leaveReason}</span>}
+                          {cls.leaveReason && (
+                            <span>Lý do: {cls.leaveReason}</span>
+                          )}
                         </div>
                       )}
                   </div>

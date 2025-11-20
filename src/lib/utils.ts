@@ -72,6 +72,28 @@ export function formatScheduleDays(days: unknown): string {
     .join(", ");
 }
 
+export function formatScheduleSlots(
+  slots?: Array<{ day?: number; start_time?: string; end_time?: string }> | null
+): string {
+  if (!slots || slots.length === 0) return "";
+  return slots
+    .map((slot) => {
+      const dayInfo =
+        typeof slot.day === "number"
+          ? DAYS_MAP[slot.day as DayOfWeek]
+          : undefined;
+      const dayLabel =
+        dayInfo?.short ?? (slot.day !== undefined ? `T${slot.day}` : "");
+      const start = slot.start_time || "";
+      const end = slot.end_time ? ` - ${slot.end_time}` : "";
+      return [dayLabel, start ? `${start}${end}` : null]
+        .filter(Boolean)
+        .join(" ");
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
 // Format date range like: 15/01/2024 → 15/06/2024
 export function formatDateRange(startDate: string, endDate: string): string {
   try {

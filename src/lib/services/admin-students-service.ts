@@ -137,6 +137,7 @@ export async function getStudents(
 
   type RawEnrollment = {
     id: string;
+    leave_reason: string | null;
     status: EnrollmentStatus;
     leave_date: string | null;
     class_id: string;
@@ -232,10 +233,17 @@ export async function getStudents(
           );
         }
 
+        const schedule = cls?.days_of_week
+          ? toArray<{ day?: number; start_time?: string; end_time?: string }>(
+              cls.days_of_week
+            )
+          : [];
+
         class_summary.push({
           classId: cls?.id ?? enrollment.class_id,
           className: cls?.name ?? "Lớp chưa đặt tên",
           status: enrollment.status,
+          schedule,
         });
       }
 

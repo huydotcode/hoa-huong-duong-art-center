@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   formatDateShort,
   formatEnrollmentStatus,
+  formatScheduleSlots,
   isNewStudent,
 } from "@/lib/utils";
 import type { StudentWithClassSummary } from "@/types";
@@ -74,7 +75,7 @@ function StudentCardComponent({
                 {student.phone || "Chưa có"}
               </p>
             </div>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -152,6 +153,11 @@ function StudentCardComponent({
                         {formatEnrollmentStatus(cls.status)}
                       </Badge>
                     </div>
+                    {cls.schedule && cls.schedule.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {formatScheduleSlots(cls.schedule)}
+                      </p>
+                    )}
                     {cls.status === "inactive" &&
                       (cls.leaveDate || cls.leaveReason) && (
                         <p className="text-xs text-muted-foreground">
@@ -161,7 +167,9 @@ function StudentCardComponent({
                               {cls.leaveReason ? " • " : ""}
                             </span>
                           )}
-                          {cls.leaveReason && <span>Lý do: {cls.leaveReason}</span>}
+                          {cls.leaveReason && (
+                            <span>Lý do: {cls.leaveReason}</span>
+                          )}
                         </p>
                       )}
                   </div>

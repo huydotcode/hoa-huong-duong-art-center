@@ -61,6 +61,11 @@ export interface StudentClassSummary {
   status: EnrollmentStatus;
   leaveDate?: string | null;
   leaveReason?: string | null;
+  schedule?: Array<{
+    day?: number;
+    start_time?: string;
+    end_time?: string;
+  }>;
 }
 
 export type StudentTuitionStatus =
