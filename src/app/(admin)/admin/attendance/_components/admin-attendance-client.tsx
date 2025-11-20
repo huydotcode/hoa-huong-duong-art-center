@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AttendanceDateToolbarClient } from "@/components/shared/attendance/attendance-date-toolbar-client";
 import {
@@ -31,6 +37,7 @@ export default function AdminAttendanceClient({
   initialState,
   initialNotes = {},
   showAllClasses = false,
+  initialClassId = null,
 }: {
   dateISO: string;
   sessionLabel: string;
@@ -41,6 +48,7 @@ export default function AdminAttendanceClient({
   initialState: Record<string, boolean>;
   initialNotes?: Record<string, string | null>;
   showAllClasses?: boolean;
+  initialClassId?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,6 +69,23 @@ export default function AdminAttendanceClient({
   const filteredRows = rows.filter((r) =>
     filterMode === "all" ? true : r.kind === filterMode
   );
+
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(
+    initialClassId
+  );
+
+  useEffect(() => {
+    const classParam = searchParams?.get("classId");
+    if (classParam) {
+      startTransition(() => {
+        setSelectedClassId(classParam);
+      });
+    } else {
+      startTransition(() => {
+        setSelectedClassId(null);
+      });
+    }
+  }, [searchParams]);
 
   const handleSessionChange = useCallback(
     (newSession: string) => {
@@ -88,6 +113,21 @@ export default function AdminAttendanceClient({
     }
     router.push(`/admin/attendance?${params.toString()}`);
   }, [searchParams, router, showAllClasses]);
+
+  const handleClassFilterChange = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+      if (value === "all") {
+        params.delete("classId");
+        setSelectedClassId(null);
+      } else {
+        params.set("classId", value);
+        setSelectedClassId(value);
+      }
+      router.push(`/admin/attendance?${params.toString()}`);
+    },
+    [router, searchParams]
+  );
 
   const [attendanceSummaries, setAttendanceSummaries] = useState<
     Record<string, { presentStudents: number; totalStudents: number }>
@@ -326,77 +366,167 @@ export default function AdminAttendanceClient({
     showAllClasses,
   ]);
 
+  const visibleGroups = useMemo(() => {
+    if (!selectedClassId) return grouped;
+    return grouped.filter((group) => group.classId === selectedClassId);
+  }, [grouped, selectedClassId]);
+
+  const classSelectOptions = useMemo(() => {
+    const options = classes
+      .map((cls) => ({
+        value: cls.id,
+        label: cls.name || "Lớp chưa đặt tên",
+      }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, "vi", { sensitivity: "base" })
+      );
+
+    if (
+      selectedClassId &&
+      !options.some((option) => option.value === selectedClassId)
+    ) {
+      const rowMatch = rows.find((r) => r.classId === selectedClassId);
+      options.push({
+        value: selectedClassId,
+        label: rowMatch?.className || "Lớp đã chọn",
+      });
+    }
+
+    return options;
+  }, [classes, rows, selectedClassId]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 w-full lg:w-auto">
-          <div className="w-full">
+      <div className="rounded-lg border bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex-1 min-w-[220px]">
             <AttendanceDateToolbarClient
               basePath={`/admin/attendance`}
               date={dateISO}
             />
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="hidden md:inline-block text-xs text-muted-foreground whitespace-nowrap">
-              Ca
-            </span>
-            <Select
-              value={displaySession}
-              onValueChange={handleSessionChange}
-              disabled={showAllClasses}
-            >
-              <SelectTrigger className="w-full sm:w-[140px]">
-                <SelectValue placeholder="Chọn giờ" />
-              </SelectTrigger>
-              <SelectContent>
-                {timeSlots.map((slot) => (
-                  <SelectItem key={slot} value={slot}>
-                    {slot}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant={showAllClasses ? "default" : "outline"}
-              size="sm"
-              onClick={handleShowAllToggle}
-              className="whitespace-nowrap"
-            >
-              {showAllClasses ? "Ẩn bớt" : "Hiện tất cả"}
-            </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
+                Ca học
+              </span>
+              <Select
+                value={displaySession}
+                onValueChange={handleSessionChange}
+                disabled={showAllClasses}
+              >
+                <SelectTrigger className="w-full sm:w-[140px]">
+                  <SelectValue placeholder="Chọn giờ" />
+                </SelectTrigger>
+                <SelectContent>
+                  {timeSlots.map((slot) => (
+                    <SelectItem key={slot} value={slot}>
+                      {slot}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant={showAllClasses ? "default" : "outline"}
+                size="sm"
+                onClick={handleShowAllToggle}
+                className="whitespace-nowrap"
+              >
+                {showAllClasses ? "Ẩn bớt" : "Hiện tất cả"}
+              </Button>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="hidden md:inline-block text-xs text-muted-foreground whitespace-nowrap">
-            Đối tượng
-          </span>
-          <Select
-            value={filterMode}
-            onValueChange={(v: "all" | "teacher" | "student") =>
-              setFilterMode(v)
-            }
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Đối tượng" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="teacher">Giáo viên</SelectItem>
-              <SelectItem value="student">Học sinh</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-1">
+            <span className="text-xs font-medium uppercase text-muted-foreground">
+              Lọc lớp
+            </span>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+              <Select
+                value={selectedClassId ?? "all"}
+                onValueChange={(value) => handleClassFilterChange(value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn lớp" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value="all">Tất cả lớp</SelectItem>
+                  {classSelectOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => handleClassFilterChange("all")}
+                disabled={!selectedClassId}
+              >
+                Xóa lọc
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs font-medium uppercase text-muted-foreground">
+              Đối tượng
+            </span>
+            <Select
+              value={filterMode}
+              onValueChange={(v: "all" | "teacher" | "student") =>
+                setFilterMode(v)
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Đối tượng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="teacher">Giáo viên</SelectItem>
+                <SelectItem value="student">Học sinh</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs font-medium uppercase text-muted-foreground">
+              Tóm tắt
+            </span>
+            <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+              <div>
+                Ngày:{" "}
+                <span className="font-semibold text-foreground">{dateISO}</span>
+              </div>
+              <div>
+                Lớp đang xem:{" "}
+                <span className="font-semibold text-foreground">
+                  {selectedClassId
+                    ? classSelectOptions.find(
+                        (option) => option.value === selectedClassId
+                      )?.label || "Đã chọn"
+                    : showAllClasses
+                      ? "Tất cả lớp / mọi ca"
+                      : "Theo ca đang chọn"}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {grouped.length === 0 ? (
+      {visibleGroups.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {showAllClasses
-            ? "Không có lớp nào trong ngày này."
-            : "Không có lớp nào trong ca này."}
+          {selectedClassId
+            ? "Không có dữ liệu điểm danh cho lớp này trong ngày/ca đã chọn."
+            : showAllClasses
+              ? "Không có lớp nào trong ngày này."
+              : "Không có lớp nào trong ca này."}
         </div>
       ) : (
         <div className="space-y-4">
-          {grouped.map((group) => {
+          {visibleGroups.map((group) => {
             const stats = classStats.get(group.classId) || {
               teacherCount: 0,
               studentCount: 0,

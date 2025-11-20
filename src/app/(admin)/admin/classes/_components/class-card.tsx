@@ -44,7 +44,10 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
 
   const handleAttendance = (e: React.MouseEvent) => {
     e.stopPropagation();
-    router.push(`/admin/classes/${c.id}/attendance`);
+    const params = new URLSearchParams();
+    params.set("classId", c.id);
+    params.set("showAll", "true");
+    router.push(`/admin/attendance?${params.toString()}`);
   };
 
   const handleCardClick = () => {

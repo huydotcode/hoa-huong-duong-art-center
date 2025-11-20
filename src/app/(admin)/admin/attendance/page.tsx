@@ -16,9 +16,14 @@ function normalizeToHourSlot(time: string): string {
 export default async function AdminAttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; session?: string; showAll?: string }>;
+  searchParams: Promise<{
+    date?: string;
+    session?: string;
+    showAll?: string;
+    classId?: string;
+  }>;
 }) {
-  const { date, session, showAll } = await searchParams;
+  const { date, session, showAll, classId } = await searchParams;
   const dateISO = (date ? new Date(date) : new Date())
     .toISOString()
     .slice(0, 10);
@@ -78,6 +83,7 @@ export default async function AdminAttendancePage({
         initialState={attendanceState.states}
         initialNotes={attendanceState.notes}
         showAllClasses={showAllClasses}
+        initialClassId={classId ?? null}
       />
     </div>
   );

@@ -1,5 +1,4 @@
-import AttendancePageClient from "./_components/attendance-page-client";
-import { getAttendancePageData } from "@/lib/services/attendance-data-service";
+import { redirect } from "next/navigation";
 
 export default async function AttendancePage({
   params,
@@ -11,22 +10,10 @@ export default async function AttendancePage({
   const { classId } = await params;
   const { date } = await searchParams;
 
-  // Get default date (today)
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  const defaultDate = `${yyyy}-${mm}-${dd}`;
-  const attendanceDate = date || defaultDate;
+  const query = new URLSearchParams();
+  if (classId) query.set("classId", classId);
+  if (date) query.set("date", date);
+  query.set("showAll", "true");
 
-  // Preload all data on server
-  const initialData = await getAttendancePageData(classId, attendanceDate);
-
-  return (
-    <AttendancePageClient
-      classId={classId}
-      initialData={initialData}
-      date={attendanceDate}
-    />
-  );
+  redirect(`/admin/attendance?${query.toString()}`);
 }
