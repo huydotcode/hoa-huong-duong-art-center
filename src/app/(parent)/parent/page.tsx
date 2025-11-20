@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -15,6 +15,13 @@ import { Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { normalizeText, formatEnrollmentStatus, toArray } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface StudentInfo {
   id: string;
@@ -56,8 +63,13 @@ interface StudentInfo {
 
 export default function SearchPage() {
   const [studentName, setStudentName] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
+  const [classOptions, setClassOptions] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [loadingClasses, setLoadingClasses] = useState(true);
 
   // Typed helpers for relation arrays
   type EnrollmentItem = {
@@ -82,11 +94,46 @@ export default function SearchPage() {
   };
   // Payment removed per request
 
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("classes")
+          .select("id, name")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
+
+        if (error) {
+          console.error("Fetch classes error:", error);
+          toast.error("Không thể tải danh sách lớp. Vui lòng thử lại sau.");
+          return;
+        }
+
+        setClassOptions(
+          (data ?? []).map((cls) => ({ id: cls.id, name: cls.name }))
+        );
+      } catch (err) {
+        console.error("Fetch classes error:", err);
+        toast.error("Không thể tải danh sách lớp. Vui lòng thử lại sau.");
+      } finally {
+        setLoadingClasses(false);
+      }
+    };
+
+    fetchClasses();
+  }, []);
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedQuery = studentName.trim();
     if (trimmedQuery.length === 0) {
       toast.error("Vui lòng nhập tên học sinh");
+      setStudentInfo(null);
+      return;
+    }
+    if (!selectedClassId) {
+      toast.error("Vui lòng chọn lớp trước khi tìm kiếm");
       setStudentInfo(null);
       return;
     }
@@ -96,34 +143,30 @@ export default function SearchPage() {
 
     try {
       // Query toàn bộ, sau đó filter client-side với normalizeText
-      const { data, error } = await supabase.from("students").select(
-        `
-          id,
-          full_name,
-          phone,
-          parent_phone,
-          is_active,
-          created_at,
-          updated_at,
-          enrollments:student_class_enrollments(
-            class_id,
-            status,
-            classes(
-              name,
-              start_date,
-              end_date,
-              days_of_week
+      const { data, error } = await supabase
+        .from("students")
+        .select(
+          `
+            id,
+            full_name,
+            phone,
+            parent_phone,
+            is_active,
+            created_at,
+            updated_at,
+            enrollments:student_class_enrollments!inner(
+              class_id,
+              status,
+              classes(
+                name,
+                start_date,
+                end_date,
+                days_of_week
+              )
             )
-          ),
-          payments:payment_status(
-            class_id,
-            month,
-            year,
-            is_paid,
-            amount
-          )
-        `
-      );
+          `
+        )
+        .eq("student_class_enrollments.class_id", selectedClassId);
 
       if (error) {
         console.error("Search error:", error);
@@ -175,7 +218,8 @@ export default function SearchPage() {
             )
           `
           )
-          .eq("student_id", studentId),
+          .eq("student_id", studentId)
+          .eq("class_id", selectedClassId),
       ]);
 
       console.log({ enrollmentsRes });
@@ -258,6 +302,32 @@ export default function SearchPage() {
         <CardContent>
           <form onSubmit={handleSearch} className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="classSelect">Lớp học</Label>
+              <Select
+                value={selectedClassId}
+                onValueChange={(value) => setSelectedClassId(value)}
+                disabled={loadingClasses}
+              >
+                <SelectTrigger id="classSelect" className="w-full">
+                  <SelectValue
+                    placeholder={loadingClasses ? "Đang tải..." : "Chọn lớp"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {classOptions.length === 0 && (
+                    <SelectItem value="__empty__" disabled>
+                      Không có lớp khả dụng
+                    </SelectItem>
+                  )}
+                  {classOptions.map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="studentName">Tên học sinh</Label>
               <Input
                 id="studentName"
@@ -267,7 +337,11 @@ export default function SearchPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || loadingClasses || classOptions.length === 0}
+            >
               <Search className="mr-2 h-4 w-4" />
               {loading ? "Đang tìm kiếm..." : "Tìm kiếm"}
             </Button>
@@ -306,49 +380,91 @@ export default function SearchPage() {
               </div>
             </div>
             {/* Lớp / điểm dạng bảng */}
-            {toArray<EnrollmentItem>(studentInfo.enrollments || []).length > 0 && (
+            {toArray<EnrollmentItem>(studentInfo.enrollments || []).length >
+              0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Lớp / điểm</h3>
                 <div className="overflow-x-auto rounded-md border">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-muted/50">
-                        <th className="px-3 py-2 text-left min-w-[200px]">Lớp</th>
-                        <th className="px-3 py-2 text-left min-w-[120px]">Trạng thái</th>
-                        <th className="px-3 py-2 text-center w-[90px]">Điểm 1</th>
-                        <th className="px-3 py-2 text-center w-[90px]">Điểm 2</th>
-                        <th className="px-3 py-2 text-center w-[90px]">Điểm 3</th>
-                        <th className="px-3 py-2 text-center w-[100px]">Điểm TB</th>
-                        <th className="px-3 py-2 text-center min-w-[160px]">Đi học (tháng này)</th>
+                        <th className="px-3 py-2 text-left min-w-[200px]">
+                          Lớp
+                        </th>
+                        <th className="px-3 py-2 text-left min-w-[120px]">
+                          Trạng thái
+                        </th>
+                        <th className="px-3 py-2 text-center w-[90px]">
+                          Điểm 1
+                        </th>
+                        <th className="px-3 py-2 text-center w-[90px]">
+                          Điểm 2
+                        </th>
+                        <th className="px-3 py-2 text-center w-[90px]">
+                          Điểm 3
+                        </th>
+                        <th className="px-3 py-2 text-center w-[100px]">
+                          Điểm TB
+                        </th>
+                        <th className="px-3 py-2 text-center min-w-[160px]">
+                          Đi học (tháng này)
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {toArray<EnrollmentItem>(studentInfo.enrollments || []).map((en) => {
-                        const cls = Array.isArray(en.classes) ? en.classes[0] : en.classes;
-                        const scores = [en.score_1, en.score_2, en.score_3].filter(
-                          (s): s is number => typeof s === "number"
-                        );
+                      {toArray<EnrollmentItem>(
+                        studentInfo.enrollments || []
+                      ).map((en) => {
+                        const cls = Array.isArray(en.classes)
+                          ? en.classes[0]
+                          : en.classes;
+                        const scores = [
+                          en.score_1,
+                          en.score_2,
+                          en.score_3,
+                        ].filter((s): s is number => typeof s === "number");
                         const avg =
                           scores.length > 0
-                            ? Number((scores.reduce((sum, s) => sum + s, 0) / scores.length).toFixed(1))
+                            ? Number(
+                                (
+                                  scores.reduce((sum, s) => sum + s, 0) /
+                                  scores.length
+                                ).toFixed(1)
+                              )
                             : null;
                         const att = studentInfo.attendanceStats?.[en.class_id];
                         const attText =
-                          att && att.total > 0 ? `${att.present}/${att.total} buổi` : "-";
+                          att && att.total > 0
+                            ? `${att.present}/${att.total} buổi`
+                            : "-";
                         const attClass =
                           att && att.total > 0 && att.present / att.total >= 0.8
                             ? "text-emerald-600"
                             : "text-amber-600";
                         return (
                           <tr key={en.class_id} className="border-t">
-                            <td className="px-3 py-2">{cls?.name || "Lớp chưa đặt tên"}</td>
-                            <td className="px-3 py-2">{formatEnrollmentStatus(en.status)}</td>
-                            <td className="px-3 py-2 text-center">{en.score_1 ?? "-"}</td>
-                            <td className="px-3 py-2 text-center">{en.score_2 ?? "-"}</td>
-                            <td className="px-3 py-2 text-center">{en.score_3 ?? "-"}</td>
-                            <td className="px-3 py-2 text-center">{avg ?? "-"}</td>
+                            <td className="px-3 py-2">
+                              {cls?.name || "Lớp chưa đặt tên"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {formatEnrollmentStatus(en.status)}
+                            </td>
                             <td className="px-3 py-2 text-center">
-                              <span className={att ? attClass : ""}>{attText}</span>
+                              {en.score_1 ?? "-"}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {en.score_2 ?? "-"}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {en.score_3 ?? "-"}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {avg ?? "-"}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={att ? attClass : ""}>
+                                {attText}
+                              </span>
                             </td>
                           </tr>
                         );
