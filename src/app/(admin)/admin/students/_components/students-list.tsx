@@ -149,30 +149,30 @@ export default function StudentsList({
     };
   }, [handleCreated, handleDeleted, handleUpdated]);
 
-  const handleLoadMore = useCallback(() => {
+  const handleShowAll = useCallback(() => {
     if (isPending || !hasMore) return;
 
     startTransition(async () => {
       try {
-        const nextBatch = (await getStudents(query, {
-          limit: pageSize,
-          offset: displayedCount,
+        const allStudents = (await getStudents(query, {
+          limit: estimatedTotal,
+          offset: 0,
           subject,
           learningStatus: normalizedLearningStatus,
           recentOnly,
         })) as StudentWithClassSummary[];
-        setAllData((prev) => [...prev, ...nextBatch]);
+        setAllData(allStudents);
+        setEstimatedTotal(allStudents.length);
       } catch (error) {
-        console.error("Error loading more students:", error);
+        console.error("Error loading all students:", error);
       }
     });
   }, [
     isPending,
     hasMore,
+    estimatedTotal,
     query,
     subject,
-    pageSize,
-    displayedCount,
     normalizedLearningStatus,
     recentOnly,
   ]);
@@ -359,31 +359,23 @@ export default function StudentsList({
         </div>
       </div>
 
-      {/* Load More Button */}
+      {/* Show All Button */}
       {hasMore && (
         <div className="px-3 pb-3 pt-2 flex justify-center">
           <Button
             variant="outline"
-            onClick={handleLoadMore}
+            onClick={handleShowAll}
             disabled={isPending}
           >
             {isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang tải...
+                Đang tải tất cả...
               </>
             ) : (
-              `Hiển thị thêm ${pageSize} học sinh`
+              "Hiện tất cả"
             )}
           </Button>
-        </div>
-      )}
-
-      {!hasMore && displayedCount > pageSize && (
-        <div className="px-3 pb-3 pt-2">
-          <p className="text-center text-sm text-muted-foreground">
-            Đã hiển thị tất cả {totalCount} học sinh
-          </p>
         </div>
       )}
     </>
