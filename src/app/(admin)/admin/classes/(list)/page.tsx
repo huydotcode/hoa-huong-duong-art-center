@@ -9,10 +9,11 @@ const PAGE_SIZE = 12;
 export default async function ClassesPage({
   searchParams,
 }: {
-  searchParams?: { q?: string; subject?: string };
+  searchParams?: Promise<{ q?: string; subject?: string }>;
 }) {
-  const query = searchParams?.q ?? "";
-  const subjectFilter = searchParams?.subject ?? "";
+  const { q, subject } = (await searchParams) ?? {};
+  const query = q ?? "";
+  const subjectFilter = subject ?? "";
 
   const [data, totalCount] = await Promise.all([
     getClasses(query, {

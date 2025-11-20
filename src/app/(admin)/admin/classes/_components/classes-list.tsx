@@ -54,14 +54,18 @@ export default function ClassesList({
   }, [initialData, startTransition]);
 
   useEffect(() => {
-    setSelectedClassId(null);
+    startTransition(() => {
+      setSelectedClassId(null);
+    });
   }, [query, subject]);
 
   useEffect(() => {
-    setSelectedClassId((prev) => {
-      if (!prev) return prev;
-      const exists = items.some((cls) => cls.id === prev);
-      return exists ? prev : null;
+    startTransition(() => {
+      setSelectedClassId((prev) => {
+        if (!prev) return prev;
+        const exists = items.some((cls) => cls.id === prev);
+        return exists ? prev : null;
+      });
     });
   }, [items]);
 
@@ -122,7 +126,7 @@ export default function ClassesList({
         </div>
       )}
       {/* Cards - responsive grid */}
-      <div className="grid gap-3 px-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 px-3 md:grid-cols-2 2xl:grid-cols-3">
         {items.map((c) => (
           <ClassCard
             key={c.id}
