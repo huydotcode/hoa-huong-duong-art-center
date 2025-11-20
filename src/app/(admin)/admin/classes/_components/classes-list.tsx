@@ -50,9 +50,20 @@ export default function ClassesList({
     startTransition(() => {
       setItems(initialData);
       setOffset(initialData.length);
-      setSelectedClassId(null);
     });
   }, [initialData, startTransition]);
+
+  useEffect(() => {
+    setSelectedClassId(null);
+  }, [query, subject]);
+
+  useEffect(() => {
+    setSelectedClassId((prev) => {
+      if (!prev) return prev;
+      const exists = items.some((cls) => cls.id === prev);
+      return exists ? prev : null;
+    });
+  }, [items]);
 
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
   const hasMore = useMemo(
