@@ -178,10 +178,7 @@ export default function StudentsList({
   ]);
 
   const filterSummary =
-    hasQuery ||
-    hasSubjectFilter ||
-    hasLearningStatusFilter ||
-    hasRecentFilter ? (
+    hasQuery || hasLearningStatusFilter || hasRecentFilter ? (
       <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
         {hasQuery && (
           <span>
@@ -189,12 +186,6 @@ export default function StudentsList({
             <span className="font-medium text-foreground">
               &quot;{query}&quot;
             </span>
-          </span>
-        )}
-        {hasSubjectFilter && (
-          <span>
-            Môn học:{" "}
-            <span className="font-medium text-foreground">{subject}</span>
           </span>
         )}
         {hasLearningStatusFilter && (
@@ -228,7 +219,7 @@ export default function StudentsList({
 
   const statsSection = (
     <div className="px-3 pb-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-6">
         {[
           {
             key: "total",

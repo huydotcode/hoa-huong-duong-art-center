@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { FormEvent, useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Filter, X } from "lucide-react";
 
@@ -12,7 +12,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { SUBJECTS } from "@/lib/constants/subjects";
 import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
 import { cn } from "@/lib/utils";
 
@@ -22,14 +21,18 @@ export default function StudentsSearchBar() {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
 
   const q = searchParams.get("q") || "";
   const subject = searchParams.get("subject") || "";
   const learningStatus = searchParams.get("learningStatus") || "";
   const recent = searchParams.get("recent") === "true";
-  const activeFilterCount = [subject, learningStatus, recent ? "1" : ""].filter(
-    Boolean
-  ).length;
+  const activeFilterCount = [
+    q.trim(),
+    subject,
+    learningStatus,
+    recent ? "1" : "",
+  ].filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
 
   const updateSearchParams = (updater: (params: URLSearchParams) => void) => {
@@ -41,8 +44,12 @@ export default function StudentsSearchBar() {
     });
   };
 
-  const handleSearch = (formData: FormData) => {
-    const query = String(formData.get("q") || "").trim();
+  useEffect(() => {
+    setSearchValue(q);
+  }, [q]);
+
+  const handleSearch = (value: string) => {
+    const query = value.trim();
     updateSearchParams((params) => {
       if (query) {
         params.set("q", query);
@@ -52,32 +59,14 @@ export default function StudentsSearchBar() {
     });
   };
 
-  const handleShowAll = () => {
+  const handleClearFilters = () => {
+    setSearchValue("");
     updateSearchParams((params) => {
       params.delete("q");
       params.delete("subject");
       params.delete("learningStatus");
       params.delete("recent");
     });
-  };
-
-  const handleClearFilters = () => {
-    updateSearchParams((params) => {
-      params.delete("subject");
-      params.delete("learningStatus");
-      params.delete("recent");
-    });
-  };
-
-  const handleSubjectSelect = (value: string) => {
-    updateSearchParams((params) => {
-      if (value) {
-        params.set("subject", value);
-      } else {
-        params.delete("subject");
-      }
-    });
-    setIsFilterOpen(false);
   };
 
   const handleRecentToggle = () => {
@@ -111,8 +100,8 @@ export default function StudentsSearchBar() {
   ];
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:w-auto">
-      <div className="flex w-full gap-2 sm:w-auto">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:w-auto">
+      <div className="order-2 flex w-full gap-2 sm:order-2 sm:w-auto sm:justify-end">
         <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -121,10 +110,13 @@ export default function StudentsSearchBar() {
               className="w-full sm:w-auto"
               disabled={isPending}
             >
-              <Filter className="mr-2 h-4 w-4" />
-              Bộ lọc
+              <Filter className="h-4 w-4 sm:mr-2" />
+              <span className="ml-2 hidden sm:inline">Bộ lọc</span>
               {activeFilterCount > 0 && (
-                <Badge className="ml-2 h-5 min-w-5 px-1.5" variant="secondary">
+                <Badge
+                  className="ml-1 h-5 min-w-5 px-1.5 sm:ml-2"
+                  variant="secondary"
+                >
                   {activeFilterCount}
                 </Badge>
               )}
@@ -134,40 +126,6 @@ export default function StudentsSearchBar() {
             className="w-72 space-y-5 max-h-[60vh] overflow-y-auto"
             align="end"
           >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-medium">Lọc theo môn học</p>
-                {subject && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => handleSubjectSelect("")}
-                  >
-                    <X className="mr-1 h-3 w-3" />
-                    Xóa
-                  </Button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {["", ...SUBJECTS].map((item) => (
-                  <button
-                    key={item || "all"}
-                    type="button"
-                    onClick={() => handleSubjectSelect(item)}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-sm transition",
-                      (item || "") === subject
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/60 hover:border-primary"
-                    )}
-                  >
-                    {item || "Tất cả môn"}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-medium">Trạng thái học</p>
@@ -258,13 +216,17 @@ export default function StudentsSearchBar() {
       </div>
 
       <form
-        action={handleSearch}
-        className="flex w-full gap-2 sm:w-80"
+        onSubmit={(event: FormEvent<HTMLFormElement>) => {
+          event.preventDefault();
+          handleSearch(searchValue);
+        }}
+        className="order-1 flex w-full gap-2 sm:order-1 sm:w-80"
         autoComplete="off"
       >
         <Input
           name="q"
-          defaultValue={q}
+          value={searchValue}
+          onChange={(event) => setSearchValue(event.target.value)}
           placeholder="Tìm học sinh..."
           className="flex-1"
           autoComplete="off"
@@ -279,18 +241,6 @@ export default function StudentsSearchBar() {
           Tìm kiếm
         </Button>
       </form>
-
-      {(q.length > 0 || subject || learningStatus || recent) && (
-        <Button
-          type="button"
-          variant="outline"
-          className="whitespace-nowrap w-full sm:w-auto"
-          onClick={handleShowAll}
-          disabled={isPending}
-        >
-          Hiện tất cả
-        </Button>
-      )}
     </div>
   );
 }
