@@ -10,9 +10,22 @@ import {
   StudentWithClassSummary,
 } from "@/types";
 import { revalidatePath } from "next/cache";
-import { normalizePhone, normalizeText, toArray } from "@/lib/utils";
+import {
+  isNewStudent,
+  normalizePhone,
+  normalizeText,
+  toArray,
+} from "@/lib/utils";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+export type StudentLearningStatsSummary = {
+  active: number;
+  trial: number;
+  inactive: number;
+  noClass: number;
+  recent: number;
+};
 
 export async function getStudents(
   query: string = "",
@@ -419,6 +432,229 @@ export async function getStudentsCount(
   const { count, error } = await request;
   if (error) throw error;
   return count ?? 0;
+}
+
+export async function getStudentLearningStats(
+  query: string = "",
+  opts: {
+    subject?: string;
+    learningStatus?: StudentLearningStatus | string | null;
+    recentOnly?: boolean;
+  } = {}
+): Promise<StudentLearningStatsSummary> {
+  const supabase = await createClient();
+
+  const trimmed = query.trim();
+  const hasQuery = trimmed.length > 0;
+
+  const subjectFilter = (opts.subject || "").trim();
+  const learningStatusFilter = (opts.learningStatus || "")
+    .toString()
+    .trim()
+    .toLowerCase();
+  const recentOnly = Boolean(opts.recentOnly);
+
+  const filterIdGroups: string[][] = [];
+
+  const subjectStudentIds =
+    subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all"
+      ? await getStudentIdsBySubject(supabase, subjectFilter)
+      : null;
+  if (subjectStudentIds) {
+    filterIdGroups.push(subjectStudentIds);
+  }
+
+  const shouldFilterByLearningStatus =
+    isValidLearningStatus(learningStatusFilter);
+  const learningStatusIds = shouldFilterByLearningStatus
+    ? await getStudentIdsByLearningStatus(
+        supabase,
+        learningStatusFilter as StudentLearningStatus
+      )
+    : null;
+  if (learningStatusIds) {
+    filterIdGroups.push(learningStatusIds);
+  }
+
+  const recentStudentIds = recentOnly
+    ? await getRecentStudentIds(supabase)
+    : null;
+  if (recentStudentIds) {
+    filterIdGroups.push(recentStudentIds);
+  }
+
+  const idsToFilter = mergeIdFilters(filterIdGroups);
+
+  if (idsToFilter && idsToFilter.length === 0) {
+    return {
+      active: 0,
+      trial: 0,
+      inactive: 0,
+      noClass: 0,
+      recent: 0,
+    };
+  }
+
+  let studentQuery = supabase.from("students").select("id, created_at");
+
+  if (idsToFilter) {
+    studentQuery = studentQuery.in("id", idsToFilter);
+  }
+
+  if (hasQuery) {
+    const sanitized = trimmed.replace(/[%_]/g, "\\$&");
+    const pattern = `%${sanitized}%`;
+    studentQuery = studentQuery.or(
+      `full_name.ilike.${pattern},phone.ilike.${pattern},parent_phone.ilike.${pattern}`
+    );
+  }
+
+  const { data: students, error: studentsError } = await studentQuery;
+  if (studentsError) throw studentsError;
+
+  const mappedStudents =
+    (students as Array<{ id: string | null; created_at: string | null }>) ?? [];
+  const studentIds = mappedStudents
+    .map((s) => s.id)
+    .filter((id): id is string => Boolean(id));
+
+  if (studentIds.length === 0) {
+    return {
+      active: 0,
+      trial: 0,
+      inactive: 0,
+      noClass: 0,
+      recent: 0,
+    };
+  }
+
+  const { data: enrollments, error: enrollmentError } = await supabase
+    .from("student_class_enrollments")
+    .select("student_id,status,leave_date,enrollment_date")
+    .in("student_id", studentIds);
+  if (enrollmentError) throw enrollmentError;
+
+  const enrollmentMap = new Map<
+    string,
+    Array<{
+      status: EnrollmentStatus;
+      leave_date: string | null;
+      enrollment_date: string | null;
+    }>
+  >();
+
+  (enrollments ?? []).forEach((row) => {
+    const studentId = row.student_id as string | null;
+    if (!studentId) return;
+    if (!enrollmentMap.has(studentId)) {
+      enrollmentMap.set(studentId, []);
+    }
+    enrollmentMap.get(studentId)!.push({
+      status: row.status as EnrollmentStatus,
+      leave_date: row.leave_date as string | null,
+      enrollment_date: row.enrollment_date as string | null,
+    });
+  });
+
+  const stats: StudentLearningStatsSummary = {
+    active: 0,
+    trial: 0,
+    inactive: 0,
+    noClass: 0,
+    recent: 0,
+  };
+
+  const now = new Date();
+
+  mappedStudents.forEach((student) => {
+    const studentId = student.id;
+    if (!studentId) return;
+
+    const enrollmentsForStudent = enrollmentMap.get(studentId) ?? [];
+    let learningStatus: StudentLearningStatus = "no_class";
+    let firstEnrollmentDate: string | null = null;
+    let hasInactiveOrLeft = false;
+    let hasActiveEnrollment = false;
+    let hasTrialEnrollment = false;
+
+    enrollmentsForStudent.forEach((enrollment) => {
+      const enrollmentDate = enrollment.enrollment_date;
+      if (enrollmentDate) {
+        if (!firstEnrollmentDate) {
+          firstEnrollmentDate = enrollmentDate;
+        } else {
+          const currentFirst = new Date(firstEnrollmentDate);
+          const candidate = new Date(enrollmentDate);
+          if (
+            !isNaN(candidate.getTime()) &&
+            (isNaN(currentFirst.getTime()) ||
+              candidate.getTime() < currentFirst.getTime())
+          ) {
+            firstEnrollmentDate = enrollmentDate;
+          }
+        }
+      }
+
+      const leaveDate = enrollment.leave_date;
+      const status = enrollment.status;
+      const isActiveEnrollment =
+        !leaveDate && (status === "active" || status === "trial");
+
+      if (!isActiveEnrollment) {
+        if (leaveDate || status === "inactive") {
+          hasInactiveOrLeft = true;
+        }
+        return;
+      }
+
+      if (status === "active") {
+        hasActiveEnrollment = true;
+      }
+      if (status === "trial") {
+        hasTrialEnrollment = true;
+      }
+    });
+
+    if (hasActiveEnrollment) {
+      learningStatus = "active";
+    } else if (hasTrialEnrollment) {
+      learningStatus = "trial";
+    } else if (hasInactiveOrLeft || enrollmentsForStudent.length > 0) {
+      learningStatus = "inactive";
+    }
+
+    switch (learningStatus) {
+      case "active":
+        stats.active += 1;
+        break;
+      case "trial":
+        stats.trial += 1;
+        break;
+      case "inactive":
+        stats.inactive += 1;
+        break;
+      default:
+        stats.noClass += 1;
+        break;
+    }
+
+    if (student.created_at && isNewStudent(student.created_at)) {
+      stats.recent += 1;
+    } else if (firstEnrollmentDate) {
+      const enrollmentDate = new Date(firstEnrollmentDate);
+      const diff = now.getTime() - enrollmentDate.getTime();
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      if (
+        !isNaN(enrollmentDate.getTime()) &&
+        diff >= 0 &&
+        diff <= THIRTY_DAYS_MS
+      ) {
+        stats.recent += 1;
+      }
+    }
+  });
+
+  return stats;
 }
 
 async function getStudentIdsBySubject(

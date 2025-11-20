@@ -1,4 +1,5 @@
 import {
+  getStudentLearningStats,
   getStudents,
   getStudentsCount,
 } from "@/lib/services/admin-students-service";
@@ -22,7 +23,7 @@ export default async function StudentsPage(props: SearchProps) {
   const learningStatus = searchParams?.learningStatus?.trim() || "";
   const recent = searchParams?.recent === "true";
 
-  const [initialData, totalCount] = await Promise.all([
+  const [initialData, totalCount, learningStats] = await Promise.all([
     getStudents(q, {
       limit: STUDENTS_PAGE_SIZE,
       offset: 0,
@@ -31,6 +32,11 @@ export default async function StudentsPage(props: SearchProps) {
       recentOnly: recent,
     }),
     getStudentsCount(q, { subject, learningStatus, recentOnly: recent }),
+    getStudentLearningStats(q, {
+      subject,
+      learningStatus,
+      recentOnly: recent,
+    }),
   ]);
 
   return (
@@ -43,6 +49,7 @@ export default async function StudentsPage(props: SearchProps) {
       recentOnly={recent}
       totalCount={totalCount}
       pageSize={STUDENTS_PAGE_SIZE}
+      learningStats={learningStats}
     />
   );
 }

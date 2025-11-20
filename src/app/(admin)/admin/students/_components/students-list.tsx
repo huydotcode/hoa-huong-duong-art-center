@@ -18,10 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StudentTableRow } from "./student-table-row";
-import { getStudents } from "@/lib/services/admin-students-service";
+import {
+  getStudents,
+  type StudentLearningStatsSummary,
+} from "@/lib/services/admin-students-service";
 import type { StudentWithClassSummary } from "@/types";
 import { Loader2 } from "lucide-react";
 import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
+import { Card } from "@/components/ui/card";
 
 interface StudentsListProps {
   initialData: StudentWithClassSummary[];
@@ -31,6 +35,7 @@ interface StudentsListProps {
   recentOnly?: boolean;
   totalCount: number;
   pageSize: number;
+  learningStats?: StudentLearningStatsSummary;
 }
 
 export default function StudentsList({
@@ -41,6 +46,7 @@ export default function StudentsList({
   recentOnly = false,
   totalCount,
   pageSize,
+  learningStats,
 }: StudentsListProps) {
   // State is automatically reset when component remounts (via key prop in parent)
   const [allData, setAllData] =
@@ -171,82 +177,155 @@ export default function StudentsList({
     recentOnly,
   ]);
 
+  const filterSummary =
+    hasQuery ||
+    hasSubjectFilter ||
+    hasLearningStatusFilter ||
+    hasRecentFilter ? (
+      <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
+        {hasQuery && (
+          <span>
+            Đang tìm theo{" "}
+            <span className="font-medium text-foreground">
+              &quot;{query}&quot;
+            </span>
+          </span>
+        )}
+        {hasSubjectFilter && (
+          <span>
+            Môn học:{" "}
+            <span className="font-medium text-foreground">{subject}</span>
+          </span>
+        )}
+        {hasLearningStatusFilter && (
+          <span>
+            Trạng thái học:{" "}
+            <span className="font-medium text-foreground">
+              {learningStatusLabel}
+            </span>
+          </span>
+        )}
+        {hasRecentFilter && (
+          <span>
+            Bộ lọc:{" "}
+            <span className="font-medium text-foreground">
+              Học sinh mới (30 ngày)
+            </span>
+          </span>
+        )}
+      </p>
+    ) : null;
+
+  const stats = learningStats ?? {
+    active: 0,
+    trial: 0,
+    inactive: 0,
+    noClass: 0,
+    recent: 0,
+  };
+
+  const totalStudents = totalCount ?? allData.length;
+
+  const statsSection = (
+    <div className="px-3 pb-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        {[
+          {
+            key: "total",
+            label: "Tổng học sinh",
+            value: totalStudents,
+            description: "Tổng số học sinh theo bộ lọc hiện tại",
+          },
+          {
+            key: "active",
+            label: "Đang học",
+            value: stats.active,
+            description: "Học sinh đang học chính thức",
+          },
+          {
+            key: "trial",
+            label: "Học thử",
+            value: stats.trial,
+            description: "Học sinh trong giai đoạn học thử",
+          },
+          {
+            key: "inactive",
+            label: "Ngừng học",
+            value: stats.inactive,
+            description: "Học sinh đã dừng học",
+          },
+          {
+            key: "noClass",
+            label: "Chưa có lớp",
+            value: stats.noClass,
+            description: "Học sinh chưa được xếp lớp",
+          },
+          {
+            key: "recent",
+            label: "Đăng ký mới (30 ngày)",
+            value: stats.recent,
+            description: "Tạo trong 30 ngày gần nhất",
+          },
+        ].map((item) => (
+          <Card key={item.key} className="p-3">
+            <p className="text-sm font-medium text-muted-foreground">
+              {item.label}
+            </p>
+            <p className="text-2xl font-semibold text-foreground">
+              {item.value.toLocaleString("vi-VN")}
+            </p>
+            <p className="text-xs text-muted-foreground">{item.description}</p>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+
   if (initialData.length === 0) {
     return (
-      <div className="px-3">
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableHeaderRow>
-                <TableHead>Họ và tên</TableHead>
-                <TableHead>Số điện thoại</TableHead>
-                <TableHead className="min-w-[220px]">
-                  Lớp / trạng thái
-                </TableHead>
-                <TableHead>Ngày nhập học</TableHead>
-                <TableHead>Đóng học phí</TableHead>
-                <TableHead>Điểm danh hôm nay</TableHead>
-                <TableHead>Ghi chú</TableHead>
-                <TableHead className="text-center">Trạng thái học</TableHead>
-                <TableHead className="text-center">Tài khoản</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
-              </TableHeaderRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell
-                  colSpan={10}
-                  className="px-4 py-8 text-center text-sm text-muted-foreground"
-                >
-                  Chưa có học sinh nào
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+      <>
+        {filterSummary}
+        {statsSection}
+        <div className="px-3">
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableHeaderRow>
+                  <TableHead>Họ và tên</TableHead>
+                  <TableHead>Số điện thoại</TableHead>
+                  <TableHead className="min-w-[220px]">
+                    Lớp / trạng thái
+                  </TableHead>
+                  <TableHead>Ngày nhập học</TableHead>
+                  <TableHead>Đóng học phí</TableHead>
+                  <TableHead>Điểm danh hôm nay</TableHead>
+                  <TableHead>Ghi chú</TableHead>
+                  <TableHead className="text-center">Trạng thái học</TableHead>
+                  <TableHead className="text-center">Tài khoản</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
+                </TableHeaderRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell
+                    colSpan={10}
+                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                  >
+                    Chưa có học sinh nào
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <>
-      {(hasQuery ||
-        hasSubjectFilter ||
-        hasLearningStatusFilter ||
-        hasRecentFilter) && (
-        <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
-          {hasQuery && (
-            <span>
-              Đang tìm theo{" "}
-              <span className="font-medium text-foreground">
-                &quot;{query}&quot;
-              </span>
-            </span>
-          )}
-          {hasSubjectFilter && (
-            <span>
-              Môn học:{" "}
-              <span className="font-medium text-foreground">{subject}</span>
-            </span>
-          )}
-          {hasLearningStatusFilter && (
-            <span>
-              Trạng thái học:{" "}
-              <span className="font-medium text-foreground">
-                {learningStatusLabel}
-              </span>
-            </span>
-          )}
-          {hasRecentFilter && (
-            <span>
-              Bộ lọc:{" "}
-              <span className="font-medium text-foreground">
-                Học sinh mới (30 ngày)
-              </span>
-            </span>
-          )}
-        </p>
-      )}
+      {filterSummary}
+      {statsSection}
 
       {/* Responsive Table view with horizontal scroll */}
       <div className="px-3">
