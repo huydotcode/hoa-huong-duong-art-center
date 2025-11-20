@@ -12,7 +12,7 @@ import {
   normalizeText,
 } from "@/lib/utils";
 import type { StudentWithClassSummary } from "@/types";
-import { Book, Calendar, Pencil } from "lucide-react";
+import { Book, Calendar, Pencil, QrCode } from "lucide-react";
 import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { DeleteStudentButton } from "./delete-student-button";
 import {
@@ -32,6 +32,11 @@ const ManageStudentClassesDialog = lazy(() =>
     default: mod.ManageStudentClassesDialog,
   }))
 );
+const StudentQRDialog = lazy(() =>
+  import("./student-qr-dialog").then((mod) => ({
+    default: mod.StudentQRDialog,
+  }))
+);
 
 function StudentTableRowComponent({
   student,
@@ -44,6 +49,7 @@ function StudentTableRowComponent({
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [manageClassesDialogOpen, setManageClassesDialogOpen] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
@@ -233,6 +239,14 @@ function StudentTableRowComponent({
             >
               <Calendar className="h-4 w-4" />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setQrDialogOpen(true)}
+              title="Tạo QR code"
+            >
+              <QrCode className="h-4 w-4" />
+            </Button>
             <UpdateStudentForm
               key={`${student.id}-${student.updated_at}`}
               student={student}
@@ -260,6 +274,16 @@ function StudentTableRowComponent({
             student={student}
             open={manageClassesDialogOpen}
             onOpenChange={setManageClassesDialogOpen}
+          />
+        </Suspense>
+      )}
+      {qrDialogOpen && (
+        <Suspense fallback={null}>
+          <StudentQRDialog
+            studentId={student.id}
+            studentName={student.full_name}
+            open={qrDialogOpen}
+            onOpenChange={setQrDialogOpen}
           />
         </Suspense>
       )}

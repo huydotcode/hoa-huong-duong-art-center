@@ -11,7 +11,7 @@ import {
   isNewStudent,
 } from "@/lib/utils";
 import type { StudentWithClassSummary } from "@/types";
-import { Book, Calendar, Loader2, Pencil } from "lucide-react";
+import { Book, Calendar, Loader2, Pencil, QrCode } from "lucide-react";
 import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { DeleteStudentButton } from "./delete-student-button";
 import {
@@ -30,6 +30,11 @@ const ManageStudentClassesDialog = lazy(() =>
     default: mod.ManageStudentClassesDialog,
   }))
 );
+const StudentQRDialog = lazy(() =>
+  import("./student-qr-dialog").then((mod) => ({
+    default: mod.StudentQRDialog,
+  }))
+);
 
 function StudentCardComponent({
   student,
@@ -38,6 +43,7 @@ function StudentCardComponent({
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [manageClassesDialogOpen, setManageClassesDialogOpen] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const isNew = useMemo(
     () => isNewStudent(student.created_at),
     [student.created_at]
@@ -99,6 +105,18 @@ function StudentCardComponent({
                 title="Xem lịch học"
               >
                 <Calendar className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQrDialogOpen(true);
+                }}
+                title="Tạo QR code"
+              >
+                <QrCode className="h-4 w-4" />
               </Button>
               <UpdateStudentForm
                 key={`${student.id}-${student.updated_at}`}
@@ -211,6 +229,22 @@ function StudentCardComponent({
             student={student}
             open={manageClassesDialogOpen}
             onOpenChange={setManageClassesDialogOpen}
+          />
+        </Suspense>
+      )}
+      {qrDialogOpen && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          }
+        >
+          <StudentQRDialog
+            studentId={student.id}
+            studentName={student.full_name}
+            open={qrDialogOpen}
+            onOpenChange={setQrDialogOpen}
           />
         </Suspense>
       )}
