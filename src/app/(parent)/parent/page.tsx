@@ -50,6 +50,7 @@ export default function SearchPage() {
     score_1?: number | null;
     score_2?: number | null;
     score_3?: number | null;
+    teacher_notes?: string | null;
     classes?:
       | {
           name: string;
@@ -178,7 +179,7 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
+    <div className="mx-auto max-w-5xl p-6">
       <div className="mb-6 text-center">
         <h1 className="mb-2 text-xl font-bold">Tra cứu thông tin học sinh</h1>
       </div>
@@ -241,7 +242,7 @@ export default function SearchPage() {
       {studentInfo && (
         <Card className="mt-6 w-full">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
               <CardTitle>Thông tin học sinh</CardTitle>
               <Button
                 variant="outline"
@@ -308,6 +309,9 @@ export default function SearchPage() {
                         <th className="px-3 py-2 text-center min-w-[160px]">
                           Đi học (tháng này)
                         </th>
+                        <th className="px-3 py-2 text-left min-w-[200px]">
+                          Nhận xét của giáo viên
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -364,6 +368,11 @@ export default function SearchPage() {
                               <span className={att ? attClass : ""}>
                                 {attText}
                               </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                {en.teacher_notes || "-"}
+                              </div>
                             </td>
                           </tr>
                         );

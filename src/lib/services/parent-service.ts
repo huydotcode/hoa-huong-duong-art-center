@@ -15,6 +15,7 @@ export interface ParentStudentInfo {
     score_1?: number | null;
     score_2?: number | null;
     score_3?: number | null;
+    teacher_notes?: string | null;
     classes?:
       | {
           name: string;
@@ -96,6 +97,7 @@ export async function getStudentById(
       score_1,
       score_2,
       score_3,
+      teacher_notes,
       classes(
         name,
         start_date,
@@ -229,6 +231,7 @@ export async function searchStudent(
         score_1,
         score_2,
         score_3,
+        teacher_notes,
         classes(
           name,
           start_date,
