@@ -35,11 +35,15 @@ export async function getClassesCount(
   let q = supabase.from("classes").select("id", { count: "exact", head: true });
 
   const trimmed = query.trim();
-  if (trimmed) {
-    q = q.ilike("name", `%${trimmed}%`);
+  const sanitizedQuery = trimmed.replace(/[%_]/g, "\\$&");
+  if (sanitizedQuery) {
+    q = q.ilike("name", `%${sanitizedQuery}%`);
   }
   if (opts?.subject) {
-    q = q.ilike("name", `%${opts.subject}%`);
+    const sanitizedSubject = opts.subject.trim().replace(/[%_]/g, "\\$&");
+    if (sanitizedSubject) {
+      q = q.ilike("name", `%${sanitizedSubject}%`);
+    }
   }
   if (opts?.is_active !== undefined) {
     q = q.eq("is_active", opts.is_active);
@@ -52,7 +56,12 @@ export async function getClassesCount(
 
 export async function getClasses(
   query: string = "",
-  opts?: { is_active?: boolean; limit?: number; subject?: string }
+  opts?: {
+    is_active?: boolean;
+    limit?: number;
+    offset?: number;
+    subject?: string;
+  }
 ): Promise<ClassListItem[]> {
   const supabase = await createClient();
   const trimmedQuery = query.trim();
@@ -63,17 +72,28 @@ export async function getClasses(
   // Use relationship counts via PostgREST embedding
   let q = supabase
     .from("classes")
-    .select(`*, class_teachers(count), student_class_enrollments(count)`, {
-      count: "exact",
-    })
+    .select(`*, class_teachers(count), student_class_enrollments(count)`)
     .order("name", { ascending: true });
 
   if (opts?.is_active !== undefined) {
     q = q.eq("is_active", opts.is_active);
   }
 
-  if (!hasQuery && !hasSubjectFilter && opts?.limit !== undefined) {
-    q = q.limit(opts.limit);
+  const sanitizedQuery = trimmedQuery.replace(/[%_]/g, "\\$&");
+  if (sanitizedQuery) {
+    q = q.ilike("name", `%${sanitizedQuery}%`);
+  }
+  const sanitizedSubject = trimmedSubject.replace(/[%_]/g, "\\$&");
+  if (sanitizedSubject) {
+    q = q.ilike("name", `%${sanitizedSubject}%`);
+  }
+
+  if (typeof opts?.limit === "number") {
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const limit = Math.max(opts.limit, 0);
+    if (limit > 0) {
+      q = q.range(offset, offset + limit - 1);
+    }
   }
 
   const { data, error } = await q;
@@ -95,24 +115,7 @@ export async function getClasses(
         : 0,
     })) || [];
 
-  if (!hasQuery && !hasSubjectFilter) {
-    return mapped;
-  }
-
-  const normalizedQuery = hasQuery ? normalizeText(trimmedQuery) : "";
-  const normalizedSubject = hasSubjectFilter
-    ? normalizeText(trimmedSubject)
-    : "";
-
-  const filtered = mapped.filter((item) => {
-    const normalizedName = normalizeText(item.name);
-    const matchesQuery = !hasQuery || normalizedName.includes(normalizedQuery);
-    const matchesSubject =
-      !hasSubjectFilter || normalizedName.includes(normalizedSubject);
-    return matchesQuery && matchesSubject;
-  });
-
-  return filtered;
+  return mapped;
 }
 
 export async function getClassById(id: string): Promise<Class | null> {

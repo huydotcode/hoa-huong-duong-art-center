@@ -15,6 +15,7 @@ import {
   useTransition,
   useMemo,
   useCallback,
+  useEffect,
   lazy,
   Suspense,
 } from "react";
@@ -28,39 +29,62 @@ const WeeklyScheduleCalendar = lazy(() =>
 );
 
 export default function ClassesList({
-  data,
+  initialData,
   query,
+  subject,
   totalCount,
+  pageSize,
 }: {
-  data: ClassListItem[];
+  initialData: ClassListItem[];
   query: string;
+  subject: string;
   totalCount: number;
+  pageSize: number;
 }) {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [allData, setAllData] = useState<ClassListItem[] | null>(null);
+  const [items, setItems] = useState<ClassListItem[]>(initialData);
+  const [offset, setOffset] = useState(initialData.length);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    startTransition(() => {
+      setItems(initialData);
+      setOffset(initialData.length);
+      setSelectedClassId(null);
+    });
+  }, [initialData, startTransition]);
+
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
-  const displayData = allData ?? data;
   const hasMore = useMemo(
-    () => !hasQuery && totalCount > data.length,
-    [hasQuery, totalCount, data.length]
+    () => totalCount > items.length,
+    [items.length, totalCount]
   );
   const selectedClass = useMemo(
-    () => displayData.find((c) => c.id === selectedClassId) ?? null,
-    [displayData, selectedClassId]
+    () => items.find((c) => c.id === selectedClassId) ?? null,
+    [items, selectedClassId]
   );
 
-  const handleShowAll = useCallback(() => {
-    if (allData) {
-      setAllData(null);
-    } else {
-      startTransition(async () => {
-        const fullData = await getClasses(query);
-        setAllData(fullData);
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore || isPending) return;
+    startTransition(async () => {
+      const nextItems = await getClasses(query, {
+        subject: subject || undefined,
+        limit: pageSize,
+        offset,
       });
-    }
-  }, [allData, query]);
+      setItems((prev) => {
+        const existingIds = new Set(prev.map((cls) => cls.id));
+        const merged = [...prev];
+        for (const item of nextItems) {
+          if (!existingIds.has(item.id)) {
+            merged.push(item);
+          }
+        }
+        return merged;
+      });
+      setOffset((prev) => prev + nextItems.length);
+    });
+  }, [hasMore, isPending, offset, pageSize, query, subject]);
 
   const handleViewSchedule = useCallback(
     (classId: string, e: React.MouseEvent) => {
@@ -71,7 +95,7 @@ export default function ClassesList({
     []
   );
 
-  if (!data || data.length === 0) {
+  if (!items || items.length === 0) {
     return (
       <div className="px-3 pb-4 text-sm text-muted-foreground">
         Không có lớp học phù hợp.
@@ -88,7 +112,7 @@ export default function ClassesList({
       )}
       {/* Cards - responsive grid */}
       <div className="grid gap-3 px-3 md:grid-cols-2 xl:grid-cols-3">
-        {displayData.map((c) => (
+        {items.map((c) => (
           <ClassCard
             key={c.id}
             classItem={c}
@@ -101,14 +125,12 @@ export default function ClassesList({
         <div className="px-3 pt-3 flex justify-center">
           <Button
             variant="outline"
-            onClick={handleShowAll}
+            onClick={handleLoadMore}
             disabled={isPending}
           >
             {isPending
               ? "Đang tải..."
-              : allData
-                ? "Thu gọn"
-                : `Hiển thị tất cả (${totalCount})`}
+              : `Hiển thị thêm (${Math.max(totalCount - items.length, 0)})`}
           </Button>
         </div>
       )}
