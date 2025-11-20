@@ -344,6 +344,7 @@ export async function getAttendanceStateForSessions(
         teacher_id: string | number | null;
         session_time: string | null;
         is_present: boolean | null;
+        notes: string | null;
       }[]
     | null
     | undefined) || []) {
