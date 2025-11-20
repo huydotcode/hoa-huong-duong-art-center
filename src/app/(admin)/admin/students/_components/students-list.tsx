@@ -278,6 +278,7 @@ export default function StudentsList({
                       ? normalizedLearningStatus
                       : undefined
                   }
+                  activeSubject={hasSubjectFilter ? subject : undefined}
                 />
               ))}
             </TableBody>

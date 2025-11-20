@@ -8,6 +8,7 @@ import {
   formatDateShort,
   formatEnrollmentStatus,
   isNewStudent,
+  normalizeText,
 } from "@/lib/utils";
 import type { StudentWithClassSummary } from "@/types";
 import { Book, Calendar, Pencil } from "lucide-react";
@@ -34,9 +35,11 @@ const ManageStudentClassesDialog = lazy(() =>
 function StudentTableRowComponent({
   student,
   activeLearningStatus,
+  activeSubject,
 }: {
   student: StudentWithClassSummary;
   activeLearningStatus?: string;
+  activeSubject?: string;
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [manageClassesDialogOpen, setManageClassesDialogOpen] = useState(false);
@@ -49,23 +52,50 @@ function StudentTableRowComponent({
     [student.class_summary]
   );
   const orderedClasses = useMemo(() => {
-    if (!activeLearningStatus || classSummary.length <= 1) {
+    if (classSummary.length <= 1) {
       return classSummary;
     }
-    const preferred: typeof classSummary = [];
+
+    const normalizedSubject = activeSubject
+      ? normalizeText(activeSubject)
+      : null;
+
+    // Priority order:
+    // 1. Classes matching both subject and learning status (if both filters active)
+    // 2. Classes matching subject (if subject filter active)
+    // 3. Classes matching learning status (if learning status filter active)
+    // 4. Other classes
+
+    const priority1: typeof classSummary = [];
+    const priority2: typeof classSummary = [];
+    const priority3: typeof classSummary = [];
     const others: typeof classSummary = [];
+
     classSummary.forEach((cls) => {
-      if (cls.status === activeLearningStatus) {
-        preferred.push(cls);
+      const normalizedClassName = normalizeText(cls.className || "");
+      const matchesSubject =
+        normalizedSubject && normalizedClassName.includes(normalizedSubject);
+      const matchesStatus =
+        activeLearningStatus && cls.status === activeLearningStatus;
+
+      if (matchesSubject && matchesStatus) {
+        priority1.push(cls);
+      } else if (matchesSubject) {
+        priority2.push(cls);
+      } else if (matchesStatus) {
+        priority3.push(cls);
       } else {
         others.push(cls);
       }
     });
-    if (preferred.length === 0) {
-      return classSummary;
+
+    // If we have priority classes, return them first
+    if (priority1.length > 0 || priority2.length > 0 || priority3.length > 0) {
+      return [...priority1, ...priority2, ...priority3, ...others];
     }
-    return [...preferred, ...others];
-  }, [classSummary, activeLearningStatus]);
+
+    return classSummary;
+  }, [classSummary, activeLearningStatus, activeSubject]);
   const visibleClasses = orderedClasses.slice(0, 2);
   const remainingClasses = classSummary.length - visibleClasses.length;
   const enrollmentDate = useMemo(
@@ -101,8 +131,17 @@ function StudentTableRowComponent({
           ) : (
             <div className="flex flex-col gap-1">
               {visibleClasses.map((cls) => {
-                const isPreferred =
-                  !!activeLearningStatus && cls.status === activeLearningStatus;
+                const normalizedSubject = activeSubject
+                  ? normalizeText(activeSubject)
+                  : null;
+                const normalizedClassName = normalizeText(cls.className || "");
+                const matchesSubject =
+                  normalizedSubject &&
+                  normalizedClassName.includes(normalizedSubject);
+                const matchesStatus =
+                  activeLearningStatus && cls.status === activeLearningStatus;
+                const isPreferred = matchesSubject || matchesStatus;
+
                 return (
                   <div
                     key={`${student.id}-${cls.classId}`}
