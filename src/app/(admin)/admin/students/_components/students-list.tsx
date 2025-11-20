@@ -215,7 +215,10 @@ export default function StudentsList({
     recent: 0,
   };
 
-  const totalStudents = totalCount ?? allData.length;
+  const totalActiveStudents = Math.max(
+    0,
+    (stats.active ?? 0) + (stats.trial ?? 0) + (stats.noClass ?? 0)
+  );
 
   const statsSection = (
     <div className="px-3 pb-3">
@@ -224,8 +227,8 @@ export default function StudentsList({
           {
             key: "total",
             label: "Tổng học sinh",
-            value: totalStudents,
-            description: "Tổng số học sinh theo bộ lọc hiện tại",
+            value: totalActiveStudents,
+            description: "Không bao gồm học sinh ngừng học",
           },
           {
             key: "active",
