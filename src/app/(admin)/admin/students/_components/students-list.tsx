@@ -301,7 +301,7 @@ export default function StudentsList({
                   <TableHead>Điểm danh hôm nay</TableHead>
                   <TableHead>Ghi chú</TableHead>
                   <TableHead className="text-center">Trạng thái học</TableHead>
-                  <TableHead className="text-center">Tài khoản</TableHead>
+                  <TableHead className="text-center">Trạng thái</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableHeaderRow>
               </TableHeader>
@@ -343,7 +343,7 @@ export default function StudentsList({
                 <TableHead>Điểm danh hôm nay</TableHead>
                 <TableHead>Ghi chú</TableHead>
                 <TableHead className="text-center">Trạng thái học</TableHead>
-                <TableHead className="text-center">Tài khoản</TableHead>
+                <TableHead className="text-center">Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableHeaderRow>
             </TableHeader>
