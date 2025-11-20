@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export type GradeRow = {
   enrollment_id: string;
+  class_id: string;
+  class_name: string;
   student_id: string;
   student_name: string;
   phone: string | null;
@@ -40,15 +42,21 @@ export async function getTeacherClassesForGrades(): Promise<
   }
 
   const result: Array<{ id: string; name: string }> = [];
-  (data || []).forEach((row: any) => {
-    const cls = Array.isArray(row.class) ? row.class[0] : row.class;
-    if (cls) {
-      result.push({
-        id: String(cls.id),
-        name: String(cls.name || ""),
-      });
+  (data || []).forEach(
+    (row: {
+      class:
+        | { id: string | number; name: string }
+        | Array<{ id: string | number; name: string }>;
+    }) => {
+      const cls = Array.isArray(row.class) ? row.class[0] : row.class;
+      if (cls) {
+        result.push({
+          id: String(cls.id),
+          name: String(cls.name || ""),
+        });
+      }
     }
-  });
+  );
 
   // Remove duplicates by class ID
   const unique = new Map<string, { id: string; name: string }>();
@@ -64,6 +72,15 @@ export async function getEnrollmentsByClassForGrades(
 ): Promise<GradeRow[]> {
   if (!classId) return [];
   const supabase = await createClient();
+
+  // Lấy thông tin lớp
+  const { data: classData } = await supabase
+    .from("classes")
+    .select("id, name")
+    .eq("id", classId)
+    .single();
+
+  const className = classData?.name ? String(classData.name) : "";
 
   const { data, error } = await supabase
     .from("student_class_enrollments")
@@ -87,22 +104,127 @@ export async function getEnrollmentsByClassForGrades(
 
   const rows: GradeRow[] = [];
 
-  (data || []).forEach((row: any) => {
-    const student = Array.isArray(row.student)
-      ? row.student[0]
-      : row.student;
-    if (!student) return;
+  (data || []).forEach(
+    (row: {
+      id: string | number;
+      student:
+        | { id: string | number; full_name: string; phone: string | null }
+        | Array<{
+            id: string | number;
+            full_name: string;
+            phone: string | null;
+          }>;
+      score_1: number | null;
+      score_2: number | null;
+      score_3: number | null;
+    }) => {
+      const student = Array.isArray(row.student) ? row.student[0] : row.student;
+      if (!student) return;
 
-    rows.push({
-      enrollment_id: String(row.id),
-      student_id: String(student.id),
-      student_name: String(student.full_name || ""),
-      phone: student.phone ? String(student.phone) : null,
-      score_1: row.score_1 ?? null,
-      score_2: row.score_2 ?? null,
-      score_3: row.score_3 ?? null,
-    });
-  });
+      rows.push({
+        enrollment_id: String(row.id),
+        class_id: classId,
+        class_name: className,
+        student_id: String(student.id),
+        student_name: String(student.full_name || ""),
+        phone: student.phone ? String(student.phone) : null,
+        score_1: row.score_1 ?? null,
+        score_2: row.score_2 ?? null,
+        score_3: row.score_3 ?? null,
+      });
+    }
+  );
+
+  return rows;
+}
+
+export async function getAllEnrollmentsForTeacher(): Promise<GradeRow[]> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return [];
+  }
+
+  // Lấy tất cả các lớp của giáo viên
+  const { data: teacherClasses, error: classesError } = await supabase
+    .from("class_teachers")
+    .select("class_id")
+    .eq("teacher_id", user.id);
+
+  if (classesError || !teacherClasses || teacherClasses.length === 0) {
+    return [];
+  }
+
+  const classIds = Array.from(
+    new Set(teacherClasses.map((tc) => String(tc.class_id)))
+  );
+
+  // Lấy tất cả enrollments từ các lớp này
+  const { data, error } = await supabase
+    .from("student_class_enrollments")
+    .select(
+      `
+      id,
+      class_id,
+      class:classes(id, name),
+      student:students(id, full_name, phone),
+      score_1,
+      score_2,
+      score_3
+    `
+    )
+    .in("class_id", classIds)
+    .in("status", ["active", "trial"])
+    .order("class_id", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching all enrollments for teacher:", error);
+    return [];
+  }
+
+  const rows: GradeRow[] = [];
+
+  (data || []).forEach(
+    (row: {
+      id: string | number;
+      class_id: string | number;
+      class:
+        | { id: string | number; name: string }
+        | Array<{ id: string | number; name: string }>;
+      student:
+        | { id: string | number; full_name: string; phone: string | null }
+        | Array<{
+            id: string | number;
+            full_name: string;
+            phone: string | null;
+          }>;
+      score_1: number | null;
+      score_2: number | null;
+      score_3: number | null;
+    }) => {
+      const student = Array.isArray(row.student) ? row.student[0] : row.student;
+      const classData = Array.isArray(row.class) ? row.class[0] : row.class;
+      if (!student || !classData) return;
+
+      rows.push({
+        enrollment_id: String(row.id),
+        class_id: String(row.class_id),
+        class_name: String(classData.name || ""),
+        student_id: String(student.id),
+        student_name: String(student.full_name || ""),
+        phone: student.phone ? String(student.phone) : null,
+        score_1: row.score_1 ?? null,
+        score_2: row.score_2 ?? null,
+        score_3: row.score_3 ?? null,
+      });
+    }
+  );
 
   return rows;
 }
@@ -166,4 +288,3 @@ export async function bulkUpdateScores(
     }
   }
 }
-
