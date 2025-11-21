@@ -14,6 +14,7 @@ const classScheduleSchema = z.object({
 export const createClassSchema = z
   .object({
     name: z.string().min(1, "Vui lòng nhập tên lớp."),
+    subject: z.string().nullable().optional(),
     days_of_week: z.array(classScheduleSchema).optional(),
     duration_minutes: z
       .number()
@@ -71,6 +72,7 @@ export const createClassSchema = z
 export const updateClassSchema = z
   .object({
     name: z.string().min(1, "Vui lòng nhập tên lớp.").optional(),
+    subject: z.string().nullable().optional(),
     days_of_week: z.array(classScheduleSchema).optional(),
     duration_minutes: z
       .number()

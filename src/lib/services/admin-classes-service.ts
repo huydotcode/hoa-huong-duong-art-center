@@ -15,6 +15,7 @@ import {
 } from "@/types";
 import { toArray, normalizeText } from "@/lib/utils";
 import { DAY_ORDER } from "@/lib/constants/schedule";
+import { SUBJECTS } from "@/lib/constants/subjects";
 
 /*
 getClasses(query?, { is_active? }): trả về danh sách lớp có kèm đếm teachers_count, students_count dùng embed class_teachers(count), student_class_enrollments(count), sắp xếp theo tên.
@@ -40,9 +41,23 @@ export async function getClassesCount(
     q = q.ilike("name", `%${sanitizedQuery}%`);
   }
   if (opts?.subject) {
-    const sanitizedSubject = opts.subject.trim().replace(/[%_]/g, "\\$&");
-    if (sanitizedSubject) {
-      q = q.ilike("name", `%${sanitizedSubject}%`);
+    const trimmedSubject = opts.subject.trim();
+    if (trimmedSubject) {
+      // Ưu tiên filter bằng subject field (chính xác hơn)
+      // Fallback về name matching nếu không khớp
+      const normalizedSubject = normalizeText(trimmedSubject);
+      // Check if subject matches one of the known subjects (exact match)
+      const exactSubject = SUBJECTS.find(
+        (s) => normalizeText(s) === normalizedSubject
+      );
+      if (exactSubject) {
+        // Use exact subject field match
+        q = q.eq("subject", exactSubject);
+      } else {
+        // Fallback to name matching for flexible search
+        const sanitizedSubject = trimmedSubject.replace(/[%_]/g, "\\$&");
+        q = q.ilike("name", `%${sanitizedSubject}%`);
+      }
     }
   }
   if (opts?.is_active !== undefined) {
@@ -66,7 +81,6 @@ export async function getClasses(
   const supabase = await createClient();
   const trimmedQuery = query.trim();
   const trimmedSubject = opts?.subject?.trim() ?? "";
-  const hasQuery = trimmedQuery.length > 0;
   const hasSubjectFilter = trimmedSubject.length > 0;
 
   // Use relationship counts via PostgREST embedding
@@ -83,9 +97,21 @@ export async function getClasses(
   if (sanitizedQuery) {
     q = q.ilike("name", `%${sanitizedQuery}%`);
   }
-  const sanitizedSubject = trimmedSubject.replace(/[%_]/g, "\\$&");
-  if (sanitizedSubject) {
-    q = q.ilike("name", `%${sanitizedSubject}%`);
+  if (hasSubjectFilter) {
+    // Ưu tiên filter bằng subject field (chính xác hơn)
+    // Fallback về name matching nếu không khớp
+    const normalizedSubject = normalizeText(trimmedSubject);
+    const exactSubject = SUBJECTS.find(
+      (s) => normalizeText(s) === normalizedSubject
+    );
+    if (exactSubject) {
+      // Use exact subject field match
+      q = q.eq("subject", exactSubject);
+    } else {
+      // Fallback to name matching for flexible search
+      const sanitizedSubject = trimmedSubject.replace(/[%_]/g, "\\$&");
+      q = q.ilike("name", `%${sanitizedSubject}%`);
+    }
   }
 
   if (typeof opts?.limit === "number") {
@@ -528,6 +554,70 @@ export async function getClassStudentsLite(
   return students;
 }
 
+/**
+ * Check if student already has an active enrollment in another class of the same subject
+ */
+async function checkSubjectConflict(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studentId: string,
+  classId: string
+): Promise<{ hasConflict: boolean; conflictingClassName?: string }> {
+  // Get the class to check its subject
+  const { data: targetClass, error: classError } = await supabase
+    .from("classes")
+    .select("id, name, subject")
+    .eq("id", classId)
+    .single();
+
+  if (classError || !targetClass) {
+    return { hasConflict: false };
+  }
+
+  const targetSubject = targetClass.subject;
+
+  // If class has no subject, skip validation (backward compatibility)
+  if (!targetSubject) {
+    return { hasConflict: false };
+  }
+
+  // Find all classes with the same subject
+  const { data: sameSubjectClasses, error: classesError } = await supabase
+    .from("classes")
+    .select("id, name")
+    .eq("subject", targetSubject)
+    .eq("is_active", true)
+    .neq("id", classId); // Exclude the target class
+
+  if (classesError || !sameSubjectClasses || sameSubjectClasses.length === 0) {
+    return { hasConflict: false };
+  }
+
+  const sameSubjectClassIds = sameSubjectClasses.map((c) => c.id);
+
+  // Check if student has active enrollment in any of these classes
+  const { data: existingEnrollments, error: enrollError } = await supabase
+    .from("student_class_enrollments")
+    .select("class_id, classes(name)")
+    .eq("student_id", studentId)
+    .in("class_id", sameSubjectClassIds)
+    .in("status", ["active", "trial"])
+    .is("leave_date", null);
+
+  if (enrollError || !existingEnrollments || existingEnrollments.length === 0) {
+    return { hasConflict: false };
+  }
+
+  // Found conflict
+  const conflictingEnrollment = existingEnrollments[0];
+  const conflictingClass = Array.isArray(conflictingEnrollment.classes)
+    ? conflictingEnrollment.classes[0]
+    : conflictingEnrollment.classes;
+  const conflictingClassName =
+    (conflictingClass as { name?: string } | null)?.name || "lớp khác";
+
+  return { hasConflict: true, conflictingClassName };
+}
+
 export async function enrollStudent(
   classId: string,
   studentId: string,
@@ -546,6 +636,14 @@ export async function enrollStudent(
 
   if (existing) {
     throw new Error("Học sinh đã có trong lớp này");
+  }
+
+  // Check if student already has enrollment in another class of the same subject
+  const conflict = await checkSubjectConflict(supabase, studentId, classId);
+  if (conflict.hasConflict) {
+    throw new Error(
+      `Học sinh đã học lớp ${conflict.conflictingClassName} cùng môn. Mỗi học sinh chỉ được học 1 lớp của 1 môn.`
+    );
   }
 
   const enrollmentDate =
@@ -584,6 +682,31 @@ export async function enrollStudents(
     const existingIds = existing.map((e) => e.student_id);
     const duplicates = studentIds.filter((id) => existingIds.includes(id));
     throw new Error(`Học sinh đã có trong lớp: ${duplicates.length} học sinh`);
+  }
+
+  // Check subject conflicts for all students
+  const conflictChecks = await Promise.all(
+    studentIds.map((studentId) =>
+      checkSubjectConflict(supabase, studentId, classId)
+    )
+  );
+
+  const conflicts = conflictChecks
+    .map((check, index) => (check.hasConflict ? studentIds[index] : null))
+    .filter((id): id is string => id !== null);
+
+  if (conflicts.length > 0) {
+    // Get student names for better error message
+    const { data: students } = await supabase
+      .from("students")
+      .select("id, full_name")
+      .in("id", conflicts);
+
+    const studentNames =
+      students?.map((s) => s.full_name).join(", ") || "học sinh";
+    throw new Error(
+      `${studentNames} đã học lớp khác cùng môn. Mỗi học sinh chỉ được học 1 lớp của 1 môn.`
+    );
   }
 
   const enrollmentDate =
@@ -869,23 +992,39 @@ export async function updateStudentEnrollment(
 }
 
 /**
- * Get classes by subject (matching class name with subject)
+ * Get classes by subject (using subject field, fallback to name matching)
  */
 export async function getClassesBySubject(
   subject: string,
   excludeClassIds?: string[]
 ): Promise<ClassListItem[]> {
   const supabase = await createClient();
-  const normalizedSubject = normalizeText(subject.trim());
+  const trimmedSubject = subject.trim();
+  const normalizedSubject = normalizeText(trimmedSubject);
 
-  // Fetch all active classes
-  const q = supabase
+  // Build query - ưu tiên filter bằng subject field
+  let q = supabase
     .from("classes")
     .select(`*, class_teachers(count), student_class_enrollments(count)`, {
       count: "exact",
     })
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+    .eq("is_active", true);
+
+  // Ưu tiên filter bằng subject field (chính xác hơn)
+  // Fallback về name matching nếu không khớp
+  const exactSubject = SUBJECTS.find(
+    (s) => normalizeText(s) === normalizedSubject
+  );
+  if (exactSubject) {
+    // Use exact subject field match
+    q = q.eq("subject", exactSubject);
+  } else {
+    // Fallback to name matching for flexible search
+    const sanitizedSubject = trimmedSubject.replace(/[%_]/g, "\\$&");
+    q = q.ilike("name", `%${sanitizedSubject}%`);
+  }
+
+  q = q.order("name", { ascending: true });
 
   const { data, error } = await q;
   if (error) throw error;
@@ -906,17 +1045,12 @@ export async function getClassesBySubject(
         : 0,
     })) || [];
 
-  // Filter by subject (diacritic-insensitive)
+  // Filter out excluded class IDs
   const filtered = mapped.filter((item) => {
-    const normalizedName = normalizeText(item.name);
-    const matchesSubject = normalizedName.includes(normalizedSubject);
-
-    // Exclude specified class IDs
     if (excludeClassIds && excludeClassIds.includes(item.id)) {
       return false;
     }
-
-    return matchesSubject;
+    return true;
   });
 
   return filtered;

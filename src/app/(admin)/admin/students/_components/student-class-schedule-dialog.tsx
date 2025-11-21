@@ -42,6 +42,7 @@ type EnrollmentRow = {
     | {
         id: string;
         name: string;
+        subject?: string | null;
         days_of_week: unknown;
         duration_minutes: number;
         is_active: boolean;
@@ -49,6 +50,7 @@ type EnrollmentRow = {
     | Array<{
         id: string;
         name: string;
+        subject?: string | null;
         days_of_week: unknown;
         duration_minutes: number;
         is_active: boolean;
@@ -66,6 +68,7 @@ export function StudentClassScheduleDialog({
       enrollmentId: string;
       classId: string;
       className: string;
+      classSubject?: string | null;
       daysOfWeek: Array<{
         day: number;
         start_time: string;
@@ -94,6 +97,7 @@ export function StudentClassScheduleDialog({
             enrollmentId: e.id,
             classId: e.class_id,
             className: classData?.name || "",
+            classSubject: classData?.subject ?? null,
             daysOfWeek: toArray<{
               day: number;
               start_time: string;
@@ -129,7 +133,7 @@ export function StudentClassScheduleDialog({
         enrollment_date,
         status,
         leave_date,
-        classes(id, name, days_of_week, duration_minutes, is_active)
+        classes(id, name, subject, days_of_week, duration_minutes, is_active)
       `
       )
       .eq("student_id", student.id)
@@ -326,6 +330,7 @@ export function StudentClassScheduleDialog({
             studentId={student.id}
             currentClassId={selectedClassData.classId}
             currentClassName={selectedClassData.className}
+            currentClassSubject={selectedClassData.classSubject}
             currentClassSchedule={selectedClassData.daysOfWeek}
             currentClassDuration={selectedClassData.durationMinutes}
             currentClassStatus={selectedClassData.status}

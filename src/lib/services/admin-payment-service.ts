@@ -76,7 +76,7 @@ export async function getTuitionData(
       leave_date,
       status,
       students(id, full_name, phone, is_active),
-      classes(id, name, monthly_fee, is_active, start_date, end_date)
+      classes(id, name, monthly_fee, is_active, start_date, end_date, subject)
     `
     )
     .in("status", ["active", "trial", "inactive"]);
@@ -136,14 +136,24 @@ export async function getTuitionData(
       if (!nameMatch && !phoneMatch) return false;
     }
 
-    // Filter by subject if provided (check if class name contains subject)
+    // Filter by subject if provided (ưu tiên check subject field, fallback về name)
     if (subject && subject !== "all" && subject.trim()) {
       const normalizedSubject = normalizeText(subject.trim());
-      const normalizedClassName = classData?.name
-        ? normalizeText(classData.name)
-        : "";
-      if (!normalizedClassName.includes(normalizedSubject)) {
-        return false;
+
+      // Ưu tiên check subject field nếu có
+      if (classData?.subject) {
+        const normalizedClassSubject = normalizeText(classData.subject);
+        if (normalizedClassSubject !== normalizedSubject) {
+          return false;
+        }
+      } else {
+        // Fallback về name matching nếu subject field chưa có
+        const normalizedClassName = classData?.name
+          ? normalizeText(classData.name)
+          : "";
+        if (!normalizedClassName.includes(normalizedSubject)) {
+          return false;
+        }
       }
     }
 

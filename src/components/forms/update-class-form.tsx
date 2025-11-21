@@ -42,6 +42,7 @@ import {
 } from "@/lib/validations/class";
 import { type Class } from "@/types";
 import { usePathname, useRouter } from "next/navigation";
+import { SUBJECTS } from "@/lib/constants/subjects";
 
 interface Props {
   classData: Class;
@@ -150,6 +151,7 @@ export function UpdateClassForm({ classData, children }: Props) {
       setDurationMonths(calculatedDuration);
       form.reset({
         name: classData.name,
+        subject: classData.subject ?? null,
         duration_minutes: classData.duration_minutes,
         max_student_count: classData.max_student_count,
         monthly_fee: classData.monthly_fee,
@@ -247,6 +249,37 @@ export function UpdateClassForm({ classData, children }: Props) {
                       <option value="Nhảy" />
                       <option value="Ballet" />
                     </datalist>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Môn học</FormLabel>
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={(value) =>
+                        field.onChange(value === "__none__" ? null : value)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn môn học (tùy chọn)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Không chọn</SelectItem>
+                        {SUBJECTS.map((subject) => (
+                          <SelectItem key={subject} value={subject}>
+                            {subject}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

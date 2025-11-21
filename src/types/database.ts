@@ -58,6 +58,7 @@ export interface Student {
 export interface StudentClassSummary {
   classId: string;
   className: string;
+  subject?: string | null;
   status: EnrollmentStatus;
   leaveDate?: string | null;
   leaveReason?: string | null;
@@ -120,6 +121,7 @@ export interface ClassSchedule {
 export interface Class {
   id: string;
   name: string;
+  subject: string | null;
   days_of_week: ClassSchedule[];
   duration_minutes: number;
   current_student_count: number;
@@ -135,6 +137,7 @@ export interface Class {
 
 export interface CreateClassData {
   name: string;
+  subject?: string | null;
   days_of_week: ClassSchedule[];
   duration_minutes: number;
   max_student_count?: number;
@@ -147,6 +150,7 @@ export interface CreateClassData {
 
 export interface UpdateClassData {
   name?: string;
+  subject?: string | null;
   days_of_week?: ClassSchedule[];
   duration_minutes?: number;
   max_student_count?: number;

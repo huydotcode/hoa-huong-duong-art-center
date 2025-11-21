@@ -35,6 +35,7 @@ interface TransferClassDialogProps {
   studentId: string;
   currentClassId: string;
   currentClassName: string;
+  currentClassSubject?: string | null;
   currentClassSchedule: Array<{
     day: number;
     start_time: string;
@@ -50,6 +51,7 @@ export function TransferClassDialog({
   studentId,
   currentClassId,
   currentClassName,
+  currentClassSubject,
   currentClassSchedule,
   currentClassDuration,
   currentClassStatus,
@@ -74,18 +76,24 @@ export function TransferClassDialog({
   // Load available classes by subject
   useEffect(() => {
     if (open && currentClassId) {
-      // Extract subject from class name
-      const normalizedClassName = normalizeText(currentClassName);
-      const matchingSubject = SUBJECTS.find((subject) =>
-        normalizedClassName.includes(normalizeText(subject))
-      );
+      // Ưu tiên dùng subject từ classData, fallback về extract từ name
+      let matchingSubject: string | undefined;
+
+      if (currentClassSubject) {
+        // Use subject field if available
+        matchingSubject = currentClassSubject;
+      } else {
+        // Fallback: Extract subject from class name
+        const normalizedClassName = normalizeText(currentClassName);
+        matchingSubject = SUBJECTS.find((subject) =>
+          normalizedClassName.includes(normalizeText(subject))
+        );
+      }
 
       if (matchingSubject) {
         getClassesBySubject(matchingSubject, [currentClassId])
           .then(async (data) => {
-            setAvailableClasses(
-              data.map((c) => ({ id: c.id, name: c.name }))
-            );
+            setAvailableClasses(data.map((c) => ({ id: c.id, name: c.name })));
             // Load full details for all available classes
             setLoadingClassesDetails(true);
             try {
@@ -114,7 +122,7 @@ export function TransferClassDialog({
         setFilteredClasses([]);
       }
     }
-  }, [open, currentClassId, currentClassName]);
+  }, [open, currentClassId, currentClassName, currentClassSubject]);
 
   // Filter classes by day and time
   useEffect(() => {
@@ -338,9 +346,8 @@ export function TransferClassDialog({
                             return daysOfWeek
                               .map((slot) => {
                                 const dayLabel =
-                                  DAYS_MAP[
-                                    slot.day as keyof typeof DAYS_MAP
-                                  ]?.short || "";
+                                  DAYS_MAP[slot.day as keyof typeof DAYS_MAP]
+                                    ?.short || "";
                                 const timeRange = slot.end_time
                                   ? `${slot.start_time} - ${slot.end_time}`
                                   : slot.start_time;
@@ -417,4 +424,3 @@ export function TransferClassDialog({
     </Dialog>
   );
 }
-

@@ -78,6 +78,7 @@ export async function getStudents(
       classes (
         id,
         name,
+        subject,
         is_active,
         days_of_week
       )
@@ -156,12 +157,14 @@ export async function getStudents(
       | {
           id?: string;
           name?: string;
+          subject?: string | null;
           is_active?: boolean;
           days_of_week?: unknown;
         }
       | Array<{
           id?: string;
           name?: string;
+          subject?: string | null;
           is_active?: boolean;
           days_of_week?: unknown;
         }>;
@@ -171,7 +174,7 @@ export async function getStudents(
     student_class_enrollments?: RawEnrollment | RawEnrollment[];
   };
 
-  const students = ((data as RawStudent[]) ?? []).map(
+  let students = ((data as RawStudent[]) ?? []).map(
     ({ student_class_enrollments, ...rest }) => {
       const enrollmentsRaw = Array.isArray(student_class_enrollments)
         ? student_class_enrollments
@@ -220,6 +223,7 @@ export async function getStudents(
               class_summary.push({
                 classId: cls?.id ?? enrollment.class_id,
                 className: cls?.name ?? "Lớp chưa đặt tên",
+                subject: cls?.subject ?? null,
                 status: "inactive",
                 leaveDate: leaveDate ?? null,
                 leaveReason: enrollment.leave_reason ?? null,
@@ -252,26 +256,71 @@ export async function getStudents(
         class_summary.push({
           classId: cls?.id ?? enrollment.class_id,
           className: cls?.name ?? "Lớp chưa đặt tên",
+          subject: cls?.subject ?? null,
           status: enrollment.status,
           schedule,
         });
-      }
-
-      let learningStatus: StudentLearningStatus = "no_class";
-      if (hasActiveEnrollment) {
-        learningStatus = "active";
-      } else if (hasTrialEnrollment) {
-        learningStatus = "trial";
-      } else if (hasAnyEnrollment || hasInactiveOrLeft) {
-        learningStatus = "inactive";
       }
 
       // Filter class_summary by subject if filter is active
       let filteredClassSummary = class_summary;
       if (hasSubjectFilter) {
         filteredClassSummary = class_summary.filter((cls) => {
+          // Ưu tiên dùng subject field nếu có
+          if (cls.subject) {
+            const normalizedClassSubject = normalizeText(cls.subject);
+            if (normalizedClassSubject === subjectFilterNormalized) {
+              return true;
+            }
+          }
+          // Fallback về name matching nếu subject chưa có
           const normalizedClassName = normalizeText(cls.className || "");
           return normalizedClassName.includes(subjectFilterNormalized);
+        });
+      }
+
+      // Calculate learningStatus based on filtered classes if subject filter is active
+      let learningStatus: StudentLearningStatus = "no_class";
+      if (hasSubjectFilter) {
+        // Only calculate based on classes in the subject
+        const hasActiveInSubject = filteredClassSummary.some(
+          (cls) => cls.status === "active"
+        );
+        const hasTrialInSubject = filteredClassSummary.some(
+          (cls) => cls.status === "trial"
+        );
+        const hasInactiveInSubject = filteredClassSummary.some(
+          (cls) => cls.status === "inactive"
+        );
+
+        if (hasActiveInSubject) {
+          learningStatus = "active";
+        } else if (hasTrialInSubject) {
+          learningStatus = "trial";
+        } else if (hasInactiveInSubject) {
+          learningStatus = "inactive";
+        } else {
+          learningStatus = "no_class";
+        }
+      } else {
+        // Original logic when no subject filter
+        if (hasActiveEnrollment) {
+          learningStatus = "active";
+        } else if (hasTrialEnrollment) {
+          learningStatus = "trial";
+        } else if (hasAnyEnrollment || hasInactiveOrLeft) {
+          learningStatus = "inactive";
+        }
+      }
+
+      // Recalculate hasSessionToday based on filtered classes if subject filter is active
+      let finalHasSessionToday = hasSessionToday;
+      if (hasSubjectFilter) {
+        finalHasSessionToday = filteredClassSummary.some((cls) => {
+          if (!cls.schedule || cls.schedule.length === 0) return false;
+          return cls.schedule.some(
+            (item) => Number(item.day) === todayDayOfWeek
+          );
         });
       }
 
@@ -279,11 +328,18 @@ export async function getStudents(
         ...rest,
         class_summary: filteredClassSummary,
         first_enrollment_date: firstEnrollmentDate,
-        has_session_today: hasSessionToday,
+        has_session_today: finalHasSessionToday,
         learning_status: learningStatus,
       } as StudentWithClassSummary;
     }
   );
+
+  // Filter out students with no classes in the subject when subject filter is active
+  if (hasSubjectFilter) {
+    students = students.filter(
+      (student) => (student.class_summary?.length ?? 0) > 0
+    );
+  }
 
   if (students.length === 0) {
     return students;
@@ -497,9 +553,14 @@ export async function getStudentsCount(
     return 0;
   }
 
-  // If tuitionStatus filter is applied, we need to load students and calculate tuition_status
-  // to filter correctly, so we use getStudents with a large limit
-  if (opts.tuitionStatus) {
+  const hasSubjectFilter =
+    subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all";
+
+  // If subject filter or tuitionStatus filter is applied, we need to load students
+  // and filter correctly (subject filter removes students with no matching classes,
+  // tuitionStatus filter needs to calculate tuition_status), so we use getStudents
+  // with a large limit
+  if (hasSubjectFilter || opts.tuitionStatus) {
     const allStudents = await getStudents(query, {
       ...opts,
       limit: 10000, // Large limit to get all matching students
@@ -680,9 +741,18 @@ export async function getStudentLearningStats(
     };
   }
 
+  const hasSubjectFilter =
+    subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all";
+  const normalizedSubjectFilter = hasSubjectFilter
+    ? normalizeText(subjectFilter)
+    : null;
+
+  // Load enrollments với class data để có thể filter theo subject
   const { data: enrollments, error: enrollmentError } = await supabase
     .from("student_class_enrollments")
-    .select("student_id,status,leave_date,enrollment_date")
+    .select(
+      "student_id,status,leave_date,enrollment_date,class_id,classes(subject,name)"
+    )
     .in("student_id", studentIds);
   if (enrollmentError) throw enrollmentError;
 
@@ -692,12 +762,36 @@ export async function getStudentLearningStats(
       status: EnrollmentStatus;
       leave_date: string | null;
       enrollment_date: string | null;
+      classSubject?: string | null;
     }>
   >();
 
   (enrollments ?? []).forEach((row) => {
     const studentId = row.student_id as string | null;
     if (!studentId) return;
+
+    // Get class data
+    const classData = Array.isArray(row.classes) ? row.classes[0] : row.classes;
+    const classSubject =
+      (classData as { subject?: string | null } | null)?.subject ?? null;
+
+    // Nếu có subject filter, chỉ thêm enrollment của môn đó
+    if (hasSubjectFilter && normalizedSubjectFilter) {
+      if (classSubject) {
+        const normalizedClassSubject = normalizeText(classSubject);
+        if (normalizedClassSubject !== normalizedSubjectFilter) {
+          return; // Skip enrollment không thuộc môn đang filter
+        }
+      } else {
+        // Fallback: check class name nếu subject chưa có
+        const className = (classData as { name?: string } | null)?.name ?? "";
+        const normalizedClassName = normalizeText(className);
+        if (!normalizedClassName.includes(normalizedSubjectFilter)) {
+          return; // Skip enrollment không thuộc môn đang filter
+        }
+      }
+    }
+
     if (!enrollmentMap.has(studentId)) {
       enrollmentMap.set(studentId, []);
     }
@@ -705,6 +799,7 @@ export async function getStudentLearningStats(
       status: row.status as EnrollmentStatus,
       leave_date: row.leave_date as string | null,
       enrollment_date: row.enrollment_date as string | null,
+      classSubject,
     });
   });
 
@@ -818,7 +913,7 @@ async function getStudentIdsBySubject(
 
   const { data: classes, error: classesError } = await supabase
     .from("classes")
-    .select("id,name,is_active");
+    .select("id, name, subject, is_active");
   if (classesError) throw classesError;
 
   const matchingClassIds =
@@ -826,11 +921,24 @@ async function getStudentIdsBySubject(
       .map((cls) => ({
         id: cls?.id as string | undefined,
         name: (cls as { name?: string }).name ?? "",
+        subject: (cls as { subject?: string | null }).subject ?? null,
       }))
       .filter(
-        (cls): cls is { id: string; name: string } =>
-          Boolean(cls.id) &&
-          normalizeText(cls.name || "").includes(normalizedSubject)
+        (cls): cls is { id: string; name: string; subject: string | null } => {
+          if (!cls.id) return false;
+
+          // Ưu tiên dùng subject field nếu có
+          if (cls.subject) {
+            const normalizedClassSubject = normalizeText(cls.subject);
+            if (normalizedClassSubject === normalizedSubject) {
+              return true;
+            }
+          }
+
+          // Fallback về name matching
+          const normalizedClassName = normalizeText(cls.name || "");
+          return normalizedClassName.includes(normalizedSubject);
+        }
       )
       .map((cls) => cls.id) ?? [];
 

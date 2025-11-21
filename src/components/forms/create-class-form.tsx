@@ -23,6 +23,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -34,6 +41,7 @@ import {
   type CreateClassSchema,
 } from "@/lib/validations/class";
 import { formatCurrencyVNDots } from "@/lib/utils";
+import { SUBJECTS } from "@/lib/constants/subjects";
 
 interface Props {
   children: React.ReactNode;
@@ -51,6 +59,7 @@ export function CreateClassForm({ children }: Props) {
     resolver: zodResolver(createClassSchema),
     defaultValues: {
       name: "",
+      subject: null,
       days_of_week: [],
       duration_minutes: 90,
       max_student_count: 20,
@@ -206,6 +215,37 @@ export function CreateClassForm({ children }: Props) {
                       <option value="Nhảy" />
                       <option value="Ballet" />
                     </datalist>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Môn học</FormLabel>
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={(value) =>
+                        field.onChange(value === "__none__" ? null : value)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn môn học (tùy chọn)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Không chọn</SelectItem>
+                        {SUBJECTS.map((subject) => (
+                          <SelectItem key={subject} value={subject}>
+                            {subject}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
