@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import {
   getAdminClassesInSession,
   getAdminAllClassesInDay,
@@ -70,8 +72,11 @@ export default async function AdminAttendancePage({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold sm:text-3xl">Điểm danh</h1>
+        <Button variant="secondary" asChild>
+          <Link href="/admin/attendance/monthly">Thống kê tháng</Link>
+        </Button>
       </div>
       <AdminAttendanceClient
         dateISO={dateISO}

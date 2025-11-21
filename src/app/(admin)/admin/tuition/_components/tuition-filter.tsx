@@ -596,66 +596,70 @@ export default function TuitionFilter({
           )}
         </div>
 
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="default"
-              className="w-full md:w-auto"
-              disabled={isPending || isSyncing || viewModeState === "year"}
-            >
-              Tạo học phí tự động
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Xác nhận tạo học phí tự động</AlertDialogTitle>
-              <AlertDialogDescription>
-                Hệ thống sẽ tự động tạo học phí cho tất cả học sinh đang học
-                trong tháng {monthState}/{yearState} chưa có học phí.
-                <br />
-                <br />
-                <strong>Lưu ý:</strong> Chỉ tạo học phí cho học sinh đang học,
-                còn học sinh đang học thử sẽ không tạo tự động.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isSyncing}>Hủy</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleSyncTuition}
-                disabled={isSyncing}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="default"
+                className="w-full md:w-auto"
+                disabled={isPending || isSyncing || viewModeState === "year"}
               >
-                {isSyncing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang tạo...
-                  </>
-                ) : (
-                  "Xác nhận"
-                )}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                Tạo học phí tự động
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Xác nhận tạo học phí tự động
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Hệ thống sẽ tự động tạo học phí cho tất cả học sinh đang học
+                  trong tháng {monthState}/{yearState} chưa có học phí.
+                  <br />
+                  <br />
+                  <strong>Lưu ý:</strong> Chỉ tạo học phí cho học sinh đang học,
+                  còn học sinh đang học thử sẽ không tạo tự động.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isSyncing}>Hủy</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleSyncTuition}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang tạo...
+                    </>
+                  ) : (
+                    "Xác nhận"
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full md:w-auto"
-          onClick={handleExport}
-          disabled={isExporting}
-        >
-          {isExporting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Đang xuất...
-            </>
-          ) : (
-            <>
-              <Download className="mr-2 h-4 w-4" />
-              Xuất Excel
-            </>
-          )}
-        </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full md:w-auto"
+            onClick={handleExport}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Đang xuất...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Xuất Excel
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

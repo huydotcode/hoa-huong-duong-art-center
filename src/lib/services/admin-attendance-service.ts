@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import type { EnrollmentStatus } from "@/types/database";
 
 export type AdminClassSession = {
   classId: string;
@@ -376,4 +377,351 @@ export async function getAttendanceStateForSessions(
   }
 
   return { states, notes };
+}
+
+
+export type MonthlyAttendanceStudent = {
+  id: string;
+  fullName: string;
+  status: EnrollmentStatus;
+};
+
+export type MonthlyAttendanceSession = {
+  id: string;
+  date: string;
+  sessionTime: string;
+  endTime?: string;
+  weekday: number;
+};
+
+export type MonthlyAttendanceClassMatrix = {
+  classId: string;
+  className: string;
+  teacherNames: string[];
+  sessions: MonthlyAttendanceSession[];
+  students: MonthlyAttendanceStudent[];
+};
+
+type MonthlyAttendanceCell = {
+  isPresent: boolean | null;
+  notes: string | null;
+};
+
+export type MonthlyAttendanceMeta = {
+  month: number;
+  year: number;
+  totalClasses: number;
+  totalSessions: number;
+  totalStudents: number;
+  presentCount: number;
+  absentCount: number;
+};
+
+export type MonthlyAttendanceMatrixResult = {
+  classes: MonthlyAttendanceClassMatrix[];
+  attendanceMap: Record<string, MonthlyAttendanceCell>;
+  meta: MonthlyAttendanceMeta;
+};
+
+function toISODate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function parseDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const iso = `${value}T00:00:00.000Z`;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function computeEndTime(
+  startTime: string,
+  endTime: string | undefined,
+  durationMinutes: number | null | undefined
+): string {
+  if (endTime) {
+    return endTime;
+  }
+  const [hour, minute] = startTime.split(":").map(Number);
+  const totalMinutes = (hour || 0) * 60 + (minute || 0) + (durationMinutes || 60);
+  const endHour = Math.floor(totalMinutes / 60) % 24;
+  const endMinute = totalMinutes % 60;
+  return `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+}
+
+function buildSessionsForClass(
+  monthStart: Date,
+  monthEnd: Date,
+  classInfo: {
+    id: string;
+    startDate: Date | null;
+    endDate: Date | null;
+    durationMinutes: number | null;
+    schedules: { day?: number; start_time?: string; end_time?: string }[];
+  }
+): MonthlyAttendanceSession[] {
+  const sessions: MonthlyAttendanceSession[] = [];
+  if (classInfo.schedules.length === 0) {
+    return sessions;
+  }
+  const classStart = classInfo.startDate ?? monthStart;
+  const classEnd = classInfo.endDate ?? monthEnd;
+  let cursor = new Date(monthStart.getTime());
+  while (cursor.getTime() <= monthEnd.getTime()) {
+    const dateISO = toISODate(cursor);
+    if (cursor.getTime() >= classStart.getTime() && cursor.getTime() <= classEnd.getTime()) {
+      const weekday = cursor.getUTCDay();
+      classInfo.schedules.forEach((schedule) => {
+        if (Number(schedule.day) === weekday && schedule.start_time) {
+          const sessionTime = schedule.start_time;
+          const sessionId = `${dateISO}@@${sessionTime}`;
+          sessions.push({
+            id: sessionId,
+            date: dateISO,
+            sessionTime,
+            endTime: computeEndTime(
+              sessionTime,
+              schedule.end_time,
+              classInfo.durationMinutes
+            ),
+            weekday,
+          });
+        }
+      });
+    }
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+  }
+  sessions.sort((a, b) => {
+    if (a.date === b.date) {
+      return a.sessionTime.localeCompare(b.sessionTime);
+    }
+    return a.date.localeCompare(b.date);
+  });
+  return sessions;
+}
+
+export async function getMonthlyAttendanceMatrix({
+  month,
+  year,
+  classIds,
+}: {
+  month: number;
+  year: number;
+  classIds?: string[];
+}): Promise<MonthlyAttendanceMatrixResult> {
+  const supabase = await createClient();
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 0));
+  const monthStartISO = toISODate(monthStart);
+  const monthEndISO = toISODate(monthEnd);
+
+  let classQuery = supabase
+    .from("classes")
+    .select("id, name, start_date, end_date, duration_minutes, days_of_week")
+    .eq("is_active", true);
+
+  if (classIds && classIds.length > 0) {
+    classQuery = classQuery.in("id", classIds);
+  }
+
+  const { data: classesData } = await classQuery;
+
+  const normalizedClasses = (Array.isArray(classesData)
+    ? (classesData as {
+        id: string;
+        name: string;
+        start_date: string | null;
+        end_date: string | null;
+        duration_minutes: number | null;
+        days_of_week: unknown;
+      }[])
+    : []
+  ).map((item) => {
+    let schedules: { day?: number; start_time?: string; end_time?: string }[] = [];
+    try {
+      const raw = Array.isArray(item.days_of_week)
+        ? item.days_of_week
+        : JSON.parse((item.days_of_week as string) || "[]");
+      schedules = Array.isArray(raw)
+        ? (raw as { day?: number; start_time?: string; end_time?: string }[])
+        : [];
+    } catch {
+      schedules = [];
+    }
+    return {
+      id: String(item.id),
+      name: String(item.name || ""),
+      startDate: parseDate(item.start_date),
+      endDate: parseDate(item.end_date),
+      durationMinutes: item.duration_minutes,
+      schedules,
+    };
+  });
+
+  if (normalizedClasses.length === 0) {
+    return {
+      classes: [],
+      attendanceMap: {},
+      meta: {
+        month,
+        year,
+        totalClasses: 0,
+        totalSessions: 0,
+        totalStudents: 0,
+        presentCount: 0,
+        absentCount: 0,
+      },
+    };
+  }
+
+  const classIdList = normalizedClasses.map((cls) => cls.id);
+
+  const [teachersResult, enrollmentsResult, attendanceResult] = await Promise.all([
+    supabase
+      .from("class_teachers")
+      .select("class_id, teacher:teachers(id, full_name)")
+      .in("class_id", classIdList),
+    supabase
+      .from("student_class_enrollments")
+      .select("class_id, status, student:students(id, full_name)")
+      .in("class_id", classIdList)
+      .in("status", ["active", "trial"]),
+    supabase
+      .from("attendance")
+      .select(
+        "class_id, student_id, attendance_date, session_time, is_present, notes"
+      )
+      .gte("attendance_date", monthStartISO)
+      .lte("attendance_date", monthEndISO)
+      .in("class_id", classIdList),
+  ]);
+
+  const teacherNamesByClass = new Map<string, string[]>();
+  (Array.isArray(teachersResult?.data)
+    ? (teachersResult.data as {
+        class_id: string;
+        teacher:
+          | { id: string; full_name: string }
+          | { id: string; full_name: string }[]
+          | null;
+      }[])
+    : []
+  ).forEach((row) => {
+    const classId = String(row.class_id);
+    const teacherField = row.teacher;
+    const names: string[] = [];
+    if (Array.isArray(teacherField)) {
+      teacherField.forEach((teacher) => {
+        if (teacher) {
+          names.push(String(teacher.full_name || ""));
+        }
+      });
+    } else if (teacherField) {
+      names.push(String(teacherField.full_name || ""));
+    }
+    if (names.length > 0) {
+      const existing = teacherNamesByClass.get(classId) || [];
+      teacherNamesByClass.set(classId, Array.from(new Set([...existing, ...names])));
+    }
+  });
+
+  const studentsByClass = new Map<string, MonthlyAttendanceStudent[]>();
+  (Array.isArray(enrollmentsResult?.data)
+    ? (enrollmentsResult.data as {
+        class_id: string;
+        status: EnrollmentStatus;
+        student:
+          | { id: string; full_name: string }
+          | { id: string; full_name: string }[]
+          | null;
+      }[])
+    : []
+  ).forEach((row) => {
+    const classId = String(row.class_id);
+    const studentField = row.student;
+    const pushStudent = (student: { id: string; full_name: string } | null) => {
+      if (!student) return;
+      const entry: MonthlyAttendanceStudent = {
+        id: String(student.id),
+        fullName: String(student.full_name || ""),
+        status: row.status,
+      };
+      const existing = studentsByClass.get(classId) || [];
+      existing.push(entry);
+      studentsByClass.set(classId, existing);
+    };
+    if (Array.isArray(studentField)) {
+      studentField.forEach((st) => pushStudent(st));
+    } else {
+      pushStudent(studentField);
+    }
+  });
+
+  const attendanceMap: Record<string, MonthlyAttendanceCell> = {};
+  (Array.isArray(attendanceResult?.data)
+    ? (attendanceResult.data as {
+        class_id: string | number | null;
+        student_id: string | number | null;
+        attendance_date: string | null;
+        session_time: string | null;
+        is_present: boolean | null;
+        notes: string | null;
+      }[])
+    : []
+  ).forEach((row) => {
+    if (!row.class_id || !row.student_id || !row.attendance_date || !row.session_time) {
+      return;
+    }
+    const classId = String(row.class_id);
+    const studentId = String(row.student_id);
+    const sessionKey = `${row.attendance_date}@@${row.session_time}`;
+    const key = `${classId}||${studentId}||${sessionKey}`;
+    attendanceMap[key] = {
+      isPresent:
+        typeof row.is_present === "boolean" ? Boolean(row.is_present) : null,
+      notes: row.notes ? String(row.notes) : null,
+    };
+  });
+
+  const classes: MonthlyAttendanceClassMatrix[] = normalizedClasses
+    .map((cls) => {
+      const sessions = buildSessionsForClass(monthStart, monthEnd, {
+        id: cls.id,
+        startDate: cls.startDate,
+        endDate: cls.endDate,
+        durationMinutes: cls.durationMinutes,
+        schedules: cls.schedules,
+      });
+      const students = (studentsByClass.get(cls.id) || []).sort((a, b) =>
+        a.fullName.localeCompare(b.fullName, "vi", { sensitivity: "base" })
+      );
+      return {
+        classId: cls.id,
+        className: cls.name || "Lớp chưa đặt tên",
+        teacherNames: teacherNamesByClass.get(cls.id) || [],
+        sessions,
+        students,
+      };
+    })
+    .filter((cls) => cls.sessions.length > 0 && cls.students.length > 0);
+
+  const meta = {
+    month,
+    year,
+    totalClasses: classes.length,
+    totalSessions: classes.reduce((count, cls) => count + cls.sessions.length, 0),
+    totalStudents: classes.reduce((count, cls) => count + cls.students.length, 0),
+    presentCount: Object.values(attendanceMap).filter(
+      (cell) => cell.isPresent === true
+    ).length,
+    absentCount: Object.values(attendanceMap).filter(
+      (cell) => cell.isPresent === false
+    ).length,
+  } satisfies MonthlyAttendanceMeta;
+
+  return {
+    classes,
+    attendanceMap,
+    meta,
+  };
 }
