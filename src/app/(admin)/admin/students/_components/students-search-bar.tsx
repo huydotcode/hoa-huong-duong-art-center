@@ -27,11 +27,13 @@ export default function StudentsSearchBar() {
   const subject = searchParams.get("subject") || "";
   const learningStatus = searchParams.get("learningStatus") || "";
   const recent = searchParams.get("recent") === "true";
+  const tuitionStatus = searchParams.get("tuitionStatus") || "";
   const activeFilterCount = [
     q.trim(),
     subject,
     learningStatus,
     recent ? "1" : "",
+    tuitionStatus,
   ].filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
 
@@ -66,6 +68,7 @@ export default function StudentsSearchBar() {
       params.delete("subject");
       params.delete("learningStatus");
       params.delete("recent");
+      params.delete("tuitionStatus");
     });
   };
 
@@ -85,6 +88,17 @@ export default function StudentsSearchBar() {
         params.set("learningStatus", value);
       } else {
         params.delete("learningStatus");
+      }
+    });
+    setIsFilterOpen(false);
+  };
+
+  const handleTuitionStatusSelect = (value: string) => {
+    updateSearchParams((params) => {
+      if (value) {
+        params.set("tuitionStatus", value);
+      } else {
+        params.delete("tuitionStatus");
       }
     });
     setIsFilterOpen(false);
@@ -151,6 +165,61 @@ export default function StudentsSearchBar() {
                     className={cn(
                       "w-full rounded border px-3 py-2 text-left text-sm transition",
                       option.value === learningStatus
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/60 hover:border-primary"
+                    )}
+                  >
+                    <p className="font-medium">{option.label}</p>
+                    {option.description && (
+                      <p className="text-xs text-muted-foreground">
+                        {option.description}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">Trạng thái học phí</p>
+                {tuitionStatus && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handleTuitionStatusSelect("")}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Xóa
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                {[
+                  {
+                    value: "",
+                    label: "Tất cả trạng thái",
+                    description: "Bao gồm mọi trạng thái học phí",
+                  },
+                  {
+                    value: "paid_or_partial",
+                    label: "Đã đóng (gồm một phần)",
+                    description: "Đã đóng hoặc đóng một phần học phí",
+                  },
+                  {
+                    value: "unpaid_or_not_created",
+                    label: "Chưa đóng",
+                    description: "Chưa đóng hoặc chưa tạo học phí",
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.value || "all-tuition"}
+                    type="button"
+                    onClick={() => handleTuitionStatusSelect(option.value)}
+                    className={cn(
+                      "w-full rounded border px-3 py-2 text-left text-sm transition",
+                      option.value === tuitionStatus
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-muted/60 hover:border-primary"
                     )}

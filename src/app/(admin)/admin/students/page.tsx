@@ -13,6 +13,7 @@ interface SearchProps {
     subject?: string;
     learningStatus?: string;
     recent?: string;
+    tuitionStatus?: string;
   }>;
 }
 
@@ -22,6 +23,11 @@ export default async function StudentsPage(props: SearchProps) {
   const subject = searchParams?.subject?.trim() || "";
   const learningStatus = searchParams?.learningStatus?.trim() || "";
   const recent = searchParams?.recent === "true";
+  const tuitionStatus =
+    (searchParams?.tuitionStatus?.trim() as
+      | "paid_or_partial"
+      | "unpaid_or_not_created"
+      | undefined) || undefined;
 
   const [initialData, totalCount, learningStats] = await Promise.all([
     getStudents(q, {
@@ -30,23 +36,31 @@ export default async function StudentsPage(props: SearchProps) {
       subject,
       learningStatus,
       recentOnly: recent,
+      tuitionStatus,
     }),
-    getStudentsCount(q, { subject, learningStatus, recentOnly: recent }),
+    getStudentsCount(q, {
+      subject,
+      learningStatus,
+      recentOnly: recent,
+      tuitionStatus,
+    }),
     getStudentLearningStats(q, {
       subject,
       learningStatus,
       recentOnly: recent,
+      tuitionStatus,
     }),
   ]);
 
   return (
     <StudentsList
-      key={`${q}-${subject}-${learningStatus}-${recent}`}
+      key={`${q}-${subject}-${learningStatus}-${recent}-${tuitionStatus || ""}`}
       initialData={initialData}
       query={q}
       subject={subject}
       learningStatus={learningStatus}
       recentOnly={recent}
+      tuitionStatus={tuitionStatus}
       totalCount={totalCount}
       pageSize={STUDENTS_PAGE_SIZE}
       learningStats={learningStats}

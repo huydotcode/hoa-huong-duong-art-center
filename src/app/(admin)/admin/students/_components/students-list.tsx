@@ -33,6 +33,7 @@ interface StudentsListProps {
   subject?: string;
   learningStatus?: string;
   recentOnly?: boolean;
+  tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created";
   totalCount: number;
   pageSize: number;
   learningStats?: StudentLearningStatsSummary;
@@ -44,6 +45,7 @@ export default function StudentsList({
   subject = "",
   learningStatus = "",
   recentOnly = false,
+  tuitionStatus,
   totalCount,
   pageSize,
   learningStats,
@@ -64,6 +66,10 @@ export default function StudentsList({
     [normalizedLearningStatus]
   );
   const hasRecentFilter = recentOnly;
+  const hasTuitionStatusFilter = useMemo(
+    () => Boolean(tuitionStatus),
+    [tuitionStatus]
+  );
   const learningStatusLabel = useMemo(() => {
     if (!hasLearningStatusFilter) return "";
     return (
@@ -72,6 +78,12 @@ export default function StudentsList({
       )?.label ?? learningStatus
     );
   }, [hasLearningStatusFilter, learningStatus, normalizedLearningStatus]);
+  const tuitionStatusLabel = useMemo(() => {
+    if (!hasTuitionStatusFilter) return "";
+    return tuitionStatus === "paid_or_partial"
+      ? "Đã đóng (gồm một phần)"
+      : "Chưa đóng";
+  }, [hasTuitionStatusFilter, tuitionStatus]);
   const displayedCount = allData.length;
   const hasMore = estimatedTotal > displayedCount;
 
@@ -93,7 +105,8 @@ export default function StudentsList({
       const shouldSkipOptimistic =
         hasSubjectFilter ||
         (hasLearningStatusFilter && normalizedLearningStatus !== "no_class") ||
-        hasRecentFilter;
+        hasRecentFilter ||
+        hasTuitionStatusFilter;
       if (shouldSkipOptimistic) {
         return;
       }
@@ -160,6 +173,7 @@ export default function StudentsList({
           subject,
           learningStatus: normalizedLearningStatus,
           recentOnly,
+          tuitionStatus,
         })) as StudentWithClassSummary[];
         setAllData(allStudents);
         setEstimatedTotal(allStudents.length);
@@ -175,10 +189,14 @@ export default function StudentsList({
     subject,
     normalizedLearningStatus,
     recentOnly,
+    tuitionStatus,
   ]);
 
   const filterSummary =
-    hasQuery || hasLearningStatusFilter || hasRecentFilter ? (
+    hasQuery ||
+    hasLearningStatusFilter ||
+    hasRecentFilter ||
+    hasTuitionStatusFilter ? (
       <p className="px-3 pb-2 text-sm text-muted-foreground space-x-2">
         {hasQuery && (
           <span>
@@ -193,6 +211,14 @@ export default function StudentsList({
             Trạng thái học:{" "}
             <span className="font-medium text-foreground">
               {learningStatusLabel}
+            </span>
+          </span>
+        )}
+        {hasTuitionStatusFilter && (
+          <span>
+            Học phí:{" "}
+            <span className="font-medium text-foreground">
+              {tuitionStatusLabel}
             </span>
           </span>
         )}

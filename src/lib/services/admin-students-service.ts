@@ -35,6 +35,7 @@ export async function getStudents(
     subject?: string;
     learningStatus?: StudentLearningStatus | string | null;
     recentOnly?: boolean;
+    tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created" | null;
   } = {}
 ): Promise<StudentWithClassSummary[]> {
   const supabase = await createClient();
@@ -114,11 +115,17 @@ export async function getStudents(
     return [];
   }
 
+  // If tuitionStatus filter is applied, we need to load all matching students first,
+  // then filter by tuition_status, then apply pagination
+  const hasTuitionStatusFilter = Boolean(opts.tuitionStatus);
+  const effectiveLimit = hasTuitionStatusFilter ? 10000 : limit;
+  const effectiveOffset = hasTuitionStatusFilter ? 0 : offset;
+
   let request = supabase
     .from("students")
     .select(selectColumns)
     .order("full_name", { ascending: true })
-    .range(offset, offset + limit - 1);
+    .range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
 
   if (idsToFilter) {
     request = request.in("id", idsToFilter);
@@ -364,7 +371,27 @@ export async function getStudents(
     student.attendance_today_status = attendanceStatus;
   });
 
-  return students;
+  // Filter by tuition status if specified
+  const tuitionStatusFilter = opts.tuitionStatus;
+  let filteredStudents = students;
+  if (tuitionStatusFilter === "paid_or_partial") {
+    filteredStudents = students.filter(
+      (s) => s.tuition_status === "paid" || s.tuition_status === "partial"
+    );
+  } else if (tuitionStatusFilter === "unpaid_or_not_created") {
+    filteredStudents = students.filter(
+      (s) => s.tuition_status === "unpaid" || s.tuition_status === "not_created"
+    );
+  }
+
+  // Apply pagination after filtering if tuitionStatus filter was applied
+  if (hasTuitionStatusFilter) {
+    const start = offset;
+    const end = offset + limit;
+    return filteredStudents.slice(start, end);
+  }
+
+  return filteredStudents;
 }
 
 // Add function to get total count (for pagination)
@@ -374,6 +401,7 @@ export async function getStudentsCount(
     subject?: string;
     learningStatus?: StudentLearningStatus | string | null;
     recentOnly?: boolean;
+    tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created" | null;
   } = {}
 ): Promise<number> {
   const supabase = await createClient();
@@ -423,6 +451,17 @@ export async function getStudentsCount(
     return 0;
   }
 
+  // If tuitionStatus filter is applied, we need to load students and calculate tuition_status
+  // to filter correctly, so we use getStudents with a large limit
+  if (opts.tuitionStatus) {
+    const allStudents = await getStudents(query, {
+      ...opts,
+      limit: 10000, // Large limit to get all matching students
+      offset: 0,
+    });
+    return allStudents.length;
+  }
+
   let request = supabase
     .from("students")
     .select("*", { count: "exact", head: true });
@@ -450,6 +489,7 @@ export async function getStudentLearningStats(
     subject?: string;
     learningStatus?: StudentLearningStatus | string | null;
     recentOnly?: boolean;
+    tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created" | null;
   } = {}
 ): Promise<StudentLearningStatsSummary> {
   const supabase = await createClient();
@@ -503,6 +543,62 @@ export async function getStudentLearningStats(
       noClass: 0,
       recent: 0,
     };
+  }
+
+  // If tuitionStatus filter is applied, we need to load students and calculate tuition_status
+  // to filter correctly, so we use getStudents with a large limit
+  if (opts.tuitionStatus) {
+    const allStudents = await getStudents(query, {
+      ...opts,
+      limit: 10000, // Large limit to get all matching students
+      offset: 0,
+    });
+    // Calculate stats from filtered students
+    const stats: StudentLearningStatsSummary = {
+      active: 0,
+      trial: 0,
+      inactive: 0,
+      noClass: 0,
+      recent: 0,
+    };
+    const now = new Date();
+    allStudents.forEach((student) => {
+      const learningStatus = student.learning_status;
+      if (learningStatus) {
+        switch (learningStatus) {
+          case "active":
+            stats.active += 1;
+            break;
+          case "trial":
+            stats.trial += 1;
+            break;
+          case "inactive":
+            stats.inactive += 1;
+            break;
+          default:
+            stats.noClass += 1;
+            break;
+        }
+      } else {
+        stats.noClass += 1;
+      }
+      // Check if recent
+      if (student.created_at && isNewStudent(student.created_at)) {
+        stats.recent += 1;
+      } else if (student.first_enrollment_date) {
+        const enrollmentDate = new Date(student.first_enrollment_date);
+        const diff = now.getTime() - enrollmentDate.getTime();
+        const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+        if (
+          !isNaN(enrollmentDate.getTime()) &&
+          diff >= 0 &&
+          diff <= THIRTY_DAYS_MS
+        ) {
+          stats.recent += 1;
+        }
+      }
+    });
+    return stats;
   }
 
   let studentQuery = supabase.from("students").select("id, created_at");
