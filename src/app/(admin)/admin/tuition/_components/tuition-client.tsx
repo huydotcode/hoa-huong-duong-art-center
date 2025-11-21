@@ -40,6 +40,7 @@ interface TuitionClientProps {
   initialLearningStatus?: "all" | "enrolled" | "active" | "trial" | "inactive";
   initialSummary: TuitionSummary;
   classes: Array<{ id: string; name: string }>;
+  viewMode: "month" | "year";
 }
 
 export default function TuitionClient({
@@ -53,6 +54,7 @@ export default function TuitionClient({
   initialLearningStatus,
   initialSummary,
   classes,
+  viewMode,
 }: TuitionClientProps) {
   const [selectedPayment, setSelectedPayment] = useState<TuitionItem | null>(
     null
@@ -68,6 +70,7 @@ export default function TuitionClient({
   const [isCancelingPayment, setIsCancelingPayment] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const isYearView = viewMode === "year";
 
   // Sync local state với initialTuitionData khi props thay đổi (sau khi refresh)
   useEffect(() => {
@@ -94,14 +97,20 @@ export default function TuitionClient({
     });
 
     return sortedGroups.map(([key, items]) => {
+      const sortedItems = [...items].sort((a, b) => {
+        if (isYearView && a.month !== b.month) {
+          return a.month - b.month;
+        }
+        return a.studentName.localeCompare(b.studentName);
+      });
       const [, className] = key.split("::");
       return {
         classId: items[0].classId,
         className,
-        items: items.sort((a, b) => a.studentName.localeCompare(b.studentName)),
+        items: sortedItems,
       };
     });
-  }, [tuitionData]);
+  }, [tuitionData, isYearView]);
 
   const handleCreatePayment = (item: TuitionItem) => {
     setSelectedPayment(item);
@@ -156,9 +165,10 @@ export default function TuitionClient({
     // Nếu đang đóng (chưa đóng → đã đóng), toggle ngay
     if (!item.isPaid) {
       try {
+        const targetMonth = isYearView ? item.month : initialMonth;
         const updatedItem = await togglePaymentStatus(
           item,
-          initialMonth,
+          targetMonth,
           initialYear,
           pathname
         );
@@ -186,9 +196,12 @@ export default function TuitionClient({
 
     setIsCancelingPayment(true);
     try {
+      const targetMonth = isYearView
+        ? cancelPaymentDialog.item.month
+        : initialMonth;
       const updatedItem = await togglePaymentStatus(
         cancelPaymentDialog.item,
-        initialMonth,
+        targetMonth,
         initialYear,
         pathname
       );
@@ -272,13 +285,14 @@ export default function TuitionClient({
         onRefreshEnd={() => {
           setTimeout(() => setIsRefreshing(false), 1000);
         }}
+        viewMode={viewMode}
       />
 
       <PaymentForm
         payment={selectedPayment}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        month={initialMonth}
+        month={selectedPayment?.month ?? initialMonth}
         year={initialYear}
         onSuccess={handleCloseDialog}
         onPaymentUpdate={handlePaymentUpdate}
@@ -348,6 +362,7 @@ export default function TuitionClient({
                   onActivateTrial={handleActivateTrial}
                   className={group.className}
                   showClassHeader={true}
+                  showMonthColumn={isYearView}
                 />
               </Card>
             ))}
@@ -380,6 +395,7 @@ export default function TuitionClient({
                   onEditPayment={handleEditPayment}
                   onTogglePayment={handleTogglePayment}
                   onActivateTrial={handleActivateTrial}
+                  showMonthBadge={isYearView}
                 />
               </Card>
             ))}

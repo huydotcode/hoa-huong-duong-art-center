@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { DAYS_MAP, type DayOfWeek } from "@/lib/constants/schedule";
+import { TuitionItem, TuitionSummary } from "./services/admin-payment-service";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -221,4 +222,22 @@ export function isNewStudent(createdAt: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function calculateTuitionSummary(
+  tuitionData: TuitionItem[]
+): TuitionSummary {
+  return tuitionData.reduce<TuitionSummary>(
+    (acc, item) => {
+      if (item.paymentStatusId === null) {
+        acc.totalNotCreated += 1;
+      } else if (item.isPaid === true) {
+        acc.totalPaid += item.amount || item.monthlyFee;
+      } else {
+        acc.totalUnpaid += item.amount || item.monthlyFee;
+      }
+      return acc;
+    },
+    { totalPaid: 0, totalUnpaid: 0, totalNotCreated: 0 }
+  );
 }

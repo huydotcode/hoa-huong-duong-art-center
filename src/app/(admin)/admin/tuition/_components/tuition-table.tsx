@@ -28,6 +28,7 @@ interface TuitionTableProps {
   onActivateTrial?: (item: TuitionItem) => Promise<void>;
   className?: string; // Tên lớp (optional, để hiển thị trong header)
   showClassHeader?: boolean; // Có hiển thị header với tên lớp không
+  showMonthColumn?: boolean;
 }
 
 export default function TuitionTable({
@@ -38,6 +39,7 @@ export default function TuitionTable({
   onActivateTrial,
   className,
   showClassHeader = false,
+  showMonthColumn = false,
 }: TuitionTableProps) {
   const getStatusBadge = (item: TuitionItem) => {
     if (item.paymentStatusId === null) {
@@ -119,6 +121,7 @@ export default function TuitionTable({
           <TableHeader>
             <TableHeaderRow>
               <TableHead>Tên học sinh</TableHead>
+              {showMonthColumn && <TableHead>Tháng</TableHead>}
               <TableHead>Trạng thái học</TableHead>
               {/* Bỏ cột "Lớp" vì đã có header */}
               <TableHead className="text-right">Học phí</TableHead>
@@ -180,11 +183,16 @@ export default function TuitionTable({
 
                 return (
                   <TableRow
-                    key={`${item.studentId}-${item.classId}-${item.enrollmentId}`}
+                    key={`${item.studentId}-${item.classId}-${item.enrollmentId}-${item.month}`}
                   >
                     <TableCell className="font-medium">
                       {item.studentName}
                     </TableCell>
+                    {showMonthColumn && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        Tháng {item.month}
+                      </TableCell>
+                    )}
                     <TableCell>{getEnrollmentStatusBadge()}</TableCell>
                     <TableCell className="text-right font-semibold">
                       {formatVND(item.monthlyFee)}

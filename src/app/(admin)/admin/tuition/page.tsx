@@ -1,9 +1,11 @@
 import {
   getTuitionData,
   getTuitionSummary,
+  getTuitionDataForYear,
 } from "@/lib/services/admin-payment-service";
 import { getClasses } from "@/lib/services/admin-classes-service";
 import TuitionClient from "./_components/tuition-client";
+import { calculateTuitionSummary } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,7 @@ interface SearchProps {
     status?: string;
     subject?: string;
     learningStatus?: string;
+    view?: string;
   }>;
 }
 
@@ -37,6 +40,8 @@ export default async function TuitionPage(props: SearchProps) {
       | "trial"
       | "inactive") || "enrolled";
 
+  const viewMode = searchParams?.view === "year" ? "year" : "month";
+
   // Default to current month/year if not provided
   const now = new Date();
   const month = monthParam ? parseInt(monthParam, 10) : now.getMonth() + 1;
@@ -46,9 +51,21 @@ export default async function TuitionPage(props: SearchProps) {
   const validMonth = month >= 1 && month <= 12 ? month : now.getMonth() + 1;
   const validYear = year >= 2020 && year <= 2100 ? year : now.getFullYear();
 
-  // Fetch data
-  const [tuitionData, summary, classes] = await Promise.all([
-    getTuitionData(
+  let tuitionData;
+  let summary;
+
+  if (viewMode === "year") {
+    tuitionData = await getTuitionDataForYear(
+      validYear,
+      classId,
+      query,
+      status,
+      subject,
+      learningStatus
+    );
+    summary = calculateTuitionSummary(tuitionData);
+  } else {
+    tuitionData = await getTuitionData(
       validMonth,
       validYear,
       classId,
@@ -56,16 +73,19 @@ export default async function TuitionPage(props: SearchProps) {
       status,
       subject,
       learningStatus
-    ),
-    getTuitionSummary(validMonth, validYear),
-    getClasses(),
-  ]);
+    );
+    summary = await getTuitionSummary(validMonth, validYear);
+  }
+
+  const classes = await getClasses();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">
-          Quản lý học phí tháng {month}/{year}
+          {viewMode === "year"
+            ? `Quản lý học phí năm ${validYear}`
+            : `Quản lý học phí tháng ${validMonth}/${validYear}`}
         </h1>
       </div>
       <TuitionClient
@@ -79,6 +99,7 @@ export default async function TuitionPage(props: SearchProps) {
         initialLearningStatus={learningStatus}
         initialSummary={summary}
         classes={classes.map((c) => ({ id: c.id, name: c.name }))}
+        viewMode={viewMode}
       />
     </div>
   );

@@ -290,6 +290,7 @@ export function PaymentForm({
           amount: values.amount,
           isPaid: values.isPaid,
           paidAt: values.isPaid && values.paidAt ? values.paidAt : null,
+          month: payment.month,
         };
         onPaymentUpdate(updatedItem);
       }
@@ -351,6 +352,7 @@ export function PaymentForm({
               ? pendingPaymentData.paidAt
               : null,
           enrollmentStatus: "active", // Cập nhật status
+          month: payment.month,
         };
         onPaymentUpdate(updatedItem);
       }

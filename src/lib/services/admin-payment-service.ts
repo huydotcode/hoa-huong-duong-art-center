@@ -7,7 +7,11 @@ import type {
   CreatePaymentStatusData,
   UpdatePaymentStatusData,
 } from "@/types/database";
-import { normalizeText, normalizePhone } from "@/lib/utils";
+import {
+  normalizeText,
+  normalizePhone,
+  calculateTuitionSummary,
+} from "@/lib/utils";
 
 export interface TuitionItem {
   paymentStatusId: string | null;
@@ -26,6 +30,7 @@ export interface TuitionItem {
   enrollmentStatus: "trial" | "active" | "inactive"; // Trạng thái học của học sinh
   classStartDate: string; // Ngày bắt đầu lớp
   classEndDate: string; // Ngày kết thúc lớp
+  month: number; // Tháng áp dụng
 }
 
 export interface TuitionSummary {
@@ -85,7 +90,7 @@ export async function getTuitionData(
   if (enrollmentError) throw enrollmentError;
   if (!allEnrollmentsData || allEnrollmentsData.length === 0) return [];
 
-  // Filter enrollments that overlap with the month
+  // Filter enrollments that overlap with the selected range
   const enrollments = allEnrollmentsData.filter((e) => {
     const enrollmentDate = new Date(e.enrollment_date);
     const leaveDate = e.leave_date ? new Date(e.leave_date) : null;
@@ -207,7 +212,7 @@ export async function getTuitionData(
   // Create a map for quick lookup: key = `${studentId}:${classId}`
   const paymentMap = new Map<string, PaymentStatus>();
   paymentStatuses?.forEach((p) => {
-    paymentMap.set(`${p.student_id}:${p.class_id}`, p);
+    paymentMap.set(`${p.student_id}:${p.class_id}:${p.month}`, p);
   });
 
   // Build TuitionItem array
@@ -215,7 +220,7 @@ export async function getTuitionData(
     const student = Array.isArray(e.students) ? e.students[0] : e.students;
     const classData = Array.isArray(e.classes) ? e.classes[0] : e.classes;
 
-    const paymentKey = `${e.student_id}:${e.class_id}`;
+    const paymentKey = `${e.student_id}:${e.class_id}:${month}`;
     const payment = paymentMap.get(paymentKey) || null;
 
     return {
@@ -236,20 +241,23 @@ export async function getTuitionData(
         (e.status as "trial" | "active" | "inactive") || "active",
       classStartDate: classData?.start_date || "",
       classEndDate: classData?.end_date || "",
+      month,
     };
   });
 
-  // Filter by status
   if (status && status !== "all") {
     return tuitionItems.filter((item) => {
       if (status === "not_created") {
         return item.paymentStatusId === null;
       }
       if (status === "paid") {
-        return item.isPaid === true;
+        return item.paymentStatusId !== null && item.isPaid === true;
       }
       if (status === "unpaid") {
-        return item.isPaid === false;
+        return (
+          item.paymentStatusId !== null &&
+          (item.isPaid === false || item.isPaid === null)
+        );
       }
       return true;
     });
@@ -382,25 +390,32 @@ export async function getTuitionSummary(
 ): Promise<TuitionSummary> {
   const tuitionData = await getTuitionData(month, year);
 
-  let totalPaid = 0;
-  let totalUnpaid = 0;
-  let totalNotCreated = 0;
+  return calculateTuitionSummary(tuitionData);
+}
 
-  tuitionData.forEach((item) => {
-    if (item.paymentStatusId === null) {
-      totalNotCreated++;
-    } else if (item.isPaid === true) {
-      totalPaid += item.amount || item.monthlyFee;
-    } else if (item.isPaid === false) {
-      totalUnpaid += item.amount || item.monthlyFee;
-    }
-  });
-
-  return {
-    totalPaid,
-    totalUnpaid,
-    totalNotCreated,
-  };
+export async function getTuitionDataForYear(
+  year: number,
+  classId?: string,
+  studentQuery?: string,
+  status?: "all" | "paid" | "unpaid" | "not_created",
+  subject?: string,
+  learningStatus?: "all" | "enrolled" | "active" | "trial" | "inactive"
+): Promise<TuitionItem[]> {
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const results = await Promise.all(
+    months.map((month) =>
+      getTuitionData(
+        month,
+        year,
+        classId,
+        studentQuery,
+        status,
+        subject,
+        learningStatus
+      )
+    )
+  );
+  return results.flat();
 }
 
 /**

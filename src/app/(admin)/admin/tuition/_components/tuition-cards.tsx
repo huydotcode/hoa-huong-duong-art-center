@@ -13,6 +13,7 @@ interface TuitionCardsProps {
   onEditPayment: (item: TuitionItem) => void;
   onTogglePayment?: (item: TuitionItem) => Promise<void>;
   onActivateTrial?: (item: TuitionItem) => Promise<void>;
+  showMonthBadge?: boolean;
 }
 
 export default function TuitionCards({
@@ -21,6 +22,7 @@ export default function TuitionCards({
   onEditPayment,
   onTogglePayment,
   onActivateTrial,
+  showMonthBadge = false,
 }: TuitionCardsProps) {
   const getStatusBadge = (item: TuitionItem) => {
     if (item.paymentStatusId === null) {
@@ -62,13 +64,18 @@ export default function TuitionCards({
       {tuitionData.map((item) => (
         <Card
           className="py-0 md:py-0"
-          key={`${item.studentId}-${item.classId}-${item.enrollmentId}`}
+          key={`${item.studentId}-${item.classId}-${item.enrollmentId}-${item.month}`}
         >
           <CardContent className="px-2 py-1">
             <div className="flex justify-between items-start mb-2">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h3 className="font-semibold">{item.studentName}</h3>
+                  {showMonthBadge && (
+                    <Badge variant="secondary" className="text-xs">
+                      Tháng {item.month}
+                    </Badge>
+                  )}
                   {(() => {
                     const status = item.enrollmentStatus;
                     if (status === "active") {

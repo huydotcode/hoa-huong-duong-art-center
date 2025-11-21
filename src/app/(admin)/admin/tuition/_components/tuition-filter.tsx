@@ -48,6 +48,7 @@ interface TuitionFilterProps {
   classes: Array<{ id: string; name: string }>;
   onRefreshStart?: () => void;
   onRefreshEnd?: () => void;
+  viewMode: "month" | "year";
 }
 
 export default function TuitionFilter({
@@ -62,6 +63,7 @@ export default function TuitionFilter({
   classes,
   onRefreshStart,
   onRefreshEnd,
+  viewMode,
 }: TuitionFilterProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -79,6 +81,9 @@ export default function TuitionFilter({
   const [learningStatusState, setLearningStatusState] = useState<string>(
     learningStatus || "enrolled"
   );
+  const [viewModeState, setViewModeState] = useState<"month" | "year">(
+    viewMode
+  );
 
   // Sync state với props khi props thay đổi (từ URL params)
   useEffect(() => {
@@ -89,33 +94,55 @@ export default function TuitionFilter({
     setStatusState(status);
     setSubjectState(subject || "all");
     setLearningStatusState(learningStatus || "enrolled");
-  }, [month, year, classId, query, status, subject, learningStatus]);
+    setViewModeState(viewMode);
+  }, [month, year, classId, query, status, subject, learningStatus, viewMode]);
 
   const updateParams = useCallback(
-    (
-      newMonth: string,
-      newYear: string,
-      newClassId: string,
-      newQuery: string,
-      newStatus: string,
-      newSubject: string,
-      newLearningStatus: string
-    ) => {
+    (updates: {
+      month?: string;
+      year?: string;
+      classId?: string;
+      query?: string;
+      status?: string;
+      subject?: string;
+      learningStatus?: string;
+      viewMode?: "month" | "year";
+    }) => {
+      const nextMonth = updates.month ?? monthState;
+      const nextYear = updates.year ?? yearState;
+      const nextClassId = updates.classId ?? classIdState;
+      const nextQuery = updates.query ?? queryState;
+      const nextStatus = updates.status ?? statusState;
+      const nextSubject = updates.subject ?? subjectState;
+      const nextLearningStatus =
+        updates.learningStatus ?? learningStatusState;
+      const nextViewMode = updates.viewMode ?? viewModeState;
+
       const params = new URLSearchParams(searchParams?.toString());
-      if (newMonth) params.set("month", newMonth);
-      else params.delete("month");
-      if (newYear) params.set("year", newYear);
+
+      if (nextViewMode === "year") {
+        params.set("view", "year");
+        params.delete("month");
+      } else {
+        params.delete("view");
+        if (nextMonth) params.set("month", nextMonth);
+        else params.delete("month");
+      }
+
+      if (nextYear) params.set("year", nextYear);
       else params.delete("year");
-      if (newClassId && newClassId !== "all") params.set("classId", newClassId);
+      if (nextClassId && nextClassId !== "all")
+        params.set("classId", nextClassId);
       else params.delete("classId");
-      if (newQuery.trim()) params.set("q", newQuery.trim());
+      if (nextQuery.trim()) params.set("q", nextQuery.trim());
       else params.delete("q");
-      if (newStatus && newStatus !== "all") params.set("status", newStatus);
+      if (nextStatus && nextStatus !== "all") params.set("status", nextStatus);
       else params.delete("status");
-      if (newSubject && newSubject !== "all") params.set("subject", newSubject);
+      if (nextSubject && nextSubject !== "all")
+        params.set("subject", nextSubject);
       else params.delete("subject");
-      if (newLearningStatus && newLearningStatus !== "enrolled")
-        params.set("learningStatus", newLearningStatus);
+      if (nextLearningStatus && nextLearningStatus !== "enrolled")
+        params.set("learningStatus", nextLearningStatus);
       else params.delete("learningStatus");
 
       startTransition(() => {
@@ -124,86 +151,50 @@ export default function TuitionFilter({
         );
       });
     },
-    [pathname, router, searchParams]
+    [
+      classIdState,
+      learningStatusState,
+      monthState,
+      pathname,
+      queryState,
+      router,
+      searchParams,
+      statusState,
+      subjectState,
+      viewModeState,
+      yearState,
+    ]
   );
 
   const handleMonthChange = (value: string) => {
     setMonthState(value);
-    updateParams(
-      value,
-      yearState,
-      classIdState,
-      queryState,
-      statusState,
-      subjectState,
-      learningStatusState
-    );
+    updateParams({ month: value });
   };
 
   const handleYearChange = (value: string) => {
     setYearState(value);
-    updateParams(
-      monthState,
-      value,
-      classIdState,
-      queryState,
-      statusState,
-      subjectState,
-      learningStatusState
-    );
+    updateParams({ year: value });
   };
 
   // Handle filter changes - apply immediately
   const handleClassChange = (value: string) => {
     setClassIdState(value);
-    updateParams(
-      monthState,
-      yearState,
-      value,
-      queryState,
-      statusState,
-      subjectState,
-      learningStatusState
-    );
+    updateParams({ classId: value });
   };
 
   const handleStatusChange = (value: string) => {
     setStatusState(value);
-    updateParams(
-      monthState,
-      yearState,
-      classIdState,
-      queryState,
-      value,
-      subjectState,
-      learningStatusState
-    );
+    updateParams({ status: value });
   };
 
   const handleSubjectChange = (value: string) => {
     setSubjectState(value);
-    updateParams(
-      monthState,
-      yearState,
-      classIdState,
-      queryState,
-      statusState,
-      value,
-      learningStatusState
-    );
+    updateParams({ subject: value });
   };
 
   const handleLearningStatusChange = (value: string) => {
     setLearningStatusState(value);
-    updateParams(
-      monthState,
-      yearState,
-      classIdState,
-      queryState,
-      statusState,
-      subjectState,
-      value
-    );
+    updateParams({ learningStatus: value });
   };
 
   const handleClearFilters = () => {
@@ -211,27 +202,16 @@ export default function TuitionFilter({
     setStatusState("all");
     setSubjectState("all");
     setLearningStatusState("enrolled");
-    updateParams(
-      monthState,
-      yearState,
-      "all",
-      queryState,
-      "all",
-      "all",
-      "enrolled"
-    );
+    updateParams({
+      classId: "all",
+      status: "all",
+      subject: "all",
+      learningStatus: "enrolled",
+    });
   };
 
   const handleSearch = () => {
-    updateParams(
-      monthState,
-      yearState,
-      classIdState,
-      queryState,
-      statusState,
-      subjectState,
-      learningStatusState
-    );
+    updateParams({});
   };
 
   const handleClear = () => {
@@ -245,19 +225,31 @@ export default function TuitionFilter({
     setStatusState("all");
     setSubjectState("all");
     setLearningStatusState("enrolled");
-    updateParams(
-      defaultMonth,
-      defaultYear,
-      "all",
-      "",
-      "all",
-      "all",
-      "enrolled"
-    );
+    setViewModeState("month");
+    updateParams({
+      month: defaultMonth,
+      year: defaultYear,
+      classId: "all",
+      query: "",
+      status: "all",
+      subject: "all",
+      learningStatus: "enrolled",
+      viewMode: "month",
+    });
     setIsFilterPopoverOpen(false);
   };
 
+  const handleViewModeChange = (value: string) => {
+    const mode = value === "year" ? "year" : "month";
+    setViewModeState(mode);
+    updateParams({ viewMode: mode });
+  };
+
   const handleSyncTuition = async () => {
+    if (viewModeState === "year") {
+      toast.info("Chỉ có thể đồng bộ ở chế độ xem theo tháng");
+      return;
+    }
     setIsSyncing(true);
     try {
       const result = await syncTuitionPaymentStatus(
@@ -326,13 +318,18 @@ export default function TuitionFilter({
     queryState.trim().length > 0 ||
     statusState !== "all" ||
     subjectState !== "all" ||
-    learningStatusState !== "enrolled";
+    learningStatusState !== "enrolled" ||
+    viewModeState !== "month";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2 md:flex-row md:items-center flex-wrap">
-          <Select value={monthState} onValueChange={handleMonthChange}>
+          <Select
+            value={monthState}
+            onValueChange={handleMonthChange}
+            disabled={viewModeState === "year"}
+          >
             <SelectTrigger className="w-full md:w-[140px]">
               <SelectValue placeholder="Chọn tháng" />
             </SelectTrigger>
@@ -355,6 +352,16 @@ export default function TuitionFilter({
                   {y}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={viewModeState} onValueChange={handleViewModeChange}>
+            <SelectTrigger className="w-full md:w-[150px]">
+              <SelectValue placeholder="Phạm vi" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Theo tháng</SelectItem>
+              <SelectItem value="year">Cả năm</SelectItem>
             </SelectContent>
           </Select>
 
@@ -528,7 +535,7 @@ export default function TuitionFilter({
             <Button
               variant="default"
               className="w-full md:w-auto"
-              disabled={isPending || isSyncing}
+              disabled={isPending || isSyncing || viewModeState === "year"}
             >
               Tạo học phí tự động
             </Button>
