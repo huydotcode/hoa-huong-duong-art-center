@@ -32,6 +32,7 @@ import {
   updateStudentEnrollment,
   getClassesIdAndName,
 } from "@/lib/services/admin-classes-service";
+import { getStudentById } from "@/lib/services/admin-students-service";
 import { formatEnrollmentStatus, formatDateShort } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -188,13 +189,28 @@ export function ManageStudentClassesDialog({
       const enrollmentsData = await fetchEnrollments();
       setEnrollments(enrollmentsData);
 
+      // Fetch updated student data and dispatch event to update the table
+      try {
+        const updatedStudent = await getStudentById(student.id);
+        if (updatedStudent) {
+          // Dispatch event để students-list cập nhật
+          window.dispatchEvent(
+            new CustomEvent("student-updated", {
+              detail: { student: updatedStudent },
+            })
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching updated student:", error);
+        // Vẫn refresh router để đảm bảo data được cập nhật
+        router.refresh();
+      }
+
       // Reset form
       setShowAddForm(false);
       setNewClassId("");
       setNewStatus("trial");
       setNewEnrollmentDate(new Date().toISOString().split("T")[0]);
-
-      router.refresh();
     } catch (error) {
       console.error("Error adding enrollment:", error);
       toast.error(
@@ -224,8 +240,24 @@ export function ManageStudentClassesDialog({
       const enrollmentsData = await fetchEnrollments();
       setEnrollments(enrollmentsData);
 
+      // Fetch updated student data and dispatch event to update the table
+      try {
+        const updatedStudent = await getStudentById(student.id);
+        if (updatedStudent) {
+          // Dispatch event để students-list cập nhật
+          window.dispatchEvent(
+            new CustomEvent("student-updated", {
+              detail: { student: updatedStudent },
+            })
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching updated student:", error);
+        // Vẫn refresh router để đảm bảo data được cập nhật
+        router.refresh();
+      }
+
       setEditingStatus(null);
-      router.refresh();
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Cập nhật trạng thái thất bại");

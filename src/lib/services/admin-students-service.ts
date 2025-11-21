@@ -1095,6 +1095,22 @@ export async function updateStudentFromForm(formData: FormData) {
 }
 
 /**
+ * Get a single student by ID with full enrollment and status information
+ */
+export async function getStudentById(
+  studentId: string
+): Promise<StudentWithClassSummary | null> {
+  // Use getStudents with query by student ID (query by name won't work, so we query all and filter)
+  // For efficiency, we can query directly by ID, but to reuse existing logic, we use getStudents
+  const students = await getStudents("", {
+    limit: 10000,
+    offset: 0,
+  });
+  const student = students.find((s) => s.id === studentId);
+  return student || null;
+}
+
+/**
  * Get all current classes a student is enrolled in (active or trial, not left)
  */
 export async function getStudentCurrentClasses(studentId: string): Promise<
