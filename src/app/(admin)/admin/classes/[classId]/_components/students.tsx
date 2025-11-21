@@ -18,10 +18,11 @@ import { UpdateEnrollmentForm } from "@/components/forms/update-enrollment-form"
 import {
   copyStudentsToClass,
   moveStudentsToClass,
+  removeClassEnrollments,
 } from "@/lib/services/admin-classes-service";
 import { type ClassStudentItem } from "@/types";
 import { formatEnrollmentStatus } from "@/lib/utils";
-import { Plus, Pencil, Copy, Scissors } from "lucide-react";
+import { Plus, Pencil, Copy, Scissors, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
@@ -41,6 +42,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function StudentsSection({
   classId,
@@ -74,6 +85,11 @@ export default function StudentsSection({
   const [isProcessing, setIsProcessing] = useState(false);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState<"copy" | "cut">("copy");
+  const [studentToRemove, setStudentToRemove] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   const selectedEnrollment =
     students.find((s) => s.enrollment_id === selectedEnrollmentId) || null;
@@ -155,6 +171,29 @@ export default function StudentsSection({
       setBulkDialogOpen(false);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleRemoveStudent = async () => {
+    if (!studentToRemove) return;
+    setIsRemoving(true);
+    try {
+      await removeClassEnrollments(classId, [studentToRemove.id], pathname);
+      toast.success(`Đã xóa ${studentToRemove.name} khỏi lớp`);
+      setSelectedStudentIds((prev) =>
+        prev.filter((id) => id !== studentToRemove.id)
+      );
+      setSelectedEnrollmentId(null);
+      setStudentToRemove(null);
+      router.refresh();
+    } catch (error) {
+      console.error("Remove student error:", error);
+      toast.error("Xóa học sinh khỏi lớp thất bại", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -324,6 +363,20 @@ export default function StudentsSection({
                         {s.student.is_active ? "Hoạt động" : "Ngừng hoạt động"}
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setStudentToRemove({
+                          id: s.student.id,
+                          name: s.student.full_name,
+                        });
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -431,13 +484,28 @@ export default function StudentsSection({
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setSelectedEnrollmentId(s.enrollment_id)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setSelectedEnrollmentId(s.enrollment_id)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        onClick={() =>
+                          setStudentToRemove({
+                            id: s.student.id,
+                            name: s.student.full_name,
+                          })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -538,6 +606,35 @@ export default function StudentsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={studentToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && !isRemoving) {
+            setStudentToRemove(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa học sinh khỏi lớp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {studentToRemove
+                ? `Bạn có chắc chắn muốn xóa ${studentToRemove.name} khỏi lớp này?`
+                : "Bạn có chắc chắn muốn xóa học sinh khỏi lớp này?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveStudent}
+              disabled={isRemoving}
+            >
+              {isRemoving ? "Đang xóa..." : "Xóa khỏi lớp"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
