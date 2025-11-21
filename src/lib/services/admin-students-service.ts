@@ -48,6 +48,9 @@ export async function getStudents(
   const limit = opts.limit ?? 30;
   const offset = opts.offset ?? 0;
   const subjectFilter = (opts.subject || "").trim();
+  const subjectFilterNormalized = normalizeText(subjectFilter);
+  const hasSubjectFilter =
+    subjectFilterNormalized.length > 0 && subjectFilterNormalized !== "all";
   const learningStatusFilter = (opts.learningStatus || "")
     .toString()
     .trim()
@@ -84,8 +87,8 @@ export async function getStudents(
   const filterIdGroups: string[][] = [];
 
   const subjectStudentIds =
-    subjectFilter.length > 0 && subjectFilter.toLowerCase() !== "all"
-      ? await getStudentIdsBySubject(supabase, subjectFilter)
+    subjectFilterNormalized.length > 0 && subjectFilterNormalized !== "all"
+      ? await getStudentIdsBySubject(supabase, subjectFilterNormalized)
       : null;
   if (subjectStudentIds) {
     filterIdGroups.push(subjectStudentIds);
@@ -263,9 +266,18 @@ export async function getStudents(
         learningStatus = "inactive";
       }
 
+      // Filter class_summary by subject if filter is active
+      let filteredClassSummary = class_summary;
+      if (hasSubjectFilter) {
+        filteredClassSummary = class_summary.filter((cls) => {
+          const normalizedClassName = normalizeText(cls.className || "");
+          return normalizedClassName.includes(subjectFilterNormalized);
+        });
+      }
+
       return {
         ...rest,
-        class_summary,
+        class_summary: filteredClassSummary,
         first_enrollment_date: firstEnrollmentDate,
         has_session_today: hasSessionToday,
         learning_status: learningStatus,
@@ -279,13 +291,30 @@ export async function getStudents(
 
   const studentIds = students.map((s) => s.id);
 
+  // Build map of subject class IDs for each student
+  const subjectClassIdsByStudent = new Map<string, Set<string>>();
+  if (hasSubjectFilter) {
+    students.forEach((student) => {
+      const matchingClassIds = new Set<string>();
+      student.class_summary?.forEach((cls) => {
+        const normalizedClassName = normalizeText(cls.className || "");
+        if (normalizedClassName.includes(subjectFilterNormalized)) {
+          matchingClassIds.add(cls.classId);
+        }
+      });
+      if (matchingClassIds.size > 0) {
+        subjectClassIdsByStudent.set(student.id, matchingClassIds);
+      }
+    });
+  }
+
   const [
     { data: paymentData, error: paymentError },
     { data: attendanceData, error: attendanceError },
   ] = await Promise.all([
     supabase
       .from("payment_status")
-      .select("student_id, is_paid")
+      .select("student_id, class_id, is_paid")
       .eq("month", currentMonth)
       .eq("year", currentYear)
       .in("student_id", studentIds),
@@ -303,20 +332,25 @@ export async function getStudents(
   const paymentMap = new Map<
     string,
     Array<{
+      class_id: string;
       is_paid: boolean;
     }>
   >();
   (
     (paymentData as Array<{
       student_id: string | null;
+      class_id: string | null;
       is_paid: boolean;
     }> | null) ?? []
   ).forEach((row) => {
-    if (!row.student_id) return;
+    if (!row.student_id || !row.class_id) return;
     if (!paymentMap.has(row.student_id)) {
       paymentMap.set(row.student_id, []);
     }
-    paymentMap.get(row.student_id)!.push({ is_paid: row.is_paid });
+    paymentMap.get(row.student_id)!.push({
+      class_id: row.class_id,
+      is_paid: row.is_paid,
+    });
   });
 
   const attendanceMap = new Map<
@@ -339,11 +373,19 @@ export async function getStudents(
   });
 
   const resolveTuitionStatus = (
-    payments: Array<{ is_paid: boolean }>
+    payments: Array<{ class_id: string; is_paid: boolean }>,
+    subjectClassIds?: Set<string>
   ): StudentTuitionStatus => {
     if (!payments || payments.length === 0) return "not_created";
-    const paidCount = payments.filter((p) => p.is_paid).length;
-    if (paidCount === payments.length) return "paid";
+
+    // Filter payments by subject class IDs if provided
+    const relevantPayments = subjectClassIds
+      ? payments.filter((p) => subjectClassIds.has(p.class_id))
+      : payments;
+
+    if (relevantPayments.length === 0) return "not_created";
+    const paidCount = relevantPayments.filter((p) => p.is_paid).length;
+    if (paidCount === relevantPayments.length) return "paid";
     if (paidCount === 0) return "unpaid";
     return "partial";
   };
@@ -360,8 +402,12 @@ export async function getStudents(
   };
 
   students.forEach((student) => {
+    const subjectClassIds = hasSubjectFilter
+      ? subjectClassIdsByStudent.get(student.id)
+      : undefined;
     const tuitionStatus = resolveTuitionStatus(
-      paymentMap.get(student.id) ?? []
+      paymentMap.get(student.id) ?? [],
+      subjectClassIds
     );
     const attendanceStatus = resolveAttendanceStatus(
       student.has_session_today,

@@ -104,7 +104,7 @@ function StudentTableRowComponent({
     return classSummary;
   }, [classSummary, activeLearningStatus, activeSubject]);
   const visibleClasses = orderedClasses.slice(0, 2);
-  const remainingClasses = classSummary.length - visibleClasses.length;
+  const remainingClasses = orderedClasses.length - visibleClasses.length;
   const enrollmentDate = useMemo(
     () => formatDateShort(student.first_enrollment_date),
     [student.first_enrollment_date]
@@ -134,7 +134,11 @@ function StudentTableRowComponent({
         <TableCell>{student.phone || "-"}</TableCell>
         <TableCell>
           {classSummary.length === 0 ? (
-            <span className="text-sm text-muted-foreground">Chưa xếp lớp</span>
+            <span className="text-sm text-muted-foreground">
+              {activeSubject
+                ? `Không có lớp thuộc môn ${activeSubject}`
+                : "Chưa xếp lớp"}
+            </span>
           ) : (
             <div className="flex flex-col gap-1">
               {visibleClasses.map((cls) => {
