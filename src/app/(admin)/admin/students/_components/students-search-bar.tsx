@@ -115,7 +115,7 @@ export default function StudentsSearchBar() {
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:w-auto">
-      <div className="order-2 flex w-full gap-2 sm:order-2 sm:w-auto sm:justify-end">
+      <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
         <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
           <PopoverTrigger asChild>
             <Button
