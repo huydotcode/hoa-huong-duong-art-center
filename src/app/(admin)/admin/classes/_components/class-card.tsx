@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatCurrencyVN, formatDateRange } from "@/lib/utils";
 import { type ClassListItem } from "@/types";
-import { Calendar, ClipboardCheck, Pencil } from "lucide-react";
+import { Calendar, ClipboardCheck, Pencil, Info } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface ClassCardProps {
@@ -50,32 +50,13 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
     router.push(`/admin/attendance?${params.toString()}`);
   };
 
-  const handleCardClick = () => {
-    router.push(`/admin/classes/${c.id}`);
-  };
-
-  const handlePreventNavigation = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
-
   const isFull =
     typeof c.current_student_count === "number" &&
     typeof c.max_student_count === "number" &&
     c.current_student_count >= c.max_student_count;
 
   return (
-    <Card
-      role="button"
-      tabIndex={0}
-      onClick={handleCardClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleCardClick();
-        }
-      }}
-      className="border p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-lg flex flex-col gap-4 cursor-pointer"
-    >
+    <Card className="border p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-lg flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -132,7 +113,7 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
         <Button
           variant="secondary"
           size="sm"
@@ -151,12 +132,26 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
           <Calendar className="mr-2 h-4 w-4" />
           Xem lịch
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={() => router.push(`/admin/classes/${c.id}`)}
+        >
+          <Info className="mr-2 h-4 w-4" />
+          Chi tiết
+        </Button>
         <UpdateClassForm classData={c}>
           <Button
             variant="outline"
             size="sm"
             className="h-9"
-            onClick={handlePreventNavigation}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
           >
             <Pencil className="h-4 w-4" />
             Chỉnh sửa
