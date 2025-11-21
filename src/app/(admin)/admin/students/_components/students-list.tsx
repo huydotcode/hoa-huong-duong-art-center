@@ -312,11 +312,10 @@ export default function StudentsList({
             <Table>
               <TableHeader>
                 <TableHeaderRow>
+                  <TableHead className="w-[60px] text-center">STT</TableHead>
                   <TableHead>Họ và tên</TableHead>
                   <TableHead>Số điện thoại</TableHead>
-                  <TableHead className="min-w-[220px]">
-                    Lớp / trạng thái
-                  </TableHead>
+                  <TableHead className="w-[220px]">Lớp / trạng thái</TableHead>
                   <TableHead>Ngày nhập học</TableHead>
                   <TableHead>Đóng học phí</TableHead>
                   <TableHead>Điểm danh hôm nay</TableHead>
@@ -329,7 +328,7 @@ export default function StudentsList({
               <TableBody>
                 <TableRow>
                   <TableCell
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-8 text-center text-sm text-muted-foreground"
                   >
                     Chưa có học sinh nào
@@ -354,11 +353,10 @@ export default function StudentsList({
           <Table>
             <TableHeader>
               <TableHeaderRow>
+                <TableHead className="w-[60px] text-center">STT</TableHead>
                 <TableHead>Họ và tên</TableHead>
                 <TableHead>Số điện thoại</TableHead>
-                <TableHead className="min-w-[220px]">
-                  Lớp / trạng thái
-                </TableHead>
+                <TableHead className="w-[220px]">Lớp / trạng thái</TableHead>
                 <TableHead>Ngày nhập học</TableHead>
                 <TableHead>Đóng học phí</TableHead>
                 <TableHead>Điểm danh hôm nay</TableHead>
@@ -369,10 +367,11 @@ export default function StudentsList({
               </TableHeaderRow>
             </TableHeader>
             <TableBody>
-              {allData.map((s) => (
+              {allData.map((s, index) => (
                 <StudentTableRow
                   key={s.id}
                   student={s}
+                  index={index + 1}
                   activeLearningStatus={
                     hasLearningStatusFilter
                       ? normalizedLearningStatus

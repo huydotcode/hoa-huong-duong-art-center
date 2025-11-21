@@ -40,10 +40,12 @@ const StudentQRDialog = lazy(() =>
 
 function StudentTableRowComponent({
   student,
+  index,
   activeLearningStatus,
   activeSubject,
 }: {
   student: StudentWithClassSummary;
+  index: number;
   activeLearningStatus?: string;
   activeSubject?: string;
 }) {
@@ -118,6 +120,7 @@ function StudentTableRowComponent({
   return (
     <>
       <TableRow>
+        <TableCell className="text-center">{index}</TableCell>
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
             <span>{student.full_name}</span>
@@ -132,7 +135,7 @@ function StudentTableRowComponent({
           </div>
         </TableCell>
         <TableCell>{student.phone || "-"}</TableCell>
-        <TableCell>
+        <TableCell className="w-[220px] max-w-[220px] whitespace-break-spaces">
           {classSummary.length === 0 ? (
             <span className="text-sm text-muted-foreground">
               {activeSubject
@@ -158,8 +161,8 @@ function StudentTableRowComponent({
                     key={`${student.id}-${cls.classId}`}
                     className="flex flex-col gap-0.5"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium truncate">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium [word-break:break-word]">
                         {cls.className}
                       </span>
                       <Badge
