@@ -273,7 +273,7 @@ export function ManageStudentClassesDialog({
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 overflow-x-auto">
             {/* Add new enrollment form */}
             {!showAddForm ? (
               <Button
