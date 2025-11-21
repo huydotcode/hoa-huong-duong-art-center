@@ -130,6 +130,7 @@ export default function StudentsList({
       hasLearningStatusFilter,
       normalizedLearningStatus,
       hasRecentFilter,
+      hasTuitionStatusFilter,
     ]
   );
 
