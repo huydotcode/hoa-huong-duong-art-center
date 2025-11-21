@@ -34,7 +34,14 @@ export default function ExpensesClient({
 
   return (
     <div className="space-y-6">
-      <ExpensesFilter total={initialTotal} onAddClick={handleAddClick} />
+      <ExpensesFilter
+        total={initialTotal}
+        onAddClick={handleAddClick}
+        viewMode={initialViewMode}
+        month={initialMonth}
+        year={initialYear}
+        query={initialQuery}
+      />
 
       <ExpenseForm expense={undefined}>
         <Button ref={addButtonRef} className="hidden">

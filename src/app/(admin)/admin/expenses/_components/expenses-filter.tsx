@@ -13,15 +13,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { formatVND } from "@/lib/utils";
+import ExpensesExportButton from "./expenses-export-button";
 
 interface ExpensesFilterProps {
   total: number;
   onAddClick: () => void;
+  viewMode: "month" | "year";
+  month: number;
+  year: number;
+  query: string;
 }
 
 export default function ExpensesFilter({
   total,
   onAddClick,
+  viewMode: initialViewMode,
+  month: initialMonthNumber,
+  year: initialYearNumber,
+  query: initialQuery,
 }: ExpensesFilterProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -30,24 +39,20 @@ export default function ExpensesFilter({
 
   const monthParam = searchParams.get("month");
   const yearParam = searchParams.get("year");
-  const queryParam = searchParams.get("q") || "";
+  const queryParam = searchParams.get("q");
   const viewParam = searchParams.get("view");
 
-  const now = new Date();
-  const defaultMonth = monthParam
+  const resolvedMonth = monthParam
     ? parseInt(monthParam, 10)
-    : now.getMonth() + 1;
-  const defaultYear = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
+    : initialMonthNumber;
+  const resolvedYear = yearParam ? parseInt(yearParam, 10) : initialYearNumber;
+  const resolvedViewMode =
+    viewParam === "year" ? "year" : (initialViewMode ?? "month");
 
-  const initialMonth = String(defaultMonth);
-  const initialYear = String(defaultYear);
-  const defaultViewMode = viewParam === "year" ? "year" : "month";
-
-  const [month, setMonth] = useState<string>(initialMonth);
-  const [year, setYear] = useState<string>(initialYear);
-  const [query, setQuery] = useState<string>(queryParam);
-  const [viewMode, setViewMode] =
-    useState<"month" | "year">(defaultViewMode);
+  const [month, setMonth] = useState<string>(String(resolvedMonth));
+  const [year, setYear] = useState<string>(String(resolvedYear));
+  const [query, setQuery] = useState<string>(queryParam ?? initialQuery ?? "");
+  const [viewMode, setViewMode] = useState<"month" | "year">(resolvedViewMode);
 
   const updateParams = useCallback(
     (
@@ -115,13 +120,13 @@ export default function ExpensesFilter({
   };
 
   // Generate year options (current year - 2 to current year + 2)
-  const currentYear = now.getFullYear();
+  const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
   const hasFilter =
-    viewMode !== "month" ||
-    month !== initialMonth ||
-    year !== initialYear ||
+    viewMode !== initialViewMode ||
+    month !== String(initialMonthNumber) ||
+    year !== String(initialYearNumber) ||
     query.trim().length > 0;
 
   return (
@@ -206,9 +211,17 @@ export default function ExpensesFilter({
           )}
         </div>
 
-        <Button onClick={onAddClick} className="w-full md:w-auto">
-          Thêm chi phí
-        </Button>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <ExpensesExportButton
+            viewMode={viewMode}
+            month={Number(month)}
+            year={Number(year)}
+            query={query}
+          />
+          <Button onClick={onAddClick} className="w-full md:w-auto">
+            Thêm chi phí
+          </Button>
+        </div>
       </div>
 
       <Card className="bg-secondary">
