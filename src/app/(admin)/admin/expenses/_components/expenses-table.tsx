@@ -34,9 +34,13 @@ import { toast } from "sonner";
 
 interface ExpensesTableProps {
   expenses: Expense[];
+  showMonthColumn?: boolean;
 }
 
-export default function ExpensesTable({ expenses }: ExpensesTableProps) {
+export default function ExpensesTable({
+  expenses,
+  showMonthColumn = false,
+}: ExpensesTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -82,6 +86,7 @@ export default function ExpensesTable({ expenses }: ExpensesTableProps) {
         <TableHeader>
           <TableHeaderRow>
             <TableHead>Ngày chi</TableHead>
+            {showMonthColumn && <TableHead>Tháng</TableHead>}
             <TableHead className="text-right">Số tiền</TableHead>
             <TableHead>Lý do</TableHead>
             <TableHead className="text-right">Thao tác</TableHead>
@@ -91,7 +96,7 @@ export default function ExpensesTable({ expenses }: ExpensesTableProps) {
           {expenses.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={4}
+                colSpan={showMonthColumn ? 5 : 4}
                 className="px-4 py-8 text-center text-sm text-muted-foreground"
               >
                 Chưa có chi phí nào
@@ -105,6 +110,11 @@ export default function ExpensesTable({ expenses }: ExpensesTableProps) {
                   <TableCell className="font-medium">
                     {formatDate(expense.expense_date)}
                   </TableCell>
+                  {showMonthColumn && (
+                    <TableCell className="whitespace-nowrap">
+                      Tháng {expense.month}
+                    </TableCell>
+                  )}
                   <TableCell className="text-right font-semibold">
                     {formatVND(expense.amount)}
                   </TableCell>

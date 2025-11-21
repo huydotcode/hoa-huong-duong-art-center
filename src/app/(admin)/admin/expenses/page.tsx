@@ -1,6 +1,7 @@
 import {
   getExpenses,
   getTotalExpensesByMonth,
+  getTotalExpensesByYear,
 } from "@/lib/services/admin-expenses-service";
 import ExpensesClient from "./_components/expenses-client";
 
@@ -20,6 +21,8 @@ export default async function ExpensesPage(props: SearchProps) {
   const monthParam = searchParams?.month;
   const yearParam = searchParams?.year;
   const query = searchParams?.q || "";
+  const viewParam = searchParams?.view;
+  const viewMode = viewParam === "year" ? "year" : "month";
 
   // Default to current month/year if not provided
   const now = new Date();
@@ -30,10 +33,16 @@ export default async function ExpensesPage(props: SearchProps) {
   const validMonth = month >= 1 && month <= 12 ? month : now.getMonth() + 1;
   const validYear = year >= 2020 && year <= 2100 ? year : now.getFullYear();
 
-  const [expenses, total] = await Promise.all([
-    getExpenses(validMonth, validYear, query),
-    getTotalExpensesByMonth(validMonth, validYear),
-  ]);
+  const [expenses, total] =
+    viewMode === "year"
+      ? await Promise.all([
+          getExpenses(undefined, validYear, query),
+          getTotalExpensesByYear(validYear),
+        ])
+      : await Promise.all([
+          getExpenses(validMonth, validYear, query),
+          getTotalExpensesByMonth(validMonth, validYear),
+        ]);
 
   return (
     <div className="space-y-6">
@@ -46,6 +55,7 @@ export default async function ExpensesPage(props: SearchProps) {
         initialYear={validYear}
         initialQuery={query}
         initialTotal={total}
+        initialViewMode={viewMode}
       />
     </div>
   );

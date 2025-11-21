@@ -15,6 +15,7 @@ interface ExpensesClientProps {
   initialYear: number;
   initialQuery: string;
   initialTotal: number;
+  initialViewMode: "month" | "year";
 }
 
 export default function ExpensesClient({
@@ -23,6 +24,7 @@ export default function ExpensesClient({
   initialYear,
   initialQuery,
   initialTotal,
+  initialViewMode,
 }: ExpensesClientProps) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -41,8 +43,14 @@ export default function ExpensesClient({
       </ExpenseForm>
 
       <Card>
-        <ExpensesTable expenses={initialExpenses} />
-        <ExpensesCards expenses={initialExpenses} />
+        <ExpensesTable
+          expenses={initialExpenses}
+          showMonthColumn={initialViewMode === "year"}
+        />
+        <ExpensesCards
+          expenses={initialExpenses}
+          showMonthBadge={initialViewMode === "year"}
+        />
       </Card>
     </div>
   );

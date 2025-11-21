@@ -25,9 +25,13 @@ import { toast } from "sonner";
 
 interface ExpensesCardsProps {
   expenses: Expense[];
+  showMonthBadge?: boolean;
 }
 
-export default function ExpensesCards({ expenses }: ExpensesCardsProps) {
+export default function ExpensesCards({
+  expenses,
+  showMonthBadge = false,
+}: ExpensesCardsProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -89,6 +93,11 @@ export default function ExpensesCards({ expenses }: ExpensesCardsProps) {
                   <h3 className="font-semibold">
                     {formatDate(expense.expense_date)}
                   </h3>
+                  {showMonthBadge && (
+                    <p className="text-xs text-muted-foreground">
+                      Tháng {expense.month}
+                    </p>
+                  )}
                   <p className="text-lg font-bold text-primary mt-1">
                     {formatVND(expense.amount)}
                   </p>

@@ -31,6 +31,7 @@ export default function ExpensesFilter({
   const monthParam = searchParams.get("month");
   const yearParam = searchParams.get("year");
   const queryParam = searchParams.get("q") || "";
+  const viewParam = searchParams.get("view");
 
   const now = new Date();
   const defaultMonth = monthParam
@@ -38,17 +39,37 @@ export default function ExpensesFilter({
     : now.getMonth() + 1;
   const defaultYear = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
 
-  const [month, setMonth] = useState<string>(String(defaultMonth));
-  const [year, setYear] = useState<string>(String(defaultYear));
+  const initialMonth = String(defaultMonth);
+  const initialYear = String(defaultYear);
+  const defaultViewMode = viewParam === "year" ? "year" : "month";
+
+  const [month, setMonth] = useState<string>(initialMonth);
+  const [year, setYear] = useState<string>(initialYear);
   const [query, setQuery] = useState<string>(queryParam);
+  const [viewMode, setViewMode] =
+    useState<"month" | "year">(defaultViewMode);
 
   const updateParams = useCallback(
-    (newMonth: string, newYear: string, newQuery: string) => {
+    (
+      newMonth: string,
+      newYear: string,
+      newQuery: string,
+      newViewMode: "month" | "year" = viewMode
+    ) => {
       const params = new URLSearchParams(searchParams?.toString());
-      if (newMonth) params.set("month", newMonth);
-      else params.delete("month");
+
+      if (newViewMode === "year") {
+        params.set("view", "year");
+        params.delete("month");
+      } else {
+        params.delete("view");
+        if (newMonth) params.set("month", newMonth);
+        else params.delete("month");
+      }
+
       if (newYear) params.set("year", newYear);
       else params.delete("year");
+
       if (newQuery.trim()) params.set("q", newQuery.trim());
       else params.delete("q");
 
@@ -58,7 +79,7 @@ export default function ExpensesFilter({
         );
       });
     },
-    [pathname, router, searchParams]
+    [pathname, router, searchParams, viewMode]
   );
 
   const handleMonthChange = (value: string) => {
@@ -71,18 +92,26 @@ export default function ExpensesFilter({
     updateParams(month, value, query);
   };
 
+  const handleViewModeChange = (value: string) => {
+    const nextView = value === "year" ? "year" : "month";
+    setViewMode(nextView);
+    const targetMonth = nextView === "month" ? month : "";
+    updateParams(targetMonth, year, query, nextView);
+  };
+
   const handleSearch = () => {
     updateParams(month, year, query);
   };
 
   const handleClear = () => {
     const now = new Date();
-    const defaultMonth = String(now.getMonth() + 1);
-    const defaultYear = String(now.getFullYear());
-    setMonth(defaultMonth);
-    setYear(defaultYear);
+    const resetMonth = String(now.getMonth() + 1);
+    const resetYear = String(now.getFullYear());
+    setMonth(resetMonth);
+    setYear(resetYear);
     setQuery("");
-    updateParams(defaultMonth, defaultYear, "");
+    setViewMode("month");
+    updateParams(resetMonth, resetYear, "", "month");
   };
 
   // Generate year options (current year - 2 to current year + 2)
@@ -90,15 +119,30 @@ export default function ExpensesFilter({
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
   const hasFilter =
-    month !== String(now.getMonth() + 1) ||
-    year !== String(now.getFullYear()) ||
+    viewMode !== "month" ||
+    month !== initialMonth ||
+    year !== initialYear ||
     query.trim().length > 0;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <Select value={month} onValueChange={handleMonthChange}>
+          <Select value={viewMode} onValueChange={handleViewModeChange}>
+            <SelectTrigger className="w-full md:w-[160px]">
+              <SelectValue placeholder="Chế độ hiển thị" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Theo tháng</SelectItem>
+              <SelectItem value="year">Cả năm</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={month}
+            onValueChange={handleMonthChange}
+            disabled={viewMode === "year"}
+          >
             <SelectTrigger className="w-full md:w-[140px]">
               <SelectValue placeholder="Chọn tháng" />
             </SelectTrigger>
@@ -172,7 +216,9 @@ export default function ExpensesFilter({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">
-                Tổng chi phí tháng {month}/{year}
+                {viewMode === "year"
+                  ? `Tổng chi phí năm ${year}`
+                  : `Tổng chi phí tháng ${month}/${year}`}
               </p>
               <p className="text-2xl font-bold">{formatVND(total)}</p>
             </div>

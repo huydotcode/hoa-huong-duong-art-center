@@ -174,6 +174,24 @@ export async function getTotalExpensesByMonth(
   return total;
 }
 
+export async function getTotalExpensesByYear(year: number): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("amount")
+    .eq("year", year);
+
+  if (error) throw error;
+
+  const total =
+    (data as { amount: number }[] | null)?.reduce(
+      (sum, expense) => sum + Number(expense.amount),
+      0
+    ) || 0;
+
+  return total;
+}
+
 /**
  * Đồng bộ lương giáo viên vào expenses
  * Tự động tạo hoặc cập nhật chi phí lương giáo viên cho tháng/năm
