@@ -69,19 +69,35 @@ export function Header({
                     <SheetTitle>Menu</SheetTitle>
                   </SheetHeader>
                   <nav className="flex flex-col gap-2 p-4">
-                    {navItems.map((item) => (
-                      <Button
-                        key={item.href}
-                        asChild
-                        variant={
-                          pathname.startsWith(item.href) ? "secondary" : "ghost"
+                    {navItems.map((item) => {
+                      const normalize = (value: string) => {
+                        if (value.length > 1 && value.endsWith("/")) {
+                          return value.slice(0, -1);
                         }
-                        className="justify-start"
-                        onClick={() => setIsOpen(false)}
-                      >
-                        <Link href={item.href}>{item.label}</Link>
-                      </Button>
-                    ))}
+                        return value;
+                      };
+
+                      const currentPath = normalize(pathname || "/");
+                      const itemHref = normalize(item.href);
+                      const rootLikePaths = ["/", "/teacher"];
+                      const isRoot = rootLikePaths.includes(itemHref);
+                      const isExactMatch = currentPath === itemHref;
+                      const isSubRoute =
+                        !isRoot && currentPath.startsWith(`${itemHref}/`);
+                      const isActive = isExactMatch || isSubRoute;
+
+                      return (
+                        <Button
+                          key={item.href}
+                          asChild
+                          variant={isActive ? "secondary" : "ghost"}
+                          className="justify-start"
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <Link href={item.href}>{item.label}</Link>
+                        </Button>
+                      );
+                    })}
                   </nav>
                 </SheetContent>
               </Sheet>

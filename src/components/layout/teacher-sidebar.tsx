@@ -16,11 +16,22 @@ function NavContent({ onLinkClick }: NavContentProps) {
   return (
     <nav className="flex flex-col gap-2 p-4">
       {TEACHER_NAV_ITEMS.map((item) => {
-        // Chỉ active khi exact match hoặc là sub-route (có "/" sau href)
-        // Tránh trường hợp "/teacher" match với "/teacher/classes"
-        const isActive =
-          pathname === item.href ||
-          (pathname.startsWith(item.href + "/") && item.href !== "/teacher");
+        const normalize = (value: string) => {
+          if (value.length > 1 && value.endsWith("/")) {
+            return value.slice(0, -1);
+          }
+          return value;
+        };
+
+        const currentPath = normalize(pathname);
+        const itemHref = normalize(item.href);
+        const isRootLink = itemHref === "/teacher";
+
+        const isExactMatch = currentPath === itemHref;
+        const isSubRoute =
+          !isRootLink && currentPath.startsWith(`${itemHref}/`);
+
+        const isActive = isExactMatch || isSubRoute;
 
         return (
           <Button
@@ -46,4 +57,3 @@ export function TeacherSidebar() {
     </aside>
   );
 }
-
