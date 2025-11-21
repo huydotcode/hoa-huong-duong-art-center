@@ -30,9 +30,13 @@ import { Badge } from "@/components/ui/badge";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition, useEffect } from "react";
 import { formatVND } from "@/lib/utils";
-import { syncTuitionPaymentStatus } from "@/lib/services/admin-payment-service";
+import {
+  syncTuitionPaymentStatus,
+  exportTuitionData,
+  type ExportTuitionInput,
+} from "@/lib/services/admin-payment-service";
 import { toast } from "sonner";
-import { Loader2, Filter, X } from "lucide-react";
+import { Loader2, Filter, X, Download } from "lucide-react";
 import type { TuitionSummary } from "@/lib/services/admin-payment-service";
 import { SUBJECTS } from "@/lib/constants/subjects";
 
@@ -70,6 +74,7 @@ export default function TuitionFilter({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
 
   const [monthState, setMonthState] = useState<string>(String(month));
@@ -114,8 +119,7 @@ export default function TuitionFilter({
       const nextQuery = updates.query ?? queryState;
       const nextStatus = updates.status ?? statusState;
       const nextSubject = updates.subject ?? subjectState;
-      const nextLearningStatus =
-        updates.learningStatus ?? learningStatusState;
+      const nextLearningStatus = updates.learningStatus ?? learningStatusState;
       const nextViewMode = updates.viewMode ?? viewModeState;
 
       const params = new URLSearchParams(searchParams?.toString());
@@ -299,6 +303,64 @@ export default function TuitionFilter({
     }
   };
 
+  const buildExportPayload = (): ExportTuitionInput => {
+    const payload: ExportTuitionInput = {
+      year: parseInt(yearState, 10),
+      viewMode: viewModeState,
+      status: statusState as ExportTuitionInput["status"],
+      learningStatus:
+        learningStatusState as ExportTuitionInput["learningStatus"],
+    };
+
+    if (viewModeState === "month") {
+      payload.month = parseInt(monthState, 10);
+    }
+    if (classIdState !== "all") {
+      payload.classId = classIdState;
+    }
+    if (subjectState !== "all") {
+      payload.subject = subjectState;
+    }
+    if (queryState.trim()) {
+      payload.query = queryState.trim();
+    }
+
+    return payload;
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const payload = buildExportPayload();
+      const result = await exportTuitionData(payload);
+
+      const byteCharacters = atob(result.fileData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: result.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Đã xuất dữ liệu học phí");
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể xuất dữ liệu", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Generate year options (current year - 2 to current year + 2)
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -469,7 +531,9 @@ export default function TuitionFilter({
 
                   {/* Trạng thái học */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Trạng thái học</label>
+                    <label className="text-sm font-medium">
+                      Trạng thái học
+                    </label>
                     <Select
                       value={learningStatusState}
                       onValueChange={handleLearningStatusChange}
@@ -479,7 +543,9 @@ export default function TuitionFilter({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="enrolled">Đang học</SelectItem>
-                        <SelectItem value="active">Đang học (chính thức)</SelectItem>
+                        <SelectItem value="active">
+                          Đang học (chính thức)
+                        </SelectItem>
                         <SelectItem value="trial">Học thử</SelectItem>
                         <SelectItem value="inactive">Ngừng học</SelectItem>
                         <SelectItem value="all">Tất cả</SelectItem>
@@ -570,6 +636,26 @@ export default function TuitionFilter({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full md:w-auto"
+          onClick={handleExport}
+          disabled={isExporting}
+        >
+          {isExporting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Đang xuất...
+            </>
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Xuất Excel
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Summary Cards */}

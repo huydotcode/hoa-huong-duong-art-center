@@ -12,6 +12,8 @@ import {
   normalizePhone,
   calculateTuitionSummary,
 } from "@/lib/utils";
+import { SUBJECTS } from "@/lib/constants/subjects";
+import * as XLSX from "xlsx";
 
 export interface TuitionItem {
   paymentStatusId: string | null;
@@ -582,6 +584,259 @@ export async function togglePaymentStatus(
       paidAt: newIsPaid ? new Date().toISOString() : null,
     };
   }
+}
+
+export type ExportStatus = "all" | "paid" | "unpaid" | "not_created";
+export type ExportLearningStatus =
+  | "all"
+  | "enrolled"
+  | "active"
+  | "trial"
+  | "inactive";
+
+export type ExportTuitionInput = {
+  month?: number;
+  year: number;
+  classId?: string;
+  query?: string;
+  status?: ExportStatus;
+  subject?: string;
+  learningStatus?: ExportLearningStatus;
+  viewMode: "month" | "year";
+};
+
+export async function exportTuitionData(input: ExportTuitionInput): Promise<{
+  fileName: string;
+  fileData: string;
+  mimeType: string;
+}> {
+  const {
+    month,
+    year,
+    classId,
+    query = "",
+    status = "all",
+    subject = "all",
+    learningStatus = "enrolled",
+    viewMode,
+  } = input;
+
+  if (!year || Number.isNaN(year)) {
+    throw new Error("Thiếu hoặc sai định dạng năm.");
+  }
+
+  let tuitionData;
+  if (viewMode === "year") {
+    tuitionData = await getTuitionDataForYear(
+      year,
+      classId,
+      query,
+      status,
+      subject,
+      learningStatus
+    );
+  } else {
+    if (!month || Number.isNaN(month)) {
+      throw new Error("Thiếu hoặc sai định dạng tháng.");
+    }
+    tuitionData = await getTuitionData(
+      month,
+      year,
+      classId,
+      query,
+      status,
+      subject,
+      learningStatus
+    );
+  }
+
+  const formatEnrollmentStatus = (
+    enrollmentStatus: "trial" | "active" | "inactive"
+  ): string => {
+    switch (enrollmentStatus) {
+      case "trial":
+        return "Học thử";
+      case "active":
+        return "Đang học";
+      case "inactive":
+        return "Ngừng học";
+      default:
+        return enrollmentStatus;
+    }
+  };
+
+  const workbook = XLSX.utils.book_new();
+  const subjectMatchers = SUBJECTS.map((subject) => ({
+    label: subject,
+    normalized: normalizeText(subject),
+  }));
+
+  if (tuitionData.length === 0) {
+    const worksheet = XLSX.utils.json_to_sheet([]);
+    worksheet["!rows"] = [{ hpt: 22 }];
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Không có dữ liệu");
+  } else if (viewMode === "year") {
+    type MonthEntry = {
+      display: string;
+    };
+    type YearRow = {
+      studentName: string;
+      studentPhone: string;
+      className: string;
+      enrollmentStatus: string;
+      months: Record<number, MonthEntry | undefined>;
+    };
+
+    const subjectRows = new Map<string, Map<string, YearRow>>();
+
+    tuitionData.forEach((item) => {
+      const normalizedClassName = normalizeText(item.className || "");
+      const matchedSubject =
+        subjectMatchers.find((subject) =>
+          normalizedClassName.includes(subject.normalized)
+        )?.label || "Môn khác";
+
+      if (!subjectRows.has(matchedSubject)) {
+        subjectRows.set(matchedSubject, new Map());
+      }
+      const rowsMap = subjectRows.get(matchedSubject)!;
+
+      const rowKey = `${item.studentId}-${item.classId}`;
+      if (!rowsMap.has(rowKey)) {
+        rowsMap.set(rowKey, {
+          studentName: item.studentName,
+          studentPhone: item.studentPhone,
+          className: item.className,
+          enrollmentStatus: formatEnrollmentStatus(item.enrollmentStatus),
+          months: {},
+        });
+      }
+
+      const row = rowsMap.get(rowKey)!;
+      let display = "Chưa tạo";
+      if (item.paymentStatusId) {
+        display = item.isPaid
+          ? item.amount
+            ? `Đã đóng (${item.amount.toLocaleString("vi-VN")})`
+            : "Đã đóng"
+          : "Chưa đóng";
+      }
+      row.months[item.month] = { display };
+    });
+
+    const monthHeaders = Array.from({ length: 12 }, (_, i) => `Tháng ${i + 1}`);
+    const columnWidths = [
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 18 },
+      ...monthHeaders.map(() => ({ wch: 16 })),
+    ];
+
+    subjectRows.forEach((rowsMap, subject) => {
+      const rows = Array.from(rowsMap.values()).map((row) => {
+        const result: Record<string, string> = {
+          "Họ tên": row.studentName,
+          "Số điện thoại": row.studentPhone,
+          Lớp: row.className,
+          "Trạng thái học": row.enrollmentStatus,
+        };
+        monthHeaders.forEach((header, index) => {
+          const month = index + 1;
+          result[header] = row.months[month]?.display ?? "";
+        });
+        return result;
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      worksheet["!cols"] = columnWidths;
+      worksheet["!rows"] = [{ hpt: 22 }];
+
+      const sheetName =
+        subject.length > 31 ? subject.slice(0, 28) + "..." : subject;
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    });
+  } else {
+    const groupedSheets = new Map<string, Record<string, string | number>[]>();
+
+    tuitionData.forEach((item) => {
+      const normalizedClassName = normalizeText(item.className || "");
+      const matchedSubject =
+        subjectMatchers.find((subject) =>
+          normalizedClassName.includes(subject.normalized)
+        )?.label || "Môn khác";
+
+      const row = {
+        "Họ tên": item.studentName,
+        "Số điện thoại": item.studentPhone,
+        Lớp: item.className,
+        Tháng: item.month,
+        "Học phí": item.monthlyFee,
+        "Trạng thái học phí": item.paymentStatusId
+          ? item.isPaid
+            ? "Đã đóng"
+            : "Chưa đóng"
+          : "Chưa tạo",
+        "Số tiền đã đóng": item.isPaid && item.amount ? item.amount : "",
+        "Ngày đóng": item.paidAt
+          ? new Date(item.paidAt).toLocaleDateString()
+          : "",
+        "Trạng thái học": formatEnrollmentStatus(item.enrollmentStatus),
+        "Ngày đăng ký": item.enrollmentDate
+          ? new Date(item.enrollmentDate).toLocaleDateString()
+          : "",
+        "Ngày rời lớp": item.leaveDate
+          ? new Date(item.leaveDate).toLocaleDateString()
+          : "",
+      };
+
+      if (!groupedSheets.has(matchedSubject)) {
+        groupedSheets.set(matchedSubject, []);
+      }
+      groupedSheets.get(matchedSubject)!.push(row);
+    });
+
+    const columnWidths = [
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 15 },
+    ];
+
+    groupedSheets.forEach((rows, subject) => {
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      worksheet["!cols"] = columnWidths;
+      worksheet["!rows"] = [{ hpt: 22 }];
+
+      const sheetName =
+        subject.length > 31 ? subject.slice(0, 28) + "..." : subject;
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    });
+  }
+
+  const buffer = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "buffer",
+  });
+
+  const fileName =
+    viewMode === "year"
+      ? `hoc-phi-${year}.xlsx`
+      : `hoc-phi-${month}-${year}.xlsx`;
+
+  return {
+    fileName,
+    fileData: Buffer.from(buffer).toString("base64"),
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  };
 }
 
 /**
