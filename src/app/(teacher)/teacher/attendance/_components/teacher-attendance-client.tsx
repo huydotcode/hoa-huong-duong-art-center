@@ -17,6 +17,7 @@ import AdminAttendanceMatrix from "@/components/shared/attendance/admin-attendan
 import type {
   TeacherAttendanceClass,
   TeacherAttendanceRow,
+  TeacherClassSession,
 } from "@/lib/services/teacher-attendance-service";
 import { generateTimeSlots } from "@/lib/utils";
 
@@ -24,18 +25,22 @@ export default function TeacherAttendanceClient({
   dateISO,
   sessionLabel,
   classSessionTimes,
+  classSessions,
   classes,
   rows,
   initialState,
   initialNotes = {},
+  showAllClasses = false,
 }: {
   dateISO: string;
   sessionLabel: string;
   classSessionTimes: Record<string, { sessionTime: string; endTime: string }>;
+  classSessions: TeacherClassSession[];
   classes: TeacherAttendanceClass[];
   rows: TeacherAttendanceRow[];
   initialState: Record<string, boolean>;
   initialNotes?: Record<string, string | null>;
+  showAllClasses?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,6 +63,7 @@ export default function TeacherAttendanceClient({
 
   const handleSessionChange = useCallback(
     (newSession: string) => {
+      if (showAllClasses) return;
       const currentSessionParam = searchParams?.get("session");
       // Only update if the value actually changed from what's in URL or current sessionLabel
       if (newSession === currentSessionParam || newSession === sessionLabel) {
@@ -66,10 +72,37 @@ export default function TeacherAttendanceClient({
 
       const params = new URLSearchParams(searchParams?.toString() || "");
       params.set("session", newSession);
+      params.delete("showAll");
       router.push(`/teacher/attendance?${params.toString()}`);
     },
-    [searchParams, router, sessionLabel]
+    [searchParams, router, sessionLabel, showAllClasses]
   );
+
+  const handleShowAllToggle = useCallback(() => {
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    if (showAllClasses) {
+      params.delete("showAll");
+    } else {
+      params.set("showAll", "true");
+    }
+    router.push(`/teacher/attendance?${params.toString()}`);
+  }, [router, searchParams, showAllClasses]);
+
+  const classMap = useMemo(
+    () => new Map(classes.map((c) => [c.id, c])),
+    [classes]
+  );
+
+  const sessionsByClass = useMemo(() => {
+    const map = new Map<string, TeacherClassSession[]>();
+    classSessions.forEach((session) => {
+      if (!map.has(session.classId)) {
+        map.set(session.classId, []);
+      }
+      map.get(session.classId)!.push(session);
+    });
+    return map;
+  }, [classSessions]);
 
   const grouped = useMemo(() => {
     const map = new Map<
@@ -85,63 +118,116 @@ export default function TeacherAttendanceClient({
       }
     >();
 
-    classes.forEach((c) => {
-      const info = classSessionTimes[c.id];
-      map.set(c.id, {
-        classId: c.id,
-        className: c.name,
-        sessionTime: info?.sessionTime ?? sessionLabel,
-        endTime: info?.endTime,
-        rows: [],
-        initialState: {},
-        initialNotes: {},
+    if (showAllClasses) {
+      sessionsByClass.forEach((sessions, classId) => {
+        const classInfo = classMap.get(classId);
+        sessions.forEach((session) => {
+          const groupKey = `${classId}::${session.sessionTime}`;
+          if (!map.has(groupKey)) {
+            map.set(groupKey, {
+              classId,
+              className: classInfo?.name || "",
+              sessionTime: session.sessionTime,
+              endTime: session.endTime,
+              rows: [],
+              initialState: {},
+              initialNotes: {},
+            });
+          }
+        });
       });
-    });
-
-    studentRows.forEach((row) => {
-      if (!map.has(row.classId)) {
-        const info = classSessionTimes[row.classId];
-        map.set(row.classId, {
-          classId: row.classId,
-          className: row.className,
+    } else {
+      classes.forEach((c) => {
+        const info = classSessionTimes[c.id];
+        map.set(c.id, {
+          classId: c.id,
+          className: c.name,
           sessionTime: info?.sessionTime ?? sessionLabel,
           endTime: info?.endTime,
-          rows: [row],
+          rows: [],
           initialState: {},
           initialNotes: {},
         });
+      });
+    }
+
+    studentRows.forEach((row) => {
+      if (showAllClasses) {
+        const sessions = sessionsByClass.get(row.classId);
+        if (sessions) {
+          sessions.forEach((session) => {
+            const groupKey = `${row.classId}::${session.sessionTime}`;
+            const group = map.get(groupKey);
+            if (group && !group.rows.find((r) => r.key === row.key)) {
+              group.rows.push(row);
+            }
+          });
+        }
       } else {
-        map.get(row.classId)!.rows.push(row);
+        if (!map.has(row.classId)) {
+          const info = classSessionTimes[row.classId];
+          map.set(row.classId, {
+            classId: row.classId,
+            className: row.className,
+            sessionTime: info?.sessionTime ?? sessionLabel,
+            endTime: info?.endTime,
+            rows: [row],
+            initialState: {},
+            initialNotes: {},
+          });
+        } else {
+          map.get(row.classId)!.rows.push(row);
+        }
       }
     });
 
     Object.entries(initialState).forEach(([key, value]) => {
-      const [baseKey] = key.split("@@");
+      const [baseKey, sessionTime] = key.split("@@");
       if (!baseKey) return;
       const [, , classId] = baseKey.split(":");
       if (!classId) return;
-      const group = map.get(classId);
-      if (!group) return;
-      group.initialState[key] = value;
+
+      if (showAllClasses) {
+        const groupKey = `${classId}::${sessionTime}`;
+        const group = map.get(groupKey);
+        if (!group) return;
+        group.initialState[key] = value;
+      } else {
+        const group = map.get(classId);
+        if (!group) return;
+        group.initialState[key] = value;
+      }
     });
 
     if (initialNotes) {
       Object.entries(initialNotes).forEach(([key, value]) => {
-        const [baseKey] = key.split("@@");
+        const [baseKey, sessionTime] = key.split("@@");
         if (!baseKey) return;
         const [, , classId] = baseKey.split(":");
         if (!classId) return;
-        const group = map.get(classId);
-        if (!group) return;
-        group.initialNotes[key] = value ?? null;
+
+        if (showAllClasses) {
+          const groupKey = `${classId}::${sessionTime}`;
+          const group = map.get(groupKey);
+          if (!group) return;
+          group.initialNotes[key] = value ?? null;
+        } else {
+          const group = map.get(classId);
+          if (!group) return;
+          group.initialNotes[key] = value ?? null;
+        }
       });
     }
 
-    return Array.from(map.values()).sort((a, b) =>
-      a.className.localeCompare(b.className, "vi", {
+    return Array.from(map.values()).sort((a, b) => {
+      if (showAllClasses) {
+        const timeCompare = a.sessionTime.localeCompare(b.sessionTime);
+        if (timeCompare !== 0) return timeCompare;
+      }
+      return a.className.localeCompare(b.className, "vi", {
         sensitivity: "base",
-      })
-    );
+      });
+    });
   }, [
     classes,
     studentRows,
@@ -149,7 +235,16 @@ export default function TeacherAttendanceClient({
     sessionLabel,
     initialState,
     initialNotes,
+    showAllClasses,
+    sessionsByClass,
+    classMap,
   ]);
+
+  const summaryKeyForGroup = useCallback(
+    (group: { classId: string; sessionTime: string }) =>
+      showAllClasses ? `${group.classId}::${group.sessionTime}` : group.classId,
+    [showAllClasses]
+  );
 
   const [attendanceSummaries, setAttendanceSummaries] = useState<
     Record<string, { presentStudents: number; totalStudents: number }>
@@ -169,11 +264,11 @@ export default function TeacherAttendanceClient({
 
   const handleStatsChange = useCallback(
     (
-      classId: string,
+      mapKey: string,
       statsSummary: { presentStudents: number; totalStudents: number }
     ) => {
       setAttendanceSummaries((prev) => {
-        const prevStats = prev[classId];
+        const prevStats = prev[mapKey];
         if (
           prevStats &&
           prevStats.presentStudents === statsSummary.presentStudents &&
@@ -183,7 +278,7 @@ export default function TeacherAttendanceClient({
         }
         return {
           ...prev,
-          [classId]: statsSummary,
+          [mapKey]: statsSummary,
         };
       });
     },
@@ -192,7 +287,7 @@ export default function TeacherAttendanceClient({
 
   const handleBulkActionsReady = useCallback(
     (
-      classId: string,
+      mapKey: string,
       actions: {
         selectedCount: number;
         allSelected: boolean;
@@ -202,7 +297,7 @@ export default function TeacherAttendanceClient({
     ) => {
       setBulkActionsMap((prev) => {
         // Chỉ update nếu actions thực sự thay đổi
-        const prevActions = prev[classId];
+        const prevActions = prev[mapKey];
         if (
           prevActions &&
           prevActions.selectedCount === actions.selectedCount &&
@@ -212,7 +307,7 @@ export default function TeacherAttendanceClient({
         }
         return {
           ...prev,
-          [classId]: actions,
+          [mapKey]: actions,
         };
       });
     },
@@ -233,7 +328,11 @@ export default function TeacherAttendanceClient({
             <span className="hidden md:inline-block text-xs text-muted-foreground whitespace-nowrap">
               Ca
             </span>
-            <Select value={displaySession} onValueChange={handleSessionChange}>
+            <Select
+              value={displaySession}
+              onValueChange={handleSessionChange}
+              disabled={showAllClasses}
+            >
               <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="Chọn giờ" />
               </SelectTrigger>
@@ -245,13 +344,23 @@ export default function TeacherAttendanceClient({
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant={showAllClasses ? "default" : "outline"}
+              size="sm"
+              onClick={handleShowAllToggle}
+              className="whitespace-nowrap"
+            >
+              {showAllClasses ? "Xem theo ca" : "Tất cả ca"}
+            </Button>
           </div>
         </div>
       </div>
 
       {grouped.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Không có lớp nào trong ca này.
+          {showAllClasses
+            ? "Không có lớp nào trong ngày này."
+            : "Không có lớp nào trong ca này."}
         </div>
       ) : (
         <div className="space-y-4">
@@ -261,10 +370,12 @@ export default function TeacherAttendanceClient({
             const stateForGroup = group.initialState;
             const notesForGroup = group.initialNotes;
             const totalStudents = group.rows.length;
-            const summary = attendanceSummaries[group.classId];
+            const summaryKey = summaryKeyForGroup(group);
+            const summary = attendanceSummaries[summaryKey];
+            const bulkActions = bulkActionsMap[summaryKey];
 
             return (
-              <Card key={group.classId} className="shadow-sm">
+              <Card key={summaryKey} className="shadow-sm">
                 <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <CardTitle className="text-lg">
@@ -286,40 +397,28 @@ export default function TeacherAttendanceClient({
                       Ca {sessionTime}
                       {sessionEnd ? ` - ${sessionEnd}` : ""}
                     </Badge>
-                    {bulkActionsMap[group.classId] && (
+                    {bulkActions && (
                       <div className="hidden md:flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={
-                            bulkActionsMap[group.classId].toggleSelectAll
-                          }
+                          onClick={bulkActions.toggleSelectAll}
                           className="whitespace-nowrap"
                         >
-                          {bulkActionsMap[group.classId].allSelected
-                            ? "Bỏ chọn"
-                            : "Chọn tất cả"}
+                          {bulkActions.allSelected ? "Bỏ chọn" : "Chọn tất cả"}
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() =>
-                            bulkActionsMap[group.classId].handleBulk(true)
-                          }
-                          disabled={
-                            bulkActionsMap[group.classId].selectedCount === 0
-                          }
+                          onClick={() => bulkActions.handleBulk(true)}
+                          disabled={bulkActions.selectedCount === 0}
                         >
                           Có
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() =>
-                            bulkActionsMap[group.classId].handleBulk(false)
-                          }
-                          disabled={
-                            bulkActionsMap[group.classId].selectedCount === 0
-                          }
+                          onClick={() => bulkActions.handleBulk(false)}
+                          disabled={bulkActions.selectedCount === 0}
                         >
                           Vắng
                         </Button>
@@ -338,12 +437,12 @@ export default function TeacherAttendanceClient({
                     initialNotes={notesForGroup}
                     statsRows={group.rows}
                     onStatsChange={(statsSummary) =>
-                      handleStatsChange(group.classId, statsSummary)
+                      handleStatsChange(summaryKey, statsSummary)
                     }
                     onBulkActionsReady={
                       group.rows.length > 0
                         ? (actions) =>
-                            handleBulkActionsReady(group.classId, actions)
+                            handleBulkActionsReady(summaryKey, actions)
                         : undefined
                     }
                     markedBy="teacher"

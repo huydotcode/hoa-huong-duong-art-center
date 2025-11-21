@@ -208,7 +208,10 @@ export type TeacherClassSession = {
 export async function getTeacherClassesInSessionWithTimes(
   teacherId: string,
   dateISO: string,
-  sessionLabel: string
+  sessionLabel: string,
+  options?: {
+    showAll?: boolean;
+  }
 ): Promise<TeacherClassSession[]> {
   const supabase = await createClient();
 
@@ -238,10 +241,11 @@ export async function getTeacherClassesInSessionWithTimes(
     .eq("is_active", true);
 
   // Convert sessionLabel (e.g., "18:00") to minutes for comparison
-  // Khi chọn ca 18:00, hiển thị tất cả các lớp bắt đầu từ 18:00 đến trước 19:00
+  // Khi chọn ca 18:00, hiển thị tất cả các lớp bắt đầu từ 18:00 đến trước 21:00 (3 giờ kế tiếp)
   const [currentHour, currentMinute] = sessionLabel.split(":").map(Number);
   const currentMinutes = (currentHour || 0) * 60 + (currentMinute || 0);
-  const nextHourMinutes = currentMinutes + 60; // Giờ tiếp theo (ví dụ 18:00 -> 19:00)
+  const windowMinutes = currentMinutes + 180; // 3 giờ tiếp theo
+  const showAllSessions = Boolean(options?.showAll);
 
   const matchedSessions: TeacherClassSession[] = [];
   (Array.isArray(classesData)
@@ -268,32 +272,21 @@ export async function getTeacherClassesInSessionWithTimes(
     } catch {
       slots = [];
     }
-    const matchedSlot = slots.find(
-      (s: { day: number; start_time: string; end_time?: string }) => {
-        const slotDay = Number(s.day);
-        if (slotDay !== weekday) {
-          return false;
-        }
-
-        const [startHour, startMin] = String(s.start_time || "00:00")
-          .split(":")
-          .map(Number);
-        const startMinutes = (startHour || 0) * 60 + (startMin || 0);
-
-        // Match nếu lớp bắt đầu trong khoảng từ giờ được chọn đến giờ tiếp theo
-        // Ví dụ: chọn 18:00 -> hiển thị lớp bắt đầu từ 18:00 đến trước 19:00
-        return startMinutes >= currentMinutes && startMinutes < nextHourMinutes;
-      }
+    const slotsForDay = slots.filter(
+      (s: { day: number }) => Number(s.day) === weekday
     );
 
-    if (matchedSlot) {
-      const [startHour, startMin] = String(matchedSlot.start_time || "00:00")
+    const pushSession = (
+      slot: { start_time: string; end_time?: string },
+      classId: string
+    ) => {
+      const [startHour, startMin] = String(slot.start_time || "00:00")
         .split(":")
         .map(Number);
       const startMinutes = (startHour || 0) * 60 + (startMin || 0);
       let endMinutes: number;
-      if (matchedSlot.end_time) {
-        const [endHour, endMin] = String(matchedSlot.end_time)
+      if (slot.end_time) {
+        const [endHour, endMin] = String(slot.end_time)
           .split(":")
           .map(Number);
         endMinutes = (endHour || 0) * 60 + (endMin || 0);
@@ -306,10 +299,30 @@ export async function getTeacherClassesInSessionWithTimes(
       const endTime = `${String(endHour).padStart(2, "0")}:${String(endMin).padStart(2, "0")}`;
 
       matchedSessions.push({
-        classId: String(c.id),
-        sessionTime: String(matchedSlot.start_time || "00:00"),
+        classId,
+        sessionTime: String(slot.start_time || "00:00"),
         endTime,
       });
+    };
+
+    if (showAllSessions) {
+      slotsForDay.forEach((slot) => pushSession(slot, String(c.id)));
+    } else {
+      const matchedSlot = slotsForDay.find(
+        (s: { start_time: string }) => {
+          const [startHour, startMin] = String(s.start_time || "00:00")
+            .split(":")
+            .map(Number);
+          const startMinutes = (startHour || 0) * 60 + (startMin || 0);
+
+          // Match nếu lớp bắt đầu trong khoảng từ giờ được chọn đến trước 3 giờ tiếp theo
+          return startMinutes >= currentMinutes && startMinutes < windowMinutes;
+        }
+      );
+
+      if (matchedSlot) {
+        pushSession(matchedSlot, String(c.id));
+      }
     }
   });
 

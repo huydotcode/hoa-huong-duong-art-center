@@ -17,15 +17,16 @@ function normalizeToHourSlot(time: string): string {
 export default async function TeacherAttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; session?: string }>;
+  searchParams: Promise<{ date?: string; session?: string; showAll?: string }>;
 }) {
-  const { date, session } = await searchParams;
+  const { date, session, showAll } = await searchParams;
   const dateISO = (date ? new Date(date) : new Date())
     .toISOString()
     .slice(0, 10);
   const sessionLabel = session
     ? session
     : normalizeToHourSlot(getCurrentSessionLabel());
+  const showAllClasses = showAll === "true";
 
   const teacherId = await getTeacherIdFromSession();
   if (!teacherId) return notFound();
@@ -33,9 +34,12 @@ export default async function TeacherAttendancePage({
   const classSessions = await getTeacherClassesInSessionWithTimes(
     teacherId,
     dateISO,
-    sessionLabel
+    sessionLabel,
+    { showAll: showAllClasses }
   );
-  const classIds = classSessions.map((item) => item.classId);
+  const classIds = Array.from(
+    new Set(classSessions.map((item) => item.classId))
+  );
   const classSessionTimes = Object.fromEntries(
     classSessions.map((item) => [
       item.classId,
@@ -57,10 +61,12 @@ export default async function TeacherAttendancePage({
         dateISO={dateISO}
         sessionLabel={sessionLabel}
         classSessionTimes={classSessionTimes}
+        classSessions={classSessions}
         classes={classes}
         rows={rows}
         initialState={attendanceState.states}
         initialNotes={attendanceState.notes}
+        showAllClasses={showAllClasses}
       />
     </div>
   );
