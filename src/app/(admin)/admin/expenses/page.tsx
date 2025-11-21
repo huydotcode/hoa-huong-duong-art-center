@@ -13,6 +13,7 @@ interface SearchProps {
     month?: string;
     year?: string;
     q?: string;
+    view?: string;
   }>;
 }
 
