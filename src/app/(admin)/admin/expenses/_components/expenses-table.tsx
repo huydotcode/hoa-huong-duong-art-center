@@ -110,13 +110,13 @@ export default function ExpensesTable({ expenses }: ExpensesTableProps) {
                   </TableCell>
                   <TableCell>{expense.reason}</TableCell>
                   <TableCell className="text-right">
-                    {!isSalary ? (
-                      <div className="flex justify-end gap-2">
-                        <ExpenseForm expense={expense}>
-                          <Button variant="ghost" size="icon">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </ExpenseForm>
+                    <div className="flex justify-end gap-2">
+                      <ExpenseForm expense={expense}>
+                        <Button variant="ghost" size="icon">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </ExpenseForm>
+                      {!isSalary && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -148,12 +148,8 @@ export default function ExpensesTable({ expenses }: ExpensesTableProps) {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Tự động quản lý
-                      </span>
-                    )}
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );

@@ -1,7 +1,6 @@
 import {
   getExpenses,
   getTotalExpensesByMonth,
-  syncTeacherSalaryExpense,
 } from "@/lib/services/admin-expenses-service";
 import ExpensesClient from "./_components/expenses-client";
 
@@ -30,10 +29,6 @@ export default async function ExpensesPage(props: SearchProps) {
   // Validate month and year
   const validMonth = month >= 1 && month <= 12 ? month : now.getMonth() + 1;
   const validYear = year >= 2020 && year <= 2100 ? year : now.getFullYear();
-
-  // Đồng bộ lương giáo viên vào expenses trước khi fetch
-  // Không revalidate trong render để tránh lỗi Next.js
-  await syncTeacherSalaryExpense(validMonth, validYear, false);
 
   const [expenses, total] = await Promise.all([
     getExpenses(validMonth, validYear, query),

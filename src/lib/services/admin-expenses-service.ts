@@ -271,3 +271,113 @@ export async function syncTeacherSalaryExpense(
     );
   }
 }
+
+const TEACHER_SALARY_PREFIX = "Lương giáo viên";
+const TEACHER_ID_REGEX = /GV:([^) ]+)/;
+
+function buildTeacherSalaryReason(
+  teacherName: string,
+  teacherId: string,
+  month: number,
+  year: number
+) {
+  return `${TEACHER_SALARY_PREFIX} - ${teacherName} (GV:${teacherId}) T${month}/${year}`;
+}
+
+function parseTeacherIdFromReason(reason: string): string | null {
+  const match = reason.match(TEACHER_ID_REGEX);
+  return match ? match[1] : null;
+}
+
+export type TeacherSalaryExpenseRecord = {
+  expenseId: string;
+  amount: number;
+  expenseDate: string;
+  reason: string;
+};
+
+export type TeacherSalaryExpenseMap = Record<
+  string,
+  TeacherSalaryExpenseRecord
+>;
+
+export async function getTeacherSalaryExpensesMap(
+  month: number,
+  year: number
+): Promise<TeacherSalaryExpenseMap> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("id, amount, reason, expense_date")
+    .eq("month", month)
+    .eq("year", year)
+    .ilike("reason", `%${TEACHER_SALARY_PREFIX}%`);
+
+  if (error) throw error;
+
+  const map: TeacherSalaryExpenseMap = {};
+  (data || []).forEach((expense) => {
+    const teacherId = parseTeacherIdFromReason(String(expense.reason));
+    if (!teacherId) return;
+    map[teacherId] = {
+      expenseId: String(expense.id),
+      amount: Number(expense.amount) || 0,
+      expenseDate: String(expense.expense_date),
+      reason: String(expense.reason),
+    };
+  });
+
+  return map;
+}
+
+export async function upsertTeacherSalaryExpense(
+  input: {
+    teacherId: string;
+    teacherName: string;
+    amount: number;
+    month: number;
+    year: number;
+    expenseDate?: string;
+  },
+  path?: string
+): Promise<void> {
+  const supabase = await createClient();
+  const { teacherId, teacherName, amount, month, year } = input;
+  const expenseDate =
+    input.expenseDate || new Date(year, month, 0).toISOString().split("T")[0];
+
+  const existing = await supabase
+    .from("expenses")
+    .select("id, reason")
+    .eq("month", month)
+    .eq("year", year)
+    .ilike("reason", `%GV:${teacherId}%`)
+    .maybeSingle();
+
+  if (existing.data?.id) {
+    const { error } = await supabase
+      .from("expenses")
+      .update({
+        amount,
+        expense_date: expenseDate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.data.id);
+    if (error) throw error;
+  } else {
+    await createExpense(
+      {
+        amount,
+        reason: buildTeacherSalaryReason(teacherName, teacherId, month, year),
+        expense_date: expenseDate,
+        month,
+        year,
+      },
+      undefined
+    );
+  }
+
+  if (path) {
+    revalidatePath(path);
+  }
+}

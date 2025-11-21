@@ -93,13 +93,13 @@ export default function ExpensesCards({ expenses }: ExpensesCardsProps) {
                     {formatVND(expense.amount)}
                   </p>
                 </div>
-                {!isSalary ? (
-                  <div className="flex gap-2">
-                    <ExpenseForm expense={expense}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </ExpenseForm>
+                <div className="flex gap-2">
+                  <ExpenseForm expense={expense}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </ExpenseForm>
+                  {!isSalary && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -132,12 +132,8 @@ export default function ExpensesCards({ expenses }: ExpensesCardsProps) {
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    Tự động quản lý
-                  </span>
-                )}
+                  )}
+                </div>
               </div>
               <div className="mt-2">
                 <p className="text-sm text-muted-foreground">Lý do:</p>

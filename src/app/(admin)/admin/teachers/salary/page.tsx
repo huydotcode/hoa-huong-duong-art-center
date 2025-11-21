@@ -2,6 +2,7 @@ import {
   getAllTeachersSalaryByMonth,
   getTotalTeachersSalaryByMonth,
 } from "@/lib/services/admin-teacher-salary-service";
+import { getTeacherSalaryExpensesMap } from "@/lib/services/admin-expenses-service";
 import SalaryClient from "./_components/salary-client";
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import { Suspense } from "react";
@@ -21,9 +22,10 @@ export default async function TeacherSalaryPage(props: SearchProps) {
   const year = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
 
   // Fetch data
-  const [salaries, totalSalary] = await Promise.all([
+  const [salaries, totalSalary, salaryExpenses] = await Promise.all([
     getAllTeachersSalaryByMonth(month, year),
     getTotalTeachersSalaryByMonth(month, year),
+    getTeacherSalaryExpensesMap(month, year),
   ]);
 
   return (
@@ -38,6 +40,7 @@ export default async function TeacherSalaryPage(props: SearchProps) {
           initialMonth={month}
           initialYear={year}
           initialTotal={totalSalary}
+          initialExpenses={salaryExpenses}
         />
       </Suspense>
     </div>

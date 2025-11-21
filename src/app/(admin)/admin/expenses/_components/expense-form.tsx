@@ -112,9 +112,8 @@ export function ExpenseForm({ expense, children }: Props) {
         const updateData: UpdateExpenseSchema = isSalaryExpense
           ? {
               amount: values.amount,
-              // Giữ nguyên reason và expense_date từ expense gốc
               reason: expense.reason,
-              expense_date: expense.expense_date,
+              expense_date: values.expense_date || expense.expense_date,
             }
           : (values as UpdateExpenseSchema);
 
@@ -238,18 +237,8 @@ export function ExpenseForm({ expense, children }: Props) {
                 <FormItem>
                   <FormLabel>Ngày chi</FormLabel>
                   <FormControl>
-                    <Input
-                      type="date"
-                      {...field}
-                      value={field.value || ""}
-                      disabled={isSalaryExpense}
-                    />
+                    <Input type="date" {...field} value={field.value || ""} />
                   </FormControl>
-                  {isSalaryExpense && (
-                    <p className="text-xs text-muted-foreground">
-                      Không thể chỉnh sửa ngày chi của chi phí lương giáo viên
-                    </p>
-                  )}
                   <FormMessage />
                 </FormItem>
               )}
