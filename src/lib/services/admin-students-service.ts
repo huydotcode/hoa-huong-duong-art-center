@@ -1196,12 +1196,54 @@ type CreateStudentData = Pick<
   "full_name" | "phone" | "parent_phone" | "is_active" | "notes"
 >;
 
+/**
+ * Check if a student with the same name and phone already exists
+ * @param fullName Student's full name
+ * @param phone Student's phone (can be null)
+ * @returns Existing student if found, null otherwise
+ */
+export async function checkDuplicateStudent(
+  fullName: string,
+  phone: string | null
+): Promise<Student | null> {
+  const supabase = await createClient();
+
+  // Normalize phone
+  const normalizedPhone = phone
+    ? phone.trim() === ""
+      ? null
+      : normalizePhone(phone)
+    : null;
+
+  // Build query: same name AND (same phone OR both phones are null)
+  let query = supabase
+    .from("students")
+    .select("*")
+    .eq("full_name", fullName.trim());
+
+  if (normalizedPhone) {
+    query = query.eq("phone", normalizedPhone);
+  } else {
+    query = query.is("phone", null);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
+
+  if (error) {
+    console.error("Error checking duplicate student:", error);
+    return null; // Don't block on error, let createStudent handle it
+  }
+
+  return data as Student | null;
+}
+
 export async function createStudent(
   data: Omit<CreateStudentData, "is_active" | "parent_phone"> & {
     is_active?: boolean;
     parent_phone?: string | null;
   },
-  path?: string
+  path?: string,
+  options?: { skipDuplicateCheck?: boolean }
 ) {
   const supabase = await createClient();
 
@@ -1222,6 +1264,21 @@ export async function createStudent(
 
   const normalizedNotes =
     data.notes && data.notes.trim().length > 0 ? data.notes.trim() : null;
+
+  // Check for duplicate: same name AND same phone (unless skipDuplicateCheck is true)
+  if (!options?.skipDuplicateCheck) {
+    const existingStudent = await checkDuplicateStudent(
+      data.full_name,
+      normalizedPhone
+    );
+
+    if (existingStudent) {
+      const phoneDisplay = normalizedPhone || "không có";
+      throw new Error(
+        `Đã tồn tại học sinh với tên "${data.full_name.trim()}" và số điện thoại "${phoneDisplay}". Vui lòng kiểm tra lại.`
+      );
+    }
+  }
 
   const payload = {
     full_name: data.full_name.trim(),
