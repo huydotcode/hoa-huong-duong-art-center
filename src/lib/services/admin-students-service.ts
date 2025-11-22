@@ -72,7 +72,6 @@ export async function getStudents(
   const recentOnly = Boolean(opts.recentOnly);
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
-  const includeInactiveClasses = learningStatusFilter === "inactive";
 
   const selectColumns = `
     id,
@@ -268,16 +267,15 @@ export async function getStudents(
         if (!isActiveEnrollment) {
           if (leaveDate || status === "inactive") {
             hasInactiveOrLeft = true;
-            if (includeInactiveClasses) {
-              class_summary.push({
-                classId: cls?.id ?? enrollment.class_id,
-                className: cls?.name ?? "Lớp chưa đặt tên",
-                subject: cls?.subject ?? null,
-                status: "inactive",
-                leaveDate: leaveDate ?? null,
-                leaveReason: enrollment.leave_reason ?? null,
-              });
-            }
+            // Luôn thêm vào class_summary để hiển thị trong cột "Lớp / trạng thái"
+            class_summary.push({
+              classId: cls?.id ?? enrollment.class_id,
+              className: cls?.name ?? "Lớp chưa đặt tên",
+              subject: cls?.subject ?? null,
+              status: "inactive",
+              leaveDate: leaveDate ?? null,
+              leaveReason: enrollment.leave_reason ?? null,
+            });
           }
           continue;
         }
