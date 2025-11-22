@@ -1,11 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +22,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Table,
   TableBody,
   TableCell,
@@ -25,27 +40,21 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Upload, Loader2, Download, Pencil, AlertCircle } from "lucide-react";
-import * as XLSX from "xlsx";
+import { importStudentsFromExcel } from "@/lib/services/admin-students-service";
+import { normalizePhone } from "@/lib/utils";
 import {
   parseExcelFile,
   validateStudentRow,
   type StudentRowWithStatus,
 } from "@/lib/utils/import-students";
-import { importStudentsFromExcel } from "@/lib/services/admin-students-service";
-import { usePathname } from "next/navigation";
-import { normalizePhone } from "@/lib/utils";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertCircle, AlertTriangle, Download, Loader2, Pencil, Upload } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { z } from "zod";
 import { MapClassesDialog } from "./map-classes-dialog";
 
 interface ImportStudentsFormProps {
@@ -83,6 +92,13 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
   const [importedStudentsWithIds, setImportedStudentsWithIds] = useState<
     StudentRowWithStatus[]
   >([]);
+  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
+  const [duplicateStudents, setDuplicateStudents] = useState<Array<{
+    rowIndex: number;
+    full_name: string;
+    phone: string | null;
+  }>>([]);
+  const [pendingImportData, setPendingImportData] = useState<StudentRowWithStatus[]>([]);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -206,6 +222,61 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
     }
   };
 
+  const handleImportSuccess = async (
+    result: {
+      success: number;
+      errors: Array<{ row: number; errors: string[] }>;
+      studentIds: Array<{ rowIndex: number; studentId: string }>;
+    },
+    validRows: StudentRowWithStatus[],
+    invalidRows: StudentRowWithStatus[]
+  ) => {
+    if (result.success > 0) {
+      toast.success(`Đã import thành công ${result.success} học sinh`);
+
+      // Map studentIds vào rows với thông tin lớp
+      const studentsWithIds = validRows.map((row) => {
+        const studentIdData = result.studentIds.find(
+          (s) => s.rowIndex === row.rowIndex
+        );
+        return {
+          ...row,
+          studentId: studentIdData?.studentId,
+        };
+      });
+
+      setImportedStudentsWithIds(studentsWithIds);
+      // Close import dialog and show map classes dialog
+      setOpen(false);
+      setShowMapClasses(true);
+    }
+
+    if (result.errors.length > 0) {
+      toast.warning(`Có ${result.errors.length} học sinh không thể import`, {
+        description: "Kiểm tra chi tiết trong danh sách lỗi",
+      });
+    }
+
+    if (invalidRows.length > 0) {
+      toast.info(`Đã bỏ qua ${invalidRows.length} học sinh không hợp lệ`, {
+        description: "Vui lòng chỉnh sửa và import lại nếu cần",
+      });
+    }
+
+    // Reset form only if not showing map classes dialog
+    if (
+      result.success === 0 ||
+      !result.studentIds ||
+      result.studentIds.length === 0
+    ) {
+      setAllRows([]);
+      setEditingRowIndex(null);
+      setOpen(false);
+      router.refresh();
+    }
+    setIsLoading(false);
+  };
+
   const handleImport = async () => {
     // Filter only valid rows
     const validRows = allRows.filter((row) => row.isValid);
@@ -237,56 +308,52 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
         pathname
       );
 
-      if (result.success > 0) {
-        toast.success(`Đã import thành công ${result.success} học sinh`);
-
-        // Map studentIds vào rows với thông tin lớp
-        const studentsWithIds = validRows.map((row) => {
-          const studentIdData = result.studentIds.find(
-            (s) => s.rowIndex === row.rowIndex
-          );
-          return {
-            ...row,
-            studentId: studentIdData?.studentId,
-          };
-        });
-
-        setImportedStudentsWithIds(studentsWithIds);
-        // Close import dialog and show map classes dialog
-        setOpen(false);
-        setShowMapClasses(true);
+      // If there are duplicates, show alert dialog
+      if (result.duplicates && result.duplicates.length > 0) {
+        setDuplicateStudents(result.duplicates);
+        setPendingImportData(validRows);
+        setShowDuplicateAlert(true);
+        setIsLoading(false);
+        return;
       }
 
-      if (result.errors.length > 0) {
-        toast.warning(`Có ${result.errors.length} học sinh không thể import`, {
-          description: "Kiểm tra chi tiết trong danh sách lỗi",
-        });
-      }
-
-      if (invalidRows.length > 0) {
-        toast.info(`Đã bỏ qua ${invalidRows.length} học sinh không hợp lệ`, {
-          description: "Vui lòng chỉnh sửa và import lại nếu cần",
-        });
-      }
-
-      // Reset form only if not showing map classes dialog
-      if (
-        result.success === 0 ||
-        !result.studentIds ||
-        result.studentIds.length === 0
-      ) {
-        setAllRows([]);
-        setEditingRowIndex(null);
-        setOpen(false);
-        router.refresh();
-      }
+      // No duplicates, proceed normally
+      await handleImportSuccess(result, validRows, invalidRows);
     } catch (error) {
       console.error("Error importing students:", error);
       toast.error("Lỗi khi import học sinh", {
         description:
           error instanceof Error ? error.message : "Vui lòng thử lại",
       });
-    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmImportWithDuplicates = async () => {
+    setIsLoading(true);
+    try {
+      const invalidRows = allRows.filter((row) => !row.isValid);
+      const result = await importStudentsFromExcel(
+        pendingImportData.map((row) => ({
+          full_name: row.full_name,
+          phone: row.phone,
+          rowIndex: row.rowIndex,
+        })),
+        pathname,
+        { skipDuplicateCheck: true }
+      );
+
+      await handleImportSuccess(result, pendingImportData, invalidRows);
+      
+      setShowDuplicateAlert(false);
+      setDuplicateStudents([]);
+      setPendingImportData([]);
+    } catch (error) {
+      console.error("Error importing students with duplicates:", error);
+      toast.error("Lỗi khi import học sinh", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại",
+      });
       setIsLoading(false);
     }
   };
@@ -650,6 +717,47 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
           setEditingRowIndex(null);
         }}
       />
+
+      {/* Duplicate Alert Dialog */}
+      <AlertDialog open={showDuplicateAlert} onOpenChange={setShowDuplicateAlert}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Cảnh báo: Có học sinh trùng lặp
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Phát hiện {duplicateStudents.length} học sinh đã tồn tại trong hệ thống:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {duplicateStudents.map((dup, index) => (
+              <div
+                key={index}
+                className="p-2 rounded-md bg-destructive/10 text-sm"
+              >
+                <strong>Dòng {dup.rowIndex}:</strong> {dup.full_name} -{" "}
+                {dup.phone || "Không có SĐT"}
+              </div>
+            ))}
+          </div>
+
+          <p className="text-sm text-muted-foreground mt-4">
+            Bạn có muốn import tất cả học sinh (kể cả những học sinh trùng lặp) không?
+          </p>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmImportWithDuplicates}
+              disabled={isLoading}
+            >
+              {isLoading ? "Đang xử lý..." : "Xác nhận import tất cả"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

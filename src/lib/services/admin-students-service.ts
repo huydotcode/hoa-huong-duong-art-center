@@ -1464,11 +1464,17 @@ export async function getStudentCurrentClasses(studentId: string): Promise<
  */
 export async function importStudentsFromExcel(
   students: Array<{ full_name: string; phone: string; rowIndex?: number }>,
-  path?: string
+  path?: string,
+  options?: { skipDuplicateCheck?: boolean }
 ): Promise<{
   success: number;
   errors: Array<{ row: number; errors: string[] }>;
   studentIds: Array<{ rowIndex: number; studentId: string }>;
+  duplicates?: Array<{
+    rowIndex: number;
+    full_name: string;
+    phone: string | null;
+  }>;
 }> {
   const supabase = await createClient();
 
@@ -1477,8 +1483,6 @@ export async function importStudentsFromExcel(
   }
 
   // Normalize all phone numbers first to ensure consistency
-  // If phone is empty after normalization, set to null
-  // Allow duplicate phones - no duplicate check needed
   const normalizedStudents = students.map((s) => {
     const normalizedPhone = normalizePhone(s.phone);
     const phone =
@@ -1490,7 +1494,11 @@ export async function importStudentsFromExcel(
     };
   });
 
-  // Prepare insert data - duplicate phones are allowed
+  const duplicates: Array<{
+    rowIndex: number;
+    full_name: string;
+    phone: string | null;
+  }> = [];
   const toInsert: Array<{
     full_name: string;
     phone: string | null;
@@ -1500,17 +1508,61 @@ export async function importStudentsFromExcel(
 
   const errors: Array<{ row: number; errors: string[] }> = [];
 
-  normalizedStudents.forEach((student) => {
-    toInsert.push({
-      full_name: student.full_name.trim(),
-      phone: student.phone, // Can be null, can be duplicate
-      parent_phone: student.phone, // Use phone as parent_phone, or null if phone is null
-      is_active: true,
+  // Check duplicates if not skipping
+  if (!options?.skipDuplicateCheck) {
+    for (const student of normalizedStudents) {
+      try {
+        const existing = await checkDuplicateStudent(
+          student.full_name.trim(),
+          student.phone
+        );
+        if (existing) {
+          duplicates.push({
+            rowIndex: student.rowIndex ?? 0,
+            full_name: student.full_name.trim(),
+            phone: student.phone,
+          });
+        } else {
+          toInsert.push({
+            full_name: student.full_name.trim(),
+            phone: student.phone,
+            parent_phone: student.phone,
+            is_active: true,
+          });
+        }
+      } catch (error) {
+        console.error(
+          `Error checking duplicate for row ${student.rowIndex}:`,
+          error
+        );
+        // If check fails, still add to insert list
+        toInsert.push({
+          full_name: student.full_name.trim(),
+          phone: student.phone,
+          parent_phone: student.phone,
+          is_active: true,
+        });
+      }
+    }
+  } else {
+    // Skip duplicate check, add all
+    normalizedStudents.forEach((student) => {
+      toInsert.push({
+        full_name: student.full_name.trim(),
+        phone: student.phone,
+        parent_phone: student.phone,
+        is_active: true,
+      });
     });
-  });
+  }
 
   if (toInsert.length === 0) {
-    return { success: 0, errors, studentIds: [] };
+    return {
+      success: 0,
+      errors,
+      studentIds: [],
+      duplicates: duplicates.length > 0 ? duplicates : undefined,
+    };
   }
 
   // Bulk insert and return inserted rows with IDs
@@ -1524,15 +1576,22 @@ export async function importStudentsFromExcel(
   }
 
   // Map rowIndex to studentId
+  // Need to map inserted students back to original rowIndex
   const studentIds: Array<{ rowIndex: number; studentId: string }> = [];
   if (inserted && inserted.length > 0) {
-    inserted.forEach((student, index) => {
-      const rowIndex = normalizedStudents[index]?.rowIndex;
-      if (rowIndex && student.id) {
+    // Create a map of students that were inserted (not duplicates)
+    let insertIndex = 0;
+    normalizedStudents.forEach((student) => {
+      // Only map if this student was inserted (not duplicate)
+      const isDuplicate = duplicates.some(
+        (d) => d.rowIndex === (student.rowIndex ?? 0)
+      );
+      if (!isDuplicate && inserted[insertIndex]?.id) {
         studentIds.push({
-          rowIndex,
-          studentId: student.id as string,
+          rowIndex: student.rowIndex ?? 0,
+          studentId: inserted[insertIndex].id as string,
         });
+        insertIndex++;
       }
     });
   }
@@ -1543,5 +1602,6 @@ export async function importStudentsFromExcel(
     success: toInsert.length,
     errors,
     studentIds,
+    duplicates: duplicates.length > 0 ? duplicates : undefined,
   };
 }
