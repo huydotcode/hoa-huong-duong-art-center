@@ -387,6 +387,16 @@ export default function TuitionFilter({
     <div className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2 md:flex-row md:items-center flex-wrap">
+          <Select value={viewModeState} onValueChange={handleViewModeChange}>
+            <SelectTrigger className="w-full md:w-[150px]">
+              <SelectValue placeholder="Phạm vi" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Theo tháng</SelectItem>
+              <SelectItem value="year">Cả năm</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select
             value={monthState}
             onValueChange={handleMonthChange}
@@ -414,16 +424,6 @@ export default function TuitionFilter({
                   {y}
                 </SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={viewModeState} onValueChange={handleViewModeChange}>
-            <SelectTrigger className="w-full md:w-[150px]">
-              <SelectValue placeholder="Phạm vi" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">Theo tháng</SelectItem>
-              <SelectItem value="year">Cả năm</SelectItem>
             </SelectContent>
           </Select>
 
@@ -475,7 +475,7 @@ export default function TuitionFilter({
                       value={classIdState}
                       onValueChange={handleClassChange}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Chọn lớp" />
                       </SelectTrigger>
                       <SelectContent>
@@ -496,7 +496,7 @@ export default function TuitionFilter({
                       value={subjectState}
                       onValueChange={handleSubjectChange}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Chọn môn học" />
                       </SelectTrigger>
                       <SelectContent>
@@ -517,7 +517,7 @@ export default function TuitionFilter({
                       value={statusState}
                       onValueChange={handleStatusChange}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Chọn trạng thái" />
                       </SelectTrigger>
                       <SelectContent>
@@ -538,7 +538,7 @@ export default function TuitionFilter({
                       value={learningStatusState}
                       onValueChange={handleLearningStatusChange}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Chọn trạng thái học" />
                       </SelectTrigger>
                       <SelectContent>

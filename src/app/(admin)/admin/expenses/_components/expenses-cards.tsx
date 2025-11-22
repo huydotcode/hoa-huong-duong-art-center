@@ -73,7 +73,7 @@ export default function ExpensesCards({
 
   if (expenses.length === 0) {
     return (
-      <div className="px-3">
+      <div className="px-3 md:hidden">
         <p className="text-center text-sm text-muted-foreground py-8">
           Chưa có chi phí nào
         </p>
