@@ -1156,6 +1156,23 @@ export async function updateStudentEnrollment(
 }
 
 /**
+ * Remove a single enrollment by enrollment ID (hard delete - use with caution)
+ * Prefer deactivateStudentEnrollments to preserve history
+ */
+export async function removeEnrollment(
+  enrollmentId: string,
+  path?: string
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("student_class_enrollments")
+    .delete()
+    .eq("id", enrollmentId);
+  if (error) throw error;
+  if (path) revalidatePath(path);
+}
+
+/**
  * Get classes by subject (using subject field, fallback to name matching)
  */
 export async function getClassesBySubject(
