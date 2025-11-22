@@ -618,6 +618,97 @@ async function checkSubjectConflict(
   return { hasConflict: true, conflictingClassName };
 }
 
+/**
+ * Check subject conflicts for multiple students (for copy warning)
+ * Returns array of students with conflicts
+ */
+async function checkSubjectConflictsForCopy(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studentIds: string[],
+  targetClassId: string
+): Promise<{
+  conflicts: Array<{
+    studentId: string;
+    studentName: string;
+    conflictingClassName: string;
+  }>;
+  subject: string | null;
+}> {
+  // Get the target class to check its subject
+  const { data: targetClass, error: classError } = await supabase
+    .from("classes")
+    .select("id, name, subject")
+    .eq("id", targetClassId)
+    .single();
+
+  if (classError || !targetClass || !targetClass.subject) {
+    return { conflicts: [], subject: null };
+  }
+
+  const targetSubject = targetClass.subject;
+
+  // Find all classes with the same subject
+  const { data: sameSubjectClasses, error: classesError } = await supabase
+    .from("classes")
+    .select("id, name")
+    .eq("subject", targetSubject)
+    .eq("is_active", true)
+    .neq("id", targetClassId);
+
+  if (classesError || !sameSubjectClasses || sameSubjectClasses.length === 0) {
+    return { conflicts: [], subject: targetSubject };
+  }
+
+  const sameSubjectClassIds = sameSubjectClasses.map((c) => c.id);
+
+  // Check if any students have active enrollment in these classes
+  const { data: existingEnrollments, error: enrollError } = await supabase
+    .from("student_class_enrollments")
+    .select("student_id, class_id, classes(name)")
+    .in("student_id", studentIds)
+    .in("class_id", sameSubjectClassIds)
+    .in("status", ["active", "trial"])
+    .is("leave_date", null);
+
+  if (enrollError || !existingEnrollments || existingEnrollments.length === 0) {
+    return { conflicts: [], subject: targetSubject };
+  }
+
+  // Get student names
+  const { data: students } = await supabase
+    .from("students")
+    .select("id, full_name")
+    .in("id", studentIds);
+
+  const conflicts: Array<{
+    studentId: string;
+    studentName: string;
+    conflictingClassName: string;
+  }> = [];
+  const processedStudents = new Set<string>();
+
+  existingEnrollments.forEach((enrollment) => {
+    const studentId = enrollment.student_id as string;
+    if (processedStudents.has(studentId)) return;
+
+    const student = students?.find((s) => s.id === studentId);
+    const conflictingClass = Array.isArray(enrollment.classes)
+      ? enrollment.classes[0]
+      : enrollment.classes;
+    const conflictingClassName =
+      (conflictingClass as { name?: string } | null)?.name || "lớp khác";
+
+    conflicts.push({
+      studentId,
+      studentName: student?.full_name || "học sinh",
+      conflictingClassName,
+    });
+    processedStudents.add(studentId);
+  });
+
+  return { conflicts, subject: targetSubject };
+}
+
 export async function enrollStudent(
   classId: string,
   studentId: string,
@@ -802,7 +893,19 @@ export async function copyStudentsToClass(
     updateIfExists?: boolean; // default false
   },
   path?: string
-): Promise<{ inserted: number; updated: number; skipped: number }> {
+): Promise<{
+  inserted: number;
+  updated: number;
+  skipped: number;
+  warnings?: {
+    conflicts: Array<{
+      studentId: string;
+      studentName: string;
+      conflictingClassName: string;
+    }>;
+    subject: string | null;
+  };
+}> {
   if (studentIds.length === 0) return { inserted: 0, updated: 0, skipped: 0 };
   const supabase = await createClient();
 
@@ -821,11 +924,28 @@ export async function copyStudentsToClass(
   const toInsert = studentIds.filter((id) => !existingIds.has(id));
   const toUpdate = existingRows.map((e) => e.id);
 
+  // Check for subject conflicts (warning only, not blocking)
+  let warnings: Array<{
+    studentId: string;
+    studentName: string;
+    conflictingClassName: string;
+  }> = [];
+  let warningSubject: string | null = null;
+  if (toInsert.length > 0) {
+    const conflictResult = await checkSubjectConflictsForCopy(
+      supabase,
+      toInsert,
+      targetClassId
+    );
+    warnings = conflictResult.conflicts;
+    warningSubject = conflictResult.subject;
+  }
+
   let inserted = 0;
   let updated = 0;
   let skipped = studentIds.length - toInsert.length;
 
-  // Insert new
+  // Insert new (proceed even with warnings)
   if (toInsert.length > 0) {
     const enrollmentDate =
       options?.enrollment_date || new Date().toISOString().split("T")[0];
@@ -864,7 +984,15 @@ export async function copyStudentsToClass(
   }
 
   if (path) revalidatePath(path);
-  return { inserted, updated, skipped };
+  return {
+    inserted,
+    updated,
+    skipped,
+    warnings:
+      warnings.length > 0
+        ? { conflicts: warnings, subject: warningSubject }
+        : undefined,
+  };
 }
 
 export async function moveStudentsToClass(
@@ -884,6 +1012,42 @@ export async function moveStudentsToClass(
   skipped: number;
   removedFromSource: number;
 }> {
+  if (studentIds.length === 0) {
+    return { inserted: 0, updated: 0, skipped: 0, removedFromSource: 0 };
+  }
+
+  const supabase = await createClient();
+
+  // Validate: source and target classes must have the same subject
+  const { data: classes, error: classesError } = await supabase
+    .from("classes")
+    .select("id, name, subject")
+    .in("id", [sourceClassId, targetClassId]);
+
+  if (classesError || !classes || classes.length !== 2) {
+    throw new Error("Không tìm thấy lớp nguồn hoặc lớp đích");
+  }
+
+  const sourceClass = classes.find((c) => c.id === sourceClassId);
+  const targetClass = classes.find((c) => c.id === targetClassId);
+
+  if (!sourceClass || !targetClass) {
+    throw new Error("Không tìm thấy lớp nguồn hoặc lớp đích");
+  }
+
+  // Both classes must have subject
+  if (!sourceClass.subject || !targetClass.subject) {
+    throw new Error("Lớp nguồn và lớp đích phải có môn học để thực hiện Cut");
+  }
+
+  // Subjects must match
+  if (sourceClass.subject !== targetClass.subject) {
+    throw new Error(
+      `Không thể Cut học sinh từ lớp "${sourceClass.name}" (${sourceClass.subject}) sang lớp "${targetClass.name}" (${targetClass.subject}). Cut chỉ được thực hiện giữa các lớp cùng môn.`
+    );
+  }
+
+  // Proceed with copy and deactivate
   const { inserted, updated, skipped } = await copyStudentsToClass(
     sourceClassId,
     targetClassId,

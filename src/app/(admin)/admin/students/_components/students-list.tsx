@@ -1,13 +1,8 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  useTransition,
-  useCallback,
-  useMemo,
-} from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -17,15 +12,22 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { StudentTableRow } from "./student-table-row";
+import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
 import {
   getStudents,
   type StudentLearningStatsSummary,
 } from "@/lib/services/admin-students-service";
 import type { StudentWithClassSummary } from "@/types";
-import { Loader2 } from "lucide-react";
-import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
-import { Card } from "@/components/ui/card";
+import { Copy, Loader2, Scissors } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
+import { BulkCopyCutDialog } from "./bulk-copy-cut-dialog";
+import { StudentTableRow } from "./student-table-row";
 
 interface StudentsListProps {
   initialData: StudentWithClassSummary[];
@@ -55,6 +57,9 @@ export default function StudentsList({
     useState<StudentWithClassSummary[]>(initialData);
   const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
   const [isPending, startTransition] = useTransition();
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<"copy" | "cut">("copy");
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
   const hasSubjectFilter = useMemo(
     () => subject.trim().length > 0 && subject.toLowerCase() !== "all",
@@ -247,6 +252,35 @@ export default function StudentsList({
     (stats.active ?? 0) + (stats.trial ?? 0) + (stats.noClass ?? 0)
   );
 
+  const toggleSelect = useCallback((studentId: string, checked: boolean) => {
+    setSelectedStudentIds((prev) =>
+      checked
+        ? Array.from(new Set([...prev, studentId]))
+        : prev.filter((id) => id !== studentId)
+    );
+  }, []);
+
+  const toggleSelectAll = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSelectedStudentIds(allData.map((s) => s.id));
+      } else {
+        setSelectedStudentIds([]);
+      }
+    },
+    [allData]
+  );
+
+  const allSelected = useMemo(
+    () => allData.length > 0 && selectedStudentIds.length === allData.length,
+    [allData.length, selectedStudentIds.length]
+  );
+
+  const selectedStudents = useMemo(
+    () => allData.filter((s) => selectedStudentIds.includes(s.id)),
+    [allData, selectedStudentIds]
+  );
+
   const statsSection = (
     <div className="px-3 pb-3">
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-6">
@@ -312,6 +346,9 @@ export default function StudentsList({
             <Table>
               <TableHeader>
                 <TableHeaderRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox disabled className="size-5" />
+                  </TableHead>
                   <TableHead className="w-[60px] text-center">STT</TableHead>
                   <TableHead>Họ và tên</TableHead>
                   <TableHead>Số điện thoại</TableHead>
@@ -328,7 +365,7 @@ export default function StudentsList({
               <TableBody>
                 <TableRow>
                   <TableCell
-                    colSpan={11}
+                    colSpan={12}
                     className="px-4 py-8 text-center text-sm text-muted-foreground"
                   >
                     Chưa có học sinh nào
@@ -347,12 +384,57 @@ export default function StudentsList({
       {filterSummary}
       {statsSection}
 
+      {/* Bulk actions bar */}
+      {selectedStudentIds.length > 0 && (
+        <div className="px-3 pb-2 flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-sm text-muted-foreground">
+            Đã chọn: {selectedStudentIds.length} học sinh
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setBulkAction("copy");
+                setBulkDialogOpen(true);
+              }}
+            >
+              <Copy className="size-4 mr-1" /> Copy
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                setBulkAction("cut");
+                setBulkDialogOpen(true);
+              }}
+            >
+              <Scissors className="size-4 mr-1" /> Cut
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedStudentIds([])}
+            >
+              Bỏ chọn
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Responsive Table view with horizontal scroll */}
       <div className="px-3">
         <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableHeaderRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    className="size-5 border-yellow-500"
+                    checked={allSelected}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead className="w-[60px] text-center">STT</TableHead>
                 <TableHead>Họ và tên</TableHead>
                 <TableHead>Số điện thoại</TableHead>
@@ -378,6 +460,8 @@ export default function StudentsList({
                       : undefined
                   }
                   activeSubject={hasSubjectFilter ? subject : undefined}
+                  selected={selectedStudentIds.includes(s.id)}
+                  onSelectChange={(checked) => toggleSelect(s.id, checked)}
                 />
               ))}
             </TableBody>
@@ -404,6 +488,14 @@ export default function StudentsList({
           </Button>
         </div>
       )}
+
+      {/* Bulk Copy/Cut Dialog */}
+      <BulkCopyCutDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        selectedStudents={selectedStudents}
+        action={bulkAction}
+      />
     </>
   );
 }

@@ -20,6 +20,7 @@ import {
   getLearningStatusBadge,
   getTuitionStatusBadge,
 } from "./student-status-utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Lazy load heavy dialog components
 const StudentClassScheduleDialog = lazy(() =>
@@ -43,11 +44,15 @@ function StudentTableRowComponent({
   index,
   activeLearningStatus,
   activeSubject,
+  selected = false,
+  onSelectChange,
 }: {
   student: StudentWithClassSummary;
   index: number;
   activeLearningStatus?: string;
   activeSubject?: string;
+  selected?: boolean;
+  onSelectChange?: (checked: boolean) => void;
 }) {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [manageClassesDialogOpen, setManageClassesDialogOpen] = useState(false);
@@ -120,6 +125,16 @@ function StudentTableRowComponent({
   return (
     <>
       <TableRow>
+        <TableCell>
+          {onSelectChange && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onSelectChange}
+              className="size-5"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+        </TableCell>
         <TableCell className="text-center">{index}</TableCell>
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">

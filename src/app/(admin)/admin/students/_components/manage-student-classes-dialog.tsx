@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -15,9 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -29,17 +38,19 @@ import {
 } from "@/components/ui/table";
 import {
   enrollStudent,
-  updateStudentEnrollment,
   getClassesIdAndName,
+  removeEnrollment,
+  updateStudentEnrollment,
 } from "@/lib/services/admin-classes-service";
 import { getStudentById } from "@/lib/services/admin-students-service";
-import { formatEnrollmentStatus, formatDateShort } from "@/lib/utils";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { Loader2, Plus, Pencil, X } from "lucide-react";
-import type { StudentWithClassSummary } from "@/types";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { formatDateShort, formatEnrollmentStatus } from "@/lib/utils";
+import type { StudentWithClassSummary } from "@/types";
 import type { EnrollmentStatus } from "@/types/database";
+import { Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 interface ManageStudentClassesDialogProps {
   student: StudentWithClassSummary;
@@ -74,6 +85,11 @@ export function ManageStudentClassesDialog({
   );
   const [adding, setAdding] = useState(false);
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
+  const [enrollmentToDelete, setEnrollmentToDelete] = useState<{
+    enrollmentId: string;
+    className: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseClient(), []);
 
@@ -261,6 +277,49 @@ export function ManageStudentClassesDialog({
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Cập nhật trạng thái thất bại");
+    }
+  };
+
+  const handleDeleteEnrollment = async () => {
+    if (!enrollmentToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await removeEnrollment(
+        enrollmentToDelete.enrollmentId,
+        "/admin/students"
+      );
+
+      toast.success(`Đã xóa khỏi lớp ${enrollmentToDelete.className}!`);
+
+      // Reload enrollments
+      const enrollmentsData = await fetchEnrollments();
+      setEnrollments(enrollmentsData);
+
+      // Fetch updated student data and dispatch event to update the table
+      try {
+        const updatedStudent = await getStudentById(student.id);
+        if (updatedStudent) {
+          window.dispatchEvent(
+            new CustomEvent("student-updated", {
+              detail: { student: updatedStudent },
+            })
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching updated student:", error);
+        router.refresh();
+      }
+
+      setEnrollmentToDelete(null);
+    } catch (error) {
+      console.error("Error deleting enrollment:", error);
+      toast.error("Xóa enrollment thất bại", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -468,20 +527,36 @@ export function ManageStudentClassesDialog({
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingStatus(
-                                  editingStatus === enrollment.enrollmentId
-                                    ? null
-                                    : enrollment.enrollmentId
-                                );
-                              }}
-                              title="Đổi trạng thái"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingStatus(
+                                    editingStatus === enrollment.enrollmentId
+                                      ? null
+                                      : enrollment.enrollmentId
+                                  );
+                                }}
+                                title="Đổi trạng thái"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEnrollmentToDelete({
+                                    enrollmentId: enrollment.enrollmentId,
+                                    className: enrollment.className,
+                                  });
+                                }}
+                                title="Xóa enrollment"
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -493,6 +568,43 @@ export function ManageStudentClassesDialog({
           </div>
         )}
       </DialogContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!enrollmentToDelete}
+        onOpenChange={(open) => {
+          if (!open) setEnrollmentToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa khỏi lớp</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa học sinh khỏi lớp{" "}
+              <span className="font-medium">
+                {enrollmentToDelete?.className}
+              </span>
+              ? Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteEnrollment}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xóa...
+                </>
+              ) : (
+                "Xóa"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

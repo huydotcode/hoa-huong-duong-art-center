@@ -137,9 +137,28 @@ export default function StudentsSection({
           ? `Copy: +${res.inserted}${res.updated ? `, cập nhật ${res.updated}` : ""}, bỏ qua ${res.skipped}`
           : `Copy: +${res.inserted}${res.updated ? `, cập nhật ${res.updated}` : ""}`;
       toast.success(msgCopy);
+
+      // Show warning if there are conflicts
+      if (res.warnings && res.warnings.conflicts.length > 0) {
+        const warningMessages = res.warnings.conflicts.map(
+          (w) => `${w.studentName} (đang học lớp ${w.conflictingClassName})`
+        );
+        const subjectName = res.warnings.subject || "môn học";
+        toast.warning(
+          `Cảnh báo: ${warningMessages.join(", ")} sẽ học 2 lớp cùng môn ${subjectName}.`,
+          { duration: 6000 }
+        );
+      }
+
       router.refresh();
       setSelectedStudentIds([]);
       setBulkDialogOpen(false);
+    } catch (error) {
+      console.error("Copy error:", error);
+      toast.error("Copy học sinh thất bại", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -169,6 +188,12 @@ export default function StudentsSection({
       router.refresh();
       setSelectedStudentIds([]);
       setBulkDialogOpen(false);
+    } catch (error) {
+      console.error("Cut error:", error);
+      toast.error("Cut học sinh thất bại", {
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
     } finally {
       setIsProcessing(false);
     }
