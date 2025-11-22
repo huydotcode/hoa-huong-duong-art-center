@@ -12,6 +12,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +35,8 @@ export default function StudentsSearchBar() {
   const learningStatus = searchParams.get("learningStatus") || "";
   const recent = searchParams.get("recent") === "true";
   const tuitionStatus = searchParams.get("tuitionStatus") || "";
+  const sortBy = searchParams.get("sortBy") || "name";
+  const sortOrder = searchParams.get("sortOrder") || "asc";
   const activeFilterCount = [
     q.trim(),
     subject,
@@ -69,6 +78,20 @@ export default function StudentsSearchBar() {
       params.delete("learningStatus");
       params.delete("recent");
       params.delete("tuitionStatus");
+      // Keep sort params when clearing filters
+    });
+  };
+
+  const handleSortChange = (value: string) => {
+    updateSearchParams((params) => {
+      if (value) {
+        const [newSortBy, newSortOrder] = value.split(":");
+        params.set("sortBy", newSortBy);
+        params.set("sortOrder", newSortOrder);
+      } else {
+        params.delete("sortBy");
+        params.delete("sortOrder");
+      }
     });
   };
 
@@ -284,32 +307,57 @@ export default function StudentsSearchBar() {
         )}
       </div>
 
-      <form
-        onSubmit={(event: FormEvent<HTMLFormElement>) => {
-          event.preventDefault();
-          handleSearch(searchValue);
-        }}
-        className="order-1 flex w-full gap-2 sm:order-1 sm:w-80"
-        autoComplete="off"
-      >
-        <Input
-          name="q"
-          value={searchValue}
-          onChange={(event) => setSearchValue(event.target.value)}
-          placeholder="Tìm học sinh..."
-          className="flex-1"
+      <div className="order-1 flex w-full gap-2 sm:order-1 sm:w-auto sm:flex-1">
+        <form
+          onSubmit={(event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            handleSearch(searchValue);
+          }}
+          className="flex flex-1 gap-2"
           autoComplete="off"
-        />
-        <Button
-          type="submit"
-          variant="secondary"
-          className="whitespace-nowrap"
-          disabled={isPending}
-          aria-label="Tìm kiếm học sinh"
         >
-          Tìm kiếm
-        </Button>
-      </form>
+          <Input
+            name="q"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="Tìm học sinh..."
+            className="flex-1"
+            autoComplete="off"
+          />
+          <Button
+            type="submit"
+            variant="secondary"
+            className="whitespace-nowrap"
+            disabled={isPending}
+            aria-label="Tìm kiếm học sinh"
+          >
+            Tìm kiếm
+          </Button>
+        </form>
+        <Select
+          value={`${sortBy}:${sortOrder}`}
+          onValueChange={handleSortChange}
+          disabled={isPending}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Sắp xếp" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name:asc">Tên A-Z</SelectItem>
+            <SelectItem value="name:desc">Tên Z-A</SelectItem>
+            <SelectItem value="created_at:desc">Mới nhất</SelectItem>
+            <SelectItem value="created_at:asc">Cũ nhất</SelectItem>
+            <SelectItem value="enrollment_date:desc">
+              Nhập học mới nhất
+            </SelectItem>
+            <SelectItem value="enrollment_date:asc">
+              Nhập học cũ nhất
+            </SelectItem>
+            <SelectItem value="phone:asc">SĐT tăng dần</SelectItem>
+            <SelectItem value="phone:desc">SĐT giảm dần</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

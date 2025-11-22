@@ -14,6 +14,8 @@ interface SearchProps {
     learningStatus?: string;
     recent?: string;
     tuitionStatus?: string;
+    sortBy?: string;
+    sortOrder?: string;
   }>;
 }
 
@@ -28,6 +30,13 @@ export default async function StudentsPage(props: SearchProps) {
       | "paid_or_partial"
       | "unpaid_or_not_created"
       | undefined) || undefined;
+  const sortBy =
+    (searchParams?.sortBy as
+      | "name"
+      | "created_at"
+      | "enrollment_date"
+      | "phone") || "name";
+  const sortOrder = (searchParams?.sortOrder as "asc" | "desc") || "asc";
 
   const [initialData, totalCount, learningStats] = await Promise.all([
     getStudents(q, {
@@ -37,6 +46,8 @@ export default async function StudentsPage(props: SearchProps) {
       learningStatus,
       recentOnly: recent,
       tuitionStatus,
+      sortBy,
+      sortOrder,
     }),
     getStudentsCount(q, {
       subject,
@@ -54,7 +65,7 @@ export default async function StudentsPage(props: SearchProps) {
 
   return (
     <StudentsList
-      key={`${q}-${subject}-${learningStatus}-${recent}-${tuitionStatus || ""}`}
+      key={`${q}-${subject}-${learningStatus}-${recent}-${tuitionStatus || ""}-${sortBy}-${sortOrder}`}
       initialData={initialData}
       query={q}
       subject={subject}

@@ -27,6 +27,18 @@ export type StudentLearningStatsSummary = {
   recent: number;
 };
 
+/**
+ * Extract last word from Vietnamese name for sorting
+ * Example: "Nguyễn Văn An" -> "An"
+ */
+function getLastNameWord(fullName: string): string {
+  if (!fullName || typeof fullName !== "string") return "";
+  const trimmed = fullName.trim();
+  if (!trimmed) return "";
+  const words = trimmed.split(/\s+/);
+  return words[words.length - 1] || trimmed;
+}
+
 export async function getStudents(
   query: string = "",
   opts: {
@@ -36,6 +48,8 @@ export async function getStudents(
     learningStatus?: StudentLearningStatus | string | null;
     recentOnly?: boolean;
     tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created" | null;
+    sortBy?: "name" | "created_at" | "enrollment_date" | "phone";
+    sortOrder?: "asc" | "desc";
   } = {}
 ): Promise<StudentWithClassSummary[]> {
   const supabase = await createClient();
@@ -125,10 +139,45 @@ export async function getStudents(
   const effectiveLimit = hasTuitionStatusFilter ? 10000 : limit;
   const effectiveOffset = hasTuitionStatusFilter ? 0 : offset;
 
+  // Determine sort column and order
+  const sortBy = opts.sortBy || "name";
+  const sortOrder = opts.sortOrder || "asc";
+
+  let orderColumn: string;
+  let orderAscending: boolean;
+  let needsPostSort = false; // For fields that need sorting after data is loaded
+
+  switch (sortBy) {
+    case "name":
+      // Sort by last word (tên) instead of full name
+      // Need to sort after loading data to extract last word
+      orderColumn = "full_name"; // fallback for initial query
+      orderAscending = true;
+      needsPostSort = true;
+      break;
+    case "created_at":
+      orderColumn = "created_at";
+      orderAscending = sortOrder === "asc";
+      break;
+    case "phone":
+      orderColumn = "phone";
+      orderAscending = sortOrder === "asc";
+      break;
+    case "enrollment_date":
+      // Need to sort after loading data since enrollment_date is not in students table
+      orderColumn = "full_name"; // fallback for initial query
+      orderAscending = true;
+      needsPostSort = true;
+      break;
+    default:
+      orderColumn = "full_name";
+      orderAscending = true;
+  }
+
   let request = supabase
     .from("students")
     .select(selectColumns)
-    .order("full_name", { ascending: true })
+    .order(orderColumn, { ascending: orderAscending })
     .range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
 
   if (idsToFilter) {
@@ -484,6 +533,31 @@ export async function getStudents(
     filteredStudents = students.filter(
       (s) => s.tuition_status === "unpaid" || s.tuition_status === "not_created"
     );
+  }
+
+  // Sort after loading data if needed
+  if (needsPostSort) {
+    if (sortBy === "enrollment_date") {
+      filteredStudents.sort((a, b) => {
+        const dateA = a.first_enrollment_date
+          ? new Date(a.first_enrollment_date).getTime()
+          : 0;
+        const dateB = b.first_enrollment_date
+          ? new Date(b.first_enrollment_date).getTime()
+          : 0;
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      });
+    } else if (sortBy === "name") {
+      // Sort by last word (tên) instead of full name
+      filteredStudents.sort((a, b) => {
+        const lastNameA = getLastNameWord(a.full_name);
+        const lastNameB = getLastNameWord(b.full_name);
+        const compare = lastNameA.localeCompare(lastNameB, "vi", {
+          sensitivity: "base",
+        });
+        return sortOrder === "asc" ? compare : -compare;
+      });
+    }
   }
 
   // Apply pagination after filtering if tuitionStatus filter was applied
