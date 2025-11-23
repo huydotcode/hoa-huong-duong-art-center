@@ -32,6 +32,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -46,16 +53,32 @@ import {
   parseExcelFile,
   validateStudentRow,
   type StudentRowWithStatus,
+  parseEnrollmentStatus,
+  parseEnrollmentDate,
+  parsePaymentStatusType,
 } from "@/lib/utils/import-students";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, AlertTriangle, Download, Loader2, Pencil, Upload } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Download,
+  Loader2,
+  Pencil,
+  Upload,
+} from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { z } from "zod";
-import { MapClassesDialog } from "./map-classes-dialog";
+import {
+  getClasses,
+  enrollStudents,
+} from "@/lib/services/admin-classes-service";
+import type { ClassListItem } from "@/types";
+import { normalizeText } from "@/lib/utils";
+import { PaymentConfirmationDialog } from "@/components/forms/payment-confirmation-dialog";
 
 interface ImportStudentsFormProps {
   children: React.ReactNode;
@@ -88,17 +111,43 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [showMapClasses, setShowMapClasses] = useState(false);
-  const [importedStudentsWithIds, setImportedStudentsWithIds] = useState<
+  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
+  const [duplicateStudents, setDuplicateStudents] = useState<
+    Array<{
+      rowIndex: number;
+      full_name: string;
+      phone: string | null;
+    }>
+  >([]);
+  const [pendingImportData, setPendingImportData] = useState<
     StudentRowWithStatus[]
   >([]);
-  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
-  const [duplicateStudents, setDuplicateStudents] = useState<Array<{
-    rowIndex: number;
-    full_name: string;
-    phone: string | null;
-  }>>([]);
-  const [pendingImportData, setPendingImportData] = useState<StudentRowWithStatus[]>([]);
+
+  // States for class enrollment
+  const [classes, setClasses] = useState<ClassListItem[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [selectedClasses, setSelectedClasses] = useState<
+    Record<number, string>
+  >({}); // rowIndex -> classId
+  const [selectedStatuses, setSelectedStatuses] = useState<
+    Record<number, "trial" | "active" | "inactive">
+  >({}); // rowIndex -> status
+  const [enrolling, setEnrolling] = useState(false);
+
+  // States for payment confirmation
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [enrolledStudentsForPayment, setEnrolledStudentsForPayment] = useState<
+    Array<{
+      studentId: string;
+      studentName: string;
+      classId: string;
+      className: string;
+      rowIndex: number;
+      enrollmentDate: string;
+      suggestedPaymentStatus: "paid" | "unpaid" | "inactive";
+    }>
+  >([]);
+
   const router = useRouter();
   const pathname = usePathname();
 
@@ -109,6 +158,169 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
       phone: "",
     },
   });
+
+  // Load classes when dialog opens
+  useEffect(() => {
+    if (open) {
+      loadClasses();
+    }
+  }, [open]);
+
+  async function loadClasses() {
+    setLoadingClasses(true);
+    try {
+      const allClasses = await getClasses("", { is_active: true });
+      setClasses(allClasses);
+    } catch (error) {
+      console.error("Error loading classes:", error);
+      toast.error("Không thể tải danh sách lớp");
+    } finally {
+      setLoadingClasses(false);
+    }
+  }
+
+  // Gợi ý lớp dựa trên môn học
+  function suggestClass(row: StudentRowWithStatus): ClassListItem | null {
+    if (!row.subject || classes.length === 0) return null;
+
+    const normalizedSubject = normalizeText(row.subject.trim().toLowerCase());
+
+    const matchingClasses = classes.filter((c) => {
+      const normalizedClassName = normalizeText(c.name.toLowerCase());
+      return normalizedClassName.includes(normalizedSubject);
+    });
+
+    if (matchingClasses.length === 0) return null;
+    if (matchingClasses.length === 1) return matchingClasses[0];
+
+    return matchingClasses[0];
+  }
+
+  async function handleEnroll() {
+    type EnrollmentKey = string; // Format: "classId|status|enrollment_date"
+    const enrollmentsByKey: Record<
+      EnrollmentKey,
+      Array<{
+        studentId: string;
+        status: "trial" | "active" | "inactive";
+        enrollment_date: string;
+        rowIndex: number;
+      }>
+    > = {};
+
+    // Lấy từ allRows thay vì importedStudentsWithIds để có thể enroll cả học sinh vừa import
+    for (const row of allRows) {
+      if (!row.studentId || !row.isValid) continue;
+
+      const classId = selectedClasses[row.rowIndex];
+      if (!classId) continue;
+
+      const status =
+        selectedStatuses[row.rowIndex] ||
+        parseEnrollmentStatus(row.payment_status, row.trial_note);
+      const enrollmentDate = parseEnrollmentDate(row.trial_note);
+
+      const key = `${classId}|${status}|${enrollmentDate}`;
+
+      if (!enrollmentsByKey[key]) {
+        enrollmentsByKey[key] = [];
+      }
+
+      enrollmentsByKey[key].push({
+        studentId: row.studentId,
+        status,
+        enrollment_date: enrollmentDate,
+        rowIndex: row.rowIndex,
+      });
+    }
+
+    const totalSelected = Object.values(enrollmentsByKey).reduce(
+      (sum, enrollments) => sum + enrollments.length,
+      0
+    );
+
+    if (totalSelected === 0) {
+      toast.warning("Vui lòng chọn lớp cho ít nhất một học sinh");
+      return;
+    }
+
+    setEnrolling(true);
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const [key, enrollments] of Object.entries(enrollmentsByKey)) {
+        try {
+          const [classId, status, enrollmentDate] = key.split("|");
+          const studentIds = enrollments.map((e) => e.studentId);
+
+          await enrollStudents(
+            classId,
+            studentIds,
+            {
+              status: status as "trial" | "active" | "inactive",
+              enrollment_date: enrollmentDate,
+            },
+            pathname
+          );
+
+          successCount += enrollments.length;
+        } catch (error) {
+          console.error("Error enrolling students:", error);
+          errorCount += enrollments.length;
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : `Lỗi khi enroll ${enrollments.length} học sinh vào lớp`
+          );
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Đã enroll thành công ${successCount} học sinh vào lớp`);
+
+        // Chuẩn bị data cho payment dialog
+        const enrolledStudentsForPayment = Object.values(enrollmentsByKey)
+          .flat()
+          .map((e) => {
+            const row = allRows.find((r) => r.rowIndex === e.rowIndex);
+            const classId = selectedClasses[e.rowIndex];
+            const classData = classes.find((c) => c.id === classId);
+
+            return {
+              studentId: e.studentId,
+              studentName: row?.full_name || "",
+              classId: classId,
+              className: classData?.name || "",
+              rowIndex: e.rowIndex,
+              enrollmentDate: e.enrollment_date,
+              suggestedPaymentStatus: parsePaymentStatusType(
+                row?.payment_status
+              ),
+            };
+          })
+          .filter((e) => e.classId && e.studentId); // Chỉ lấy những học sinh đã enroll thành công
+
+        if (enrolledStudentsForPayment.length > 0) {
+          setEnrolledStudentsForPayment(enrolledStudentsForPayment);
+          setPaymentDialogOpen(true);
+        } else {
+          // Nếu không có học sinh nào để tạo payment, đóng dialog luôn
+          router.refresh();
+          handleDialogChange(false);
+        }
+      }
+
+      if (errorCount > 0) {
+        toast.warning(`Không thể enroll ${errorCount} học sinh`);
+      }
+    } catch (error) {
+      console.error("Error in enrollment process:", error);
+      toast.error("Lỗi khi enroll học sinh");
+    } finally {
+      setEnrolling(false);
+    }
+  }
 
   // Validate all rows (allow duplicate phones)
   const revalidateAllRows = (
@@ -234,21 +446,21 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
     if (result.success > 0) {
       toast.success(`Đã import thành công ${result.success} học sinh`);
 
-      // Map studentIds vào rows với thông tin lớp
-      const studentsWithIds = validRows.map((row) => {
+      // Map studentIds vào allRows để hiển thị trong bảng
+      const updatedRows = allRows.map((row) => {
         const studentIdData = result.studentIds.find(
           (s) => s.rowIndex === row.rowIndex
         );
-        return {
-          ...row,
-          studentId: studentIdData?.studentId,
-        };
+        if (studentIdData) {
+          return {
+            ...row,
+            studentId: studentIdData.studentId,
+          };
+        }
+        return row;
       });
 
-      setImportedStudentsWithIds(studentsWithIds);
-      // Close import dialog and show map classes dialog
-      setOpen(false);
-      setShowMapClasses(true);
+      setAllRows(updatedRows);
     }
 
     if (result.errors.length > 0) {
@@ -263,17 +475,6 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
       });
     }
 
-    // Reset form only if not showing map classes dialog
-    if (
-      result.success === 0 ||
-      !result.studentIds ||
-      result.studentIds.length === 0
-    ) {
-      setAllRows([]);
-      setEditingRowIndex(null);
-      setOpen(false);
-      router.refresh();
-    }
     setIsLoading(false);
   };
 
@@ -344,7 +545,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
       );
 
       await handleImportSuccess(result, pendingImportData, invalidRows);
-      
+
       setShowDuplicateAlert(false);
       setDuplicateStudents([]);
       setPendingImportData([]);
@@ -417,9 +618,25 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
   const validCount = allRows.filter((r) => r.isValid).length;
   const invalidCount = allRows.filter((r) => !r.isValid).length;
 
+  const handleDialogChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      // Reset khi đóng dialog
+      setAllRows([]);
+      setEditingRowIndex(null);
+      setSelectedClasses({});
+      setSelectedStatuses({});
+    }
+  };
+
+  const studentsWithIds = allRows.filter((r) => r.studentId && r.isValid);
+  const selectedCount = Object.values(selectedClasses).filter(
+    (classId) => classId !== undefined && classId !== ""
+  ).length;
+
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleDialogChange}>
         <DialogTrigger asChild>{children}</DialogTrigger>
         <DialogContent
           maxWidth="max-w-[95vw] sm:max-w-6xl lg:max-w-7xl"
@@ -502,82 +719,261 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
             {/* Students table */}
             {allRows.length > 0 && (
               <div className="space-y-2">
-                <div className="text-sm font-medium">Danh sách học sinh</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Danh sách học sinh</div>
+                  {studentsWithIds.length > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {selectedCount > 0 && (
+                        <span className="font-medium text-foreground">
+                          Đã chọn lớp: {selectedCount}/{studentsWithIds.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bulk status update */}
+                {studentsWithIds.length > 0 && selectedCount > 0 && (
+                  <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md border">
+                    <span className="text-xs text-muted-foreground">
+                      Set trạng thái mặc định cho tất cả học sinh đã chọn lớp:
+                    </span>
+                    <Select
+                      value=""
+                      onValueChange={(value) => {
+                        if (value) {
+                          const newStatuses: Record<
+                            number,
+                            "trial" | "active" | "inactive"
+                          > = {};
+                          studentsWithIds.forEach((s) => {
+                            if (selectedClasses[s.rowIndex]) {
+                              newStatuses[s.rowIndex] = value as
+                                | "trial"
+                                | "active"
+                                | "inactive";
+                            }
+                          });
+                          setSelectedStatuses((prev) => ({
+                            ...prev,
+                            ...newStatuses,
+                          }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Chọn trạng thái" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="trial">Học thử</SelectItem>
+                        <SelectItem value="active">Đang học</SelectItem>
+                        <SelectItem value="inactive">Ngừng học</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="max-h-96 overflow-y-auto border rounded-md">
                   <Table>
                     <TableHeader>
                       <TableHeaderRow>
                         <TableHead className="w-16">Dòng</TableHead>
-                        <TableHead>Họ và tên</TableHead>
-                        <TableHead>Số điện thoại</TableHead>
+                        <TableHead>Họ và tên / Số điện thoại</TableHead>
                         <TableHead>Môn</TableHead>
                         <TableHead>Thời gian</TableHead>
                         <TableHead>Thứ</TableHead>
                         <TableHead>Trạng thái học phí</TableHead>
                         <TableHead className="w-24">Trạng thái</TableHead>
+                        {studentsWithIds.length > 0 && (
+                          <>
+                            <TableHead className="w-48">Lớp</TableHead>
+                            <TableHead className="w-40">
+                              Trạng thái học
+                            </TableHead>
+                          </>
+                        )}
                         <TableHead className="w-32">Thao tác</TableHead>
                       </TableHeaderRow>
                     </TableHeader>
                     <TableBody>
-                      {allRows.map((row, index) => (
-                        <React.Fragment key={index}>
-                          <TableRow
-                            className={
-                              row.isValid
-                                ? ""
-                                : "bg-destructive/5 hover:bg-destructive/10"
-                            }
-                          >
-                            <TableCell className="font-medium">
-                              {row.rowIndex}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {row.full_name}
-                            </TableCell>
-                            <TableCell>{row.phone || "-"}</TableCell>
-                            <TableCell>{row.subject || "-"}</TableCell>
-                            <TableCell>{row.time_slot || "-"}</TableCell>
-                            <TableCell>{row.days || "-"}</TableCell>
-                            <TableCell>{row.payment_status || "-"}</TableCell>
-                            <TableCell>
-                              {row.isValid ? (
-                                <Badge variant="default">Hợp lệ</Badge>
-                              ) : (
-                                <Badge variant="destructive">
-                                  Không hợp lệ
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {!row.isValid && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setEditingRowIndex(index);
-                                    editForm.reset({
-                                      full_name: row.full_name,
-                                      phone: row.phone || "",
-                                    });
-                                  }}
-                                >
-                                  <Pencil className="h-4 w-4 mr-1" />
-                                  Chỉnh sửa
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                          {!row.isValid && row.errors.length > 0 && (
-                            <TableRow className="bg-destructive/5">
-                              <TableCell colSpan={9} className="p-2">
-                                <div className="text-xs text-destructive">
-                                  <strong>Lỗi:</strong> {row.errors.join(", ")}
+                      {allRows.map((row, index) => {
+                        const suggestedClass = suggestClass(row);
+                        const selectedClassId = selectedClasses[row.rowIndex];
+
+                        return (
+                          <React.Fragment key={index}>
+                            <TableRow
+                              className={
+                                row.isValid
+                                  ? ""
+                                  : "bg-destructive/5 hover:bg-destructive/10"
+                              }
+                            >
+                              <TableCell className="font-medium">
+                                {row.rowIndex}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex flex-col gap-1">
+                                  <span>{row.full_name}</span>
+                                  {row.phone && (
+                                    <span className="text-sm text-muted-foreground">
+                                      {row.phone}
+                                    </span>
+                                  )}
                                 </div>
                               </TableCell>
+                              <TableCell>{row.subject || "-"}</TableCell>
+                              <TableCell>{row.time_slot || "-"}</TableCell>
+                              <TableCell>{row.days || "-"}</TableCell>
+                              <TableCell>{row.payment_status || "-"}</TableCell>
+                              <TableCell>
+                                {row.isValid ? (
+                                  <Badge variant="default">Hợp lệ</Badge>
+                                ) : (
+                                  <Badge variant="destructive">
+                                    Không hợp lệ
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              {studentsWithIds.length > 0 && (
+                                <>
+                                  <TableCell>
+                                    {row.studentId && row.isValid ? (
+                                      <Select
+                                        value={selectedClassId || "__none__"}
+                                        onValueChange={(value) => {
+                                          if (value === "__none__") {
+                                            setSelectedClasses((prev) => {
+                                              const updated = { ...prev };
+                                              delete updated[row.rowIndex];
+                                              return updated;
+                                            });
+                                          } else {
+                                            setSelectedClasses((prev) => ({
+                                              ...prev,
+                                              [row.rowIndex]: value,
+                                            }));
+                                          }
+                                        }}
+                                        disabled={loadingClasses}
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue placeholder="Chọn lớp" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">
+                                            <span className="text-muted-foreground italic">
+                                              Không chọn lớp
+                                            </span>
+                                          </SelectItem>
+                                          {classes.map((cls) => {
+                                            const isSuggested =
+                                              suggestedClass?.id === cls.id;
+                                            return (
+                                              <SelectItem
+                                                key={cls.id}
+                                                value={cls.id}
+                                              >
+                                                <div className="flex items-center gap-2">
+                                                  <span>{cls.name}</span>
+                                                  {isSuggested &&
+                                                    !selectedClassId && (
+                                                      <span className="text-xs text-primary font-medium">
+                                                        (Gợi ý)
+                                                      </span>
+                                                    )}
+                                                </div>
+                                              </SelectItem>
+                                            );
+                                          })}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : (
+                                      <span className="text-muted-foreground text-xs">
+                                        Chưa import
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {row.studentId &&
+                                    row.isValid &&
+                                    selectedClassId ? (
+                                      <Select
+                                        value={
+                                          selectedStatuses[row.rowIndex] ||
+                                          parseEnrollmentStatus(
+                                            row.payment_status,
+                                            row.trial_note
+                                          )
+                                        }
+                                        onValueChange={(value) => {
+                                          setSelectedStatuses((prev) => ({
+                                            ...prev,
+                                            [row.rowIndex]: value as
+                                              | "trial"
+                                              | "active"
+                                              | "inactive",
+                                          }));
+                                        }}
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="trial">
+                                            Học thử
+                                          </SelectItem>
+                                          <SelectItem value="active">
+                                            Đang học
+                                          </SelectItem>
+                                          <SelectItem value="inactive">
+                                            Ngừng học
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    ) : (
+                                      <span className="text-muted-foreground text-xs">
+                                        -
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                </>
+                              )}
+                              <TableCell>
+                                {!row.isValid && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingRowIndex(index);
+                                      editForm.reset({
+                                        full_name: row.full_name,
+                                        phone: row.phone || "",
+                                      });
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4 mr-1" />
+                                    Chỉnh sửa
+                                  </Button>
+                                )}
+                              </TableCell>
                             </TableRow>
-                          )}
-                        </React.Fragment>
-                      ))}
+                            {!row.isValid && row.errors.length > 0 && (
+                              <TableRow className="bg-destructive/5">
+                                <TableCell
+                                  colSpan={studentsWithIds.length > 0 ? 10 : 8}
+                                  className="p-2"
+                                >
+                                  <div className="text-xs text-destructive">
+                                    <strong>Lỗi:</strong>{" "}
+                                    {row.errors.join(", ")}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -674,52 +1070,54 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                 setAllRows([]);
                 setEditingRowIndex(null);
               }}
-              disabled={isLoading}
+              disabled={isLoading || enrolling}
             >
               Hủy
             </Button>
-            <Button
-              onClick={handleImport}
-              disabled={isLoading || validCount === 0}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang import...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import ({validCount} học sinh)
-                </>
-              )}
-            </Button>
+            {studentsWithIds.length > 0 && selectedCount > 0 && (
+              <Button
+                onClick={handleEnroll}
+                disabled={enrolling}
+                variant="default"
+              >
+                {enrolling ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang enroll...
+                  </>
+                ) : (
+                  `Đăng ký lớp cho ${selectedCount} học sinh`
+                )}
+              </Button>
+            )}
+            {/* Chỉ hiện nút Import khi chưa có studentsWithIds (chưa import) */}
+            {studentsWithIds.length === 0 && (
+              <Button
+                onClick={handleImport}
+                disabled={isLoading || enrolling || validCount === 0}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang import...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import ({validCount} học sinh)
+                  </>
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Map Classes Dialog - rendered outside import dialog to avoid nested dialogs */}
-      <MapClassesDialog
-        open={showMapClasses}
-        onOpenChange={(open) => {
-          setShowMapClasses(open);
-          if (!open) {
-            // Reset form when dialog closes
-            setAllRows([]);
-            setEditingRowIndex(null);
-            router.refresh();
-          }
-        }}
-        importedStudents={importedStudentsWithIds}
-        onSuccess={() => {
-          setShowMapClasses(false);
-          setAllRows([]);
-          setEditingRowIndex(null);
-        }}
-      />
-
       {/* Duplicate Alert Dialog */}
-      <AlertDialog open={showDuplicateAlert} onOpenChange={setShowDuplicateAlert}>
+      <AlertDialog
+        open={showDuplicateAlert}
+        onOpenChange={setShowDuplicateAlert}
+      >
         <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -727,10 +1125,11 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
               Cảnh báo: Có học sinh trùng lặp
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Phát hiện {duplicateStudents.length} học sinh đã tồn tại trong hệ thống:
+              Phát hiện {duplicateStudents.length} học sinh đã tồn tại trong hệ
+              thống:
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {duplicateStudents.map((dup, index) => (
               <div
@@ -744,7 +1143,8 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
           </div>
 
           <p className="text-sm text-muted-foreground mt-4">
-            Bạn có muốn import tất cả học sinh (kể cả những học sinh trùng lặp) không?
+            Bạn có muốn import tất cả học sinh (kể cả những học sinh trùng lặp)
+            không?
           </p>
 
           <AlertDialogFooter>
@@ -758,6 +1158,23 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Payment Confirmation Dialog */}
+      <PaymentConfirmationDialog
+        open={paymentDialogOpen}
+        onOpenChange={(open) => {
+          setPaymentDialogOpen(open);
+          if (!open) {
+            // Khi đóng payment dialog → đóng luôn import dialog và refresh
+            router.refresh();
+            handleDialogChange(false);
+          }
+        }}
+        enrolledStudents={enrolledStudentsForPayment}
+        onSuccess={() => {
+          router.refresh();
+        }}
+      />
     </>
   );
 }

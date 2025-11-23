@@ -55,6 +55,9 @@ export function MapClassesDialog({
   const [selectedClasses, setSelectedClasses] = useState<
     Record<number, string>
   >({}); // rowIndex -> classId
+  const [selectedStatuses, setSelectedStatuses] = useState<
+    Record<number, "trial" | "active" | "inactive">
+  >({}); // rowIndex -> status
   const [enrolling, setEnrolling] = useState(false);
   const [viewingScheduleRowIndex, setViewingScheduleRowIndex] = useState<
     number | null
@@ -123,10 +126,10 @@ export function MapClassesDialog({
       const classId = selectedClasses[student.rowIndex];
       if (!classId) continue;
 
-      const status = parseEnrollmentStatus(
-        student.payment_status,
-        student.trial_note
-      );
+      // Sử dụng status đã chọn, nếu không có thì parse từ payment_status/trial_note
+      const status =
+        selectedStatuses[student.rowIndex] ||
+        parseEnrollmentStatus(student.payment_status, student.trial_note);
       const enrollmentDate = parseEnrollmentDate(student.trial_note);
 
       // Create key: "classId|status|enrollment_date"
@@ -238,6 +241,47 @@ export function MapClassesDialog({
                 </span>
               )}
             </div>
+
+            {/* Nút set status mặc định cho tất cả học sinh đã chọn lớp */}
+            {selectedCount > 0 && (
+              <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md border">
+                <span className="text-xs text-muted-foreground">
+                  Set trạng thái mặc định cho tất cả học sinh đã chọn lớp:
+                </span>
+                <Select
+                  value=""
+                  onValueChange={(value) => {
+                    if (value) {
+                      const newStatuses: Record<
+                        number,
+                        "trial" | "active" | "inactive"
+                      > = {};
+                      studentsWithIds.forEach((s) => {
+                        if (selectedClasses[s.rowIndex]) {
+                          newStatuses[s.rowIndex] = value as
+                            | "trial"
+                            | "active"
+                            | "inactive";
+                        }
+                      });
+                      setSelectedStatuses((prev) => ({
+                        ...prev,
+                        ...newStatuses,
+                      }));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Chọn trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trial">Học thử</SelectItem>
+                    <SelectItem value="active">Đang học</SelectItem>
+                    <SelectItem value="inactive">Ngừng học</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-3 max-h-[60vh] overflow-y-auto border rounded-md p-2">
               {studentsWithIds.map((student) => {
@@ -415,6 +459,48 @@ export function MapClassesDialog({
                                     selectedClass.end_date
                                   )}
                                 </span>
+                              </div>
+                            </div>
+
+                            {/* Trạng thái học */}
+                            <div className="pt-2 border-t">
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs font-medium text-muted-foreground flex-shrink-0">
+                                  Trạng thái học:
+                                </label>
+                                <Select
+                                  value={
+                                    selectedStatuses[student.rowIndex] ||
+                                    parseEnrollmentStatus(
+                                      student.payment_status,
+                                      student.trial_note
+                                    )
+                                  }
+                                  onValueChange={(value) => {
+                                    setSelectedStatuses((prev) => ({
+                                      ...prev,
+                                      [student.rowIndex]: value as
+                                        | "trial"
+                                        | "active"
+                                        | "inactive",
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[140px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="trial">
+                                      Học thử
+                                    </SelectItem>
+                                    <SelectItem value="active">
+                                      Đang học
+                                    </SelectItem>
+                                    <SelectItem value="inactive">
+                                      Ngừng học
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
 

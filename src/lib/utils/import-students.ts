@@ -135,6 +135,45 @@ export function parseEnrollmentStatus(
 }
 
 /**
+ * Parse payment status from Excel → payment type for tuition payment
+ * Returns: "paid" | "unpaid" | "inactive"
+ * - "Đã đóng" → "paid"
+ * - "Chưa đóng" → "unpaid"
+ * - "Nghỉ luôn" / "Nghỉ" / "Ngừng" → "inactive"
+ */
+export function parsePaymentStatusType(
+  paymentStatus?: string
+): "paid" | "unpaid" | "inactive" {
+  if (!paymentStatus) {
+    return "unpaid"; // Default to unpaid if not specified
+  }
+
+  const normalized = paymentStatus.trim().toLowerCase();
+
+  // Check for "Nghỉ luôn", "Nghỉ", "Ngừng"
+  if (
+    normalized.includes("nghỉ luôn") ||
+    normalized.includes("nghỉ") ||
+    normalized.includes("ngừng")
+  ) {
+    return "inactive";
+  }
+
+  // Check for "Đã đóng", "Đóng"
+  if (normalized.includes("đã đóng") || normalized.includes("đóng")) {
+    return "paid";
+  }
+
+  // Check for "Chưa đóng"
+  if (normalized.includes("chưa đóng")) {
+    return "unpaid";
+  }
+
+  // Default to unpaid if unclear
+  return "unpaid";
+}
+
+/**
  * Parse enrollment date from trial_note (ví dụ: "05/10" → "2024-10-05")
  * Returns today's date if no valid date found
  */
@@ -201,7 +240,7 @@ export async function parseExcelFile(file: File): Promise<StudentRow[]> {
           // Column 5: Thứ
           // Column 6: Đóng học phí
           // Column 7: Ghi chú học thử
-          const stt = String(row[0] || "").trim(); // Column 0: STT (ignore)
+          // Column 0: STT (ignore)
           const full_name = String(row[1] || "").trim(); // Column 1: Họ Tên
           const phone = String(row[2] || "").trim(); // Column 2: SĐT
           const subject = String(row[3] || "").trim(); // Column 3: Môn
