@@ -11,17 +11,31 @@ import { normalizeText, normalizePhone } from "@/lib/utils";
 
 // Re-export for convenience
 export type { CreateTeacherData, Teacher, UpdateTeacherData };
+export type TeacherWithClasses = Teacher & {
+  class_ids?: string[];
+  class_names?: string[];
+};
 
-export async function getTeachers(query?: string): Promise<Teacher[]> {
+export async function getTeachers(
+  query?: string,
+  options?: { includeClasses?: boolean }
+): Promise<(Teacher | TeacherWithClasses)[]> {
   const supabase = await createClient();
 
   // Fetch all teachers first
-  const { data, error } = await supabase
+  let baseQuery = supabase
     .from("teachers")
     .select("*")
-    .order("created_at", {
-      ascending: false,
-    });
+    .order("created_at", { ascending: false });
+
+  if (options?.includeClasses) {
+    baseQuery = supabase
+      .from("teachers")
+      .select("*, class_teachers ( teacher_id, classes ( id, name ) )")
+      .order("created_at", { ascending: false });
+  }
+
+  const { data, error } = await baseQuery;
 
   if (error) {
     console.error("Error fetching teachers:", error);
@@ -30,18 +44,58 @@ export async function getTeachers(query?: string): Promise<Teacher[]> {
 
   if (!data) return [];
 
+  let teachersData: Array<Teacher | TeacherWithClasses> = data;
+
+  if (options?.includeClasses) {
+    teachersData = (
+      data as Array<
+        Teacher & {
+          class_teachers?: Array<{
+            teacher_id: string;
+            classes?: {
+              id: string;
+              name: string;
+            } | null;
+          }>;
+        }
+      >
+    ).map((row) => {
+      const classIds: string[] = [];
+      const classNames: string[] = [];
+
+      row.class_teachers?.forEach((assignment) => {
+        if (assignment.classes) {
+          classIds.push(assignment.classes.id);
+          classNames.push(assignment.classes.name);
+        }
+      });
+
+      return {
+        id: row.id,
+        full_name: row.full_name,
+        phone: row.phone,
+        notes: row.notes,
+        is_active: row.is_active,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        class_ids: classIds,
+        class_names: classNames,
+      };
+    });
+  }
+
   const q = (query || "").trim();
 
   // If no query, return all teachers
   if (q.length === 0) {
-    return data || [];
+    return teachersData;
   }
 
   // Filter client-side with diacritic-insensitive search
   const normalizedQuery = normalizeText(q);
   const normalizedQueryForPhone = normalizePhone(q);
 
-  const filtered = (data as Teacher[]).filter((teacher) => {
+  const filtered = teachersData.filter((teacher) => {
     // Search by full_name (diacritic-insensitive)
     const nameMatch = teacher.full_name
       ? normalizeText(teacher.full_name).includes(normalizedQuery)

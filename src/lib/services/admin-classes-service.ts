@@ -455,6 +455,47 @@ export async function addClassTeachers(
   if (path) revalidatePath(path);
 }
 
+export async function assignTeacherToClass(
+  teacherId: string,
+  classId: string,
+  path?: string
+) {
+  const supabase = await createClient();
+
+  // check existing assignment
+  const { data: existing, error: existingError } = await supabase
+    .from("class_teachers")
+    .select("id")
+    .eq("teacher_id", teacherId)
+    .eq("class_id", classId)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Error checking teacher assignment:", existingError);
+    throw new Error("Không thể kiểm tra giáo viên trong lớp");
+  }
+
+  if (existing) {
+    throw new Error("Giáo viên đã đang dạy lớp này");
+  }
+
+  const { error } = await supabase.from("class_teachers").insert({
+    teacher_id: teacherId,
+    class_id: classId,
+  });
+
+  if (error) {
+    console.error("Error assigning teacher to class:", error);
+    throw new Error("Không thể thêm giáo viên vào lớp");
+  }
+
+  if (path) {
+    revalidatePath(path);
+  }
+
+  return { success: true };
+}
+
 export async function removeClassTeacher(
   assignmentId: string,
   path?: string

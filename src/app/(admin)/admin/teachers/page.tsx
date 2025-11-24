@@ -11,9 +11,16 @@ import {
   TableHeaderRow,
   TableRow,
 } from "@/components/ui/table";
-import { getTeachers } from "@/lib/services/admin-teachers-service";
+import {
+  getTeachers,
+  type TeacherWithClasses,
+} from "@/lib/services/admin-teachers-service";
 import { Pencil } from "lucide-react";
-import { DeleteTeacherButton, TeachersSearchBar } from "./_components";
+import {
+  AssignTeacherToClassDialog,
+  DeleteTeacherButton,
+  TeachersSearchBar,
+} from "./_components";
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;
@@ -22,7 +29,9 @@ interface SearchProps {
 export default async function TeachersPage(props: SearchProps) {
   const searchParams = await props.searchParams;
   const q = searchParams?.q || "";
-  const teachers = await getTeachers(q);
+  const teachers = (await getTeachers(q, {
+    includeClasses: true,
+  })) as TeacherWithClasses[];
   return (
     <>
       {q && (
@@ -62,14 +71,47 @@ export default async function TeachersPage(props: SearchProps) {
                       />
                     </div>
                   </div>
-                  {teacher.notes && (
-                    <div className="space-y-1 text-sm">
+                  <div className="space-y-2 text-sm">
+                    {teacher.notes && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Ghi chú:</span>
                         <span>{teacher.notes}</span>
                       </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-muted-foreground">
+                        Đang dạy (
+                        {teacher.class_names?.length
+                          ? teacher.class_names.length
+                          : 0}{" "}
+                        lớp):
+                      </span>
+                      {teacher.class_names && teacher.class_names.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {teacher.class_names.map((className) => (
+                            <Badge key={className} variant="secondary">
+                              {className}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          Chưa được gán lớp nào
+                        </span>
+                      )}
                     </div>
-                  )}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <AssignTeacherToClassDialog
+                      teacherId={teacher.id}
+                      teacherName={teacher.full_name}
+                      currentClasses={teacher.class_names ?? []}
+                      stopPropagationOnTrigger
+                      buttonVariant="secondary"
+                      buttonSize="sm"
+                      ariaLabel="Thêm giáo viên vào lớp"
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </UpdateTeacherForm>
@@ -92,6 +134,7 @@ export default async function TeachersPage(props: SearchProps) {
               <TableHead>Họ và tên</TableHead>
               <TableHead>Số điện thoại</TableHead>
               <TableHead>Ghi chú</TableHead>
+              <TableHead>Lớp đang dạy</TableHead>
               <TableHead className="text-center">Trạng thái</TableHead>
               <TableHead className="text-right">Thao tác</TableHead>
             </TableHeaderRow>
@@ -114,6 +157,21 @@ export default async function TeachersPage(props: SearchProps) {
                   </TableCell>
                   <TableCell>{teacher.phone}</TableCell>
                   <TableCell>{teacher.notes || "-"}</TableCell>
+                  <TableCell>
+                    {teacher.class_names && teacher.class_names.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {teacher.class_names.map((className) => (
+                          <Badge key={className} variant="secondary">
+                            {className}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Chưa có lớp
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center">
                     <Badge
                       variant={teacher.is_active ? "default" : "destructive"}
@@ -128,6 +186,16 @@ export default async function TeachersPage(props: SearchProps) {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </UpdateTeacherForm>
+                      <AssignTeacherToClassDialog
+                        teacherId={teacher.id}
+                        teacherName={teacher.full_name}
+                        currentClasses={teacher.class_names ?? []}
+                        buttonVariant="ghost"
+                        buttonSize="sm"
+                        showIcon
+                        hideLabel
+                        ariaLabel="Thêm giáo viên vào lớp"
+                      />
                       <DeleteTeacherButton
                         teacherId={teacher.id}
                         teacherName={teacher.full_name}
