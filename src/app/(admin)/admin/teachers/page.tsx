@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { getTeachers } from "@/lib/services/admin-teachers-service";
 import { Pencil } from "lucide-react";
-import { TeachersSearchBar } from "./_components";
+import { DeleteTeacherButton, TeachersSearchBar } from "./_components";
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;
@@ -55,6 +55,11 @@ export default async function TeachersPage(props: SearchProps) {
                       >
                         {teacher.is_active ? "Hoạt động" : "Ngừng hoạt động"}
                       </Badge>
+                      <DeleteTeacherButton
+                        teacherId={teacher.id}
+                        teacherName={teacher.full_name}
+                        stopPropagationOnTrigger
+                      />
                     </div>
                   </div>
                   {teacher.notes && (
@@ -117,11 +122,17 @@ export default async function TeachersPage(props: SearchProps) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <UpdateTeacherForm teacher={teacher}>
-                      <Button variant="ghost" size="icon">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </UpdateTeacherForm>
+                    <div className="flex justify-end gap-2">
+                      <UpdateTeacherForm teacher={teacher}>
+                        <Button variant="ghost" size="icon">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </UpdateTeacherForm>
+                      <DeleteTeacherButton
+                        teacherId={teacher.id}
+                        teacherName={teacher.full_name}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

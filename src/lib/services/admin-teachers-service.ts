@@ -190,3 +190,87 @@ export async function getTeacherById(id: string): Promise<Teacher | null> {
 
   return data;
 }
+
+export async function deleteTeacher(id: string, path?: string) {
+  const supabase = await createClient();
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    throw new Error("Thiếu cấu hình Supabase để xóa giáo viên");
+  }
+
+  try {
+    const { data: assignments, error: assignmentsCheckError } = await supabase
+      .from("class_teachers")
+      .select("class_id")
+      .eq("teacher_id", id);
+
+    if (assignmentsCheckError) {
+      console.error(
+        "Error checking teacher assignments:",
+        assignmentsCheckError
+      );
+      throw new Error("Không kiểm tra được tình trạng lớp của giáo viên");
+    }
+
+    if (assignments && assignments.length > 0) {
+      throw new Error(
+        "Không thể xóa giáo viên đang được phân công dạy lớp. Vui lòng chuyển hoặc xóa phân công trước."
+      );
+    }
+
+    // Xóa phân công lớp trước để tránh lỗi ràng buộc
+    const { error: assignmentsError } = await supabase
+      .from("class_teachers")
+      .delete()
+      .eq("teacher_id", id);
+
+    if (assignmentsError) {
+      console.error("Error removing teacher assignments:", assignmentsError);
+      throw new Error("Không thể xóa phân công lớp của giáo viên");
+    }
+
+    const { error: teacherError } = await supabase
+      .from("teachers")
+      .delete()
+      .eq("id", id);
+
+    if (teacherError) {
+      console.error("Error deleting teacher:", teacherError);
+      throw new Error("Không thể xóa giáo viên");
+    }
+
+    const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+      method: "DELETE",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      let errorMessage = "Không thể xóa tài khoản Supabase của giáo viên";
+      try {
+        const body = await response.json();
+        if (body?.message) {
+          errorMessage = body.message;
+        }
+      } catch (parseError) {
+        console.error("Failed to parse Supabase delete response", parseError);
+      }
+      throw new Error(errorMessage);
+    }
+
+    if (path) {
+      revalidatePath(path);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error in deleteTeacher:", error);
+    throw error;
+  }
+}
