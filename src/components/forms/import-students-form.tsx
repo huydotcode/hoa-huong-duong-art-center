@@ -68,7 +68,7 @@ import {
   Upload,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -83,6 +83,30 @@ import { PaymentConfirmationDialog } from "@/components/forms/payment-confirmati
 
 interface ImportStudentsFormProps {
   children: React.ReactNode;
+}
+
+const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+function formatClassSchedule(cls?: ClassListItem) {
+  if (!cls || !cls.days_of_week || cls.days_of_week.length === 0) {
+    return "Chưa có lịch học";
+  }
+
+  return cls.days_of_week
+    .map((slot) => {
+      const day = DAY_LABELS[slot.day] ?? `Thứ ${slot.day}`;
+      const start = slot.start_time?.slice(0, 5);
+      const end = slot.end_time?.slice(0, 5);
+
+      if (start && end) {
+        return `${day} · ${start}-${end}`;
+      }
+      if (start) {
+        return `${day} · ${start}`;
+      }
+      return day;
+    })
+    .join(" • ");
 }
 
 // Schema for editing student row
@@ -823,8 +847,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                         <TableHead className="w-16">Dòng</TableHead>
                         <TableHead>Họ và tên / Số điện thoại</TableHead>
                         <TableHead>Môn</TableHead>
-                        <TableHead>Thời gian</TableHead>
-                        <TableHead>Thứ</TableHead>
+                        <TableHead>Thời gian / Thứ</TableHead>
                         <TableHead>Trạng thái học phí</TableHead>
                         <TableHead className="w-32">Ghi chú học thử</TableHead>
                         <TableHead className="w-24">Trạng thái</TableHead>
@@ -867,8 +890,14 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                                 </div>
                               </TableCell>
                               <TableCell>{row.subject || "-"}</TableCell>
-                              <TableCell>{row.time_slot || "-"}</TableCell>
-                              <TableCell>{row.days || "-"}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-col text-sm">
+                                  <span>{row.time_slot || "-"}</span>
+                                  <span className="text-muted-foreground">
+                                    {row.days || "-"}
+                                  </span>
+                                </div>
+                              </TableCell>
                               <TableCell>{row.payment_status || "-"}</TableCell>
                               <TableCell className="text-sm">
                                 {row.trial_note ? (
@@ -912,7 +941,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                                         }}
                                         disabled={loadingClasses}
                                       >
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger className="w-full min-h-[50px]">
                                           <SelectValue placeholder="Chọn lớp" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -924,19 +953,26 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                                           {classes.map((cls) => {
                                             const isSuggested =
                                               suggestedClass?.id === cls.id;
+                                            const scheduleText =
+                                              formatClassSchedule(cls);
                                             return (
                                               <SelectItem
                                                 key={cls.id}
                                                 value={cls.id}
                                               >
-                                                <div className="flex items-center gap-2">
-                                                  <span>{cls.name}</span>
-                                                  {isSuggested &&
-                                                    !selectedClassId && (
-                                                      <span className="text-xs text-primary font-medium">
-                                                        (Gợi ý)
-                                                      </span>
-                                                    )}
+                                                <div className="flex flex-col gap-1">
+                                                  <div className="flex items-center gap-2">
+                                                    <span>{cls.name}</span>
+                                                    {isSuggested &&
+                                                      !selectedClassId && (
+                                                        <span className="text-xs text-primary font-medium">
+                                                          (Gợi ý)
+                                                        </span>
+                                                      )}
+                                                  </div>
+                                                  <span className="text-xs text-muted-foreground">
+                                                    {scheduleText}
+                                                  </span>
                                                 </div>
                                               </SelectItem>
                                             );
@@ -1028,7 +1064,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                             {!row.isValid && row.errors.length > 0 && (
                               <TableRow className="bg-destructive/5">
                                 <TableCell
-                                  colSpan={studentsWithIds.length > 0 ? 11 : 9}
+                                  colSpan={studentsWithIds.length > 0 ? 10 : 8}
                                   className="p-2"
                                 >
                                   <div className="text-xs text-destructive">
