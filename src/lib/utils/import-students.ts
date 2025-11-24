@@ -210,6 +210,70 @@ export function parseEnrollmentDate(trialNote?: string): string {
 }
 
 /**
+ * Convert Excel serial date number to date string format "dd/MM"
+ * Excel epoch: 1/1/1900 = 1
+ */
+function convertExcelSerialToDate(serialNumber: number): string | null {
+  try {
+    // Excel serial date: 1 = 1900-01-01
+    // JavaScript Date epoch: 1970-01-01
+    // Excel's epoch is actually Dec 30, 1899 (day 0 = Dec 30, 1899, day 1 = Dec 31, 1899)
+    // But Excel treats Jan 1, 1900 as day 1 for compatibility
+    const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
+    const date = new Date(excelEpoch.getTime() + (serialNumber - 1) * 86400000);
+
+    // Validate date
+    if (isNaN(date.getTime())) return null;
+
+    // Check if date is reasonable (between 2000 and 2100)
+    const year = date.getFullYear();
+    if (year < 2000 || year > 2100) return null;
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${day}/${month}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalize trial_note: convert Excel serial date to date string if needed
+ */
+function normalizeTrialNote(
+  value: string | number | undefined
+): string | undefined {
+  if (!value) return undefined;
+
+  // If it's already a string, check if it looks like a date format
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    // If it's already in dd/MM format, return as is
+    if (/^\d{1,2}\/\d{1,2}$/.test(trimmed)) {
+      return trimmed;
+    }
+    // If it's a number string, try to parse it
+    const numValue = parseFloat(trimmed);
+    if (!isNaN(numValue) && numValue > 0 && numValue < 100000) {
+      const dateStr = convertExcelSerialToDate(numValue);
+      if (dateStr) return dateStr;
+    }
+    return trimmed;
+  }
+
+  // If it's a number (Excel serial date)
+  if (typeof value === "number") {
+    if (value > 0 && value < 100000) {
+      const dateStr = convertExcelSerialToDate(value);
+      if (dateStr) return dateStr;
+    }
+    return String(value);
+  }
+
+  return undefined;
+}
+
+/**
  * Parse Excel file to StudentRow array
  */
 export async function parseExcelFile(file: File): Promise<StudentRow[]> {
@@ -247,7 +311,9 @@ export async function parseExcelFile(file: File): Promise<StudentRow[]> {
           const time_slot = String(row[4] || "").trim(); // Column 4: Thời gian
           const days = String(row[5] || "").trim(); // Column 5: Thứ
           const payment_status = String(row[6] || "").trim(); // Column 6: Đóng học phí
-          const trial_note = String(row[7] || "").trim(); // Column 7: Ghi chú học thử
+          const trial_note = normalizeTrialNote(
+            row[7] as string | number | undefined
+          ); // Column 7: Ghi chú học thử
 
           if (!full_name && !phone) continue; // Skip completely empty rows
 

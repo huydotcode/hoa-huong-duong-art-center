@@ -186,24 +186,26 @@ export function MapClassesDialog({
           toast.error(
             error instanceof Error
               ? error.message
-              : `Lỗi khi enroll ${enrollments.length} học sinh vào lớp`
+              : `Lỗi khi đăng ký học ${enrollments.length} học sinh vào lớp`
           );
         }
       }
 
       if (successCount > 0) {
-        toast.success(`Đã enroll thành công ${successCount} học sinh vào lớp`);
+        toast.success(
+          `Đã đăng ký học thành công ${successCount} học sinh vào lớp`
+        );
         router.refresh();
         onSuccess?.();
         onOpenChange(false);
       }
 
       if (errorCount > 0) {
-        toast.warning(`Không thể enroll ${errorCount} học sinh`);
+        toast.warning(`Không thể đăng ký học ${errorCount} học sinh`);
       }
     } catch (error) {
       console.error("Error in enrollment process:", error);
-      toast.error("Lỗi khi enroll học sinh");
+      toast.error("Lỗi khi đăng ký học học sinh");
     } finally {
       setEnrolling(false);
     }
@@ -567,7 +569,7 @@ export function MapClassesDialog({
                 {enrolling ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang enroll...
+                    Đang đăng ký học...
                   </>
                 ) : (
                   `Đăng ký lớp cho ${selectedCount} học sinh`

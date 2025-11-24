@@ -64,6 +64,7 @@ import {
   Download,
   Loader2,
   Pencil,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -166,6 +167,33 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
     }
   }, [open]);
 
+  // Tự động set status = "trial" khi có trial_note
+  useEffect(() => {
+    setSelectedStatuses((prev) => {
+      const newStatuses: Record<number, "trial" | "active" | "inactive"> = {};
+
+      allRows.forEach((row) => {
+        // Nếu có trial_note và chưa có status được set thủ công
+        if (row.trial_note && row.trial_note.trim().length > 0) {
+          // Chỉ set nếu chưa có status cho row này
+          if (!prev[row.rowIndex]) {
+            newStatuses[row.rowIndex] = "trial";
+          }
+        }
+      });
+
+      // Chỉ update nếu có thay đổi
+      if (Object.keys(newStatuses).length > 0) {
+        return {
+          ...prev,
+          ...newStatuses,
+        };
+      }
+
+      return prev;
+    });
+  }, [allRows]); // Chạy khi allRows thay đổi
+
   async function loadClasses() {
     setLoadingClasses(true);
     try {
@@ -194,6 +222,19 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
     if (matchingClasses.length === 1) return matchingClasses[0];
 
     return matchingClasses[0];
+  }
+
+  // Function to delete a row from allRows only
+  function handleDeleteRow(rowIndex: number) {
+    setAllRows((prev) => prev.filter((row) => row.rowIndex !== rowIndex));
+
+    // Reset editing if deleting the row being edited
+    if (editingRowIndex !== null) {
+      const editingRow = allRows[editingRowIndex];
+      if (editingRow && editingRow.rowIndex === rowIndex) {
+        setEditingRowIndex(null);
+      }
+    }
   }
 
   async function handleEnroll() {
@@ -271,13 +312,15 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
           toast.error(
             error instanceof Error
               ? error.message
-              : `Lỗi khi enroll ${enrollments.length} học sinh vào lớp`
+              : `Lỗi khi đăng ký học ${enrollments.length} học sinh vào lớp`
           );
         }
       }
 
       if (successCount > 0) {
-        toast.success(`Đã enroll thành công ${successCount} học sinh vào lớp`);
+        toast.success(
+          `Đã đăng ký học thành công ${successCount} học sinh vào lớp`
+        );
 
         // Chuẩn bị data cho payment dialog
         const enrolledStudentsForPayment = Object.values(enrollmentsByKey)
@@ -299,7 +342,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
               ),
             };
           })
-          .filter((e) => e.classId && e.studentId); // Chỉ lấy những học sinh đã enroll thành công
+          .filter((e) => e.classId && e.studentId); // Chỉ lấy những học sinh đã đăng ký học thành công
 
         if (enrolledStudentsForPayment.length > 0) {
           setEnrolledStudentsForPayment(enrolledStudentsForPayment);
@@ -312,11 +355,11 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
       }
 
       if (errorCount > 0) {
-        toast.warning(`Không thể enroll ${errorCount} học sinh`);
+        toast.warning(`Không thể đăng ký học ${errorCount} học sinh`);
       }
     } catch (error) {
       console.error("Error in enrollment process:", error);
-      toast.error("Lỗi khi enroll học sinh");
+      toast.error("Lỗi khi đăng ký học học sinh");
     } finally {
       setEnrolling(false);
     }
@@ -783,6 +826,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                         <TableHead>Thời gian</TableHead>
                         <TableHead>Thứ</TableHead>
                         <TableHead>Trạng thái học phí</TableHead>
+                        <TableHead className="w-32">Ghi chú học thử</TableHead>
                         <TableHead className="w-24">Trạng thái</TableHead>
                         {studentsWithIds.length > 0 && (
                           <>
@@ -826,6 +870,17 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                               <TableCell>{row.time_slot || "-"}</TableCell>
                               <TableCell>{row.days || "-"}</TableCell>
                               <TableCell>{row.payment_status || "-"}</TableCell>
+                              <TableCell className="text-sm">
+                                {row.trial_note ? (
+                                  <span className="text-primary font-medium">
+                                    {row.trial_note}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell>
                                 {row.isValid ? (
                                   <Badge variant="default">Hợp lệ</Badge>
@@ -940,28 +995,40 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                                 </>
                               )}
                               <TableCell>
-                                {!row.isValid && (
+                                <div className="flex items-center gap-2">
+                                  {!row.isValid && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEditingRowIndex(index);
+                                        editForm.reset({
+                                          full_name: row.full_name,
+                                          phone: row.phone || "",
+                                        });
+                                      }}
+                                    >
+                                      <Pencil className="h-4 w-4 mr-1" />
+                                      Chỉnh sửa
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => {
-                                      setEditingRowIndex(index);
-                                      editForm.reset({
-                                        full_name: row.full_name,
-                                        phone: row.phone || "",
-                                      });
-                                    }}
+                                    onClick={() =>
+                                      handleDeleteRow(row.rowIndex)
+                                    }
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                   >
-                                    <Pencil className="h-4 w-4 mr-1" />
-                                    Chỉnh sửa
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
-                                )}
+                                </div>
                               </TableCell>
                             </TableRow>
                             {!row.isValid && row.errors.length > 0 && (
                               <TableRow className="bg-destructive/5">
                                 <TableCell
-                                  colSpan={studentsWithIds.length > 0 ? 10 : 8}
+                                  colSpan={studentsWithIds.length > 0 ? 11 : 9}
                                   className="p-2"
                                 >
                                   <div className="text-xs text-destructive">
@@ -1083,7 +1150,7 @@ export function ImportStudentsForm({ children }: ImportStudentsFormProps) {
                 {enrolling ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang enroll...
+                    Đang đăng ký học...
                   </>
                 ) : (
                   `Đăng ký lớp cho ${selectedCount} học sinh`
