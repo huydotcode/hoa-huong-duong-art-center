@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useEffect, useCallback } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ import {
 } from "@/lib/validations/class";
 import { formatCurrencyVNDots } from "@/lib/utils";
 import { SUBJECTS } from "@/lib/constants/subjects";
+import { DAY_ORDER } from "@/lib/constants/schedule";
+import { Trash2, Plus } from "lucide-react";
 
 interface Props {
   children: React.ReactNode;
@@ -72,6 +74,24 @@ export function CreateClassForm({ children }: Props) {
   });
 
   const className = form.watch("name");
+  const {
+    fields: scheduleFields,
+    append: appendSchedule,
+    remove: removeSchedule,
+  } = useFieldArray({
+    control: form.control,
+    name: "days_of_week",
+  });
+
+  const DAY_LABELS = [
+    { label: "Thứ 2", value: 1 },
+    { label: "Thứ 3", value: 2 },
+    { label: "Thứ 4", value: 3 },
+    { label: "Thứ 5", value: 4 },
+    { label: "Thứ 6", value: 5 },
+    { label: "Thứ 7", value: 6 },
+    { label: "Chủ nhật", value: 0 },
+  ];
 
   // Check class name exists with debounce
   const checkName = useCallback(
@@ -147,10 +167,29 @@ export function CreateClassForm({ children }: Props) {
 
     setIsLoading(true);
     try {
+      const dayOrderMap = new Map<number, number>(
+        DAY_ORDER.map((day, index) => [day, index])
+      );
+      const normalizedDays =
+        values.days_of_week
+          ?.map((item) => ({
+            day: Number(item.day),
+            start_time: item.start_time,
+            end_time: item.end_time || undefined,
+          }))
+          .sort((a, b) => {
+            const orderDiff =
+              (dayOrderMap.get(a.day) ?? 999) - (dayOrderMap.get(b.day) ?? 999);
+            if (orderDiff !== 0) {
+              return orderDiff;
+            }
+            return a.start_time.localeCompare(b.start_time);
+          }) ?? [];
+
       // Ensure days_of_week is always an array and is_active is always boolean
       const classData = {
         ...values,
-        days_of_week: values.days_of_week || [],
+        days_of_week: normalizedDays,
         is_active: values.is_active ?? true,
       };
       await createClass(classData, { path });
@@ -520,6 +559,125 @@ export function CreateClassForm({ children }: Props) {
                       placeholder="Chọn ngày kết thúc"
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="days_of_week"
+              render={() => (
+                <FormItem>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <FormLabel className="mb-1 sm:mb-0">
+                      Lịch học trong tuần
+                    </FormLabel>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        appendSchedule({
+                          day: 1,
+                          start_time: "17:00",
+                          end_time: "18:30",
+                        })
+                      }
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Thêm ca học
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Có thể để trống nếu chưa chốt lịch.
+                  </p>
+                  <div className="mt-3 space-y-3">
+                    {scheduleFields.length === 0 && (
+                      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                        Chưa có ca học nào. Nhấn &quot;Thêm ca học&quot; để bắt
+                        đầu.
+                      </div>
+                    )}
+                    {scheduleFields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="flex flex-col gap-3 rounded-lg border p-3 md:flex-row md:items-center"
+                      >
+                        <FormField
+                          control={form.control}
+                          name={`days_of_week.${index}.day`}
+                          render={({ field }) => (
+                            <FormItem className="w-full md:w-1/3">
+                              <FormLabel className="md:hidden">Thứ</FormLabel>
+                              <Select
+                                value={String(field.value ?? 1)}
+                                onValueChange={(value) =>
+                                  field.onChange(Number(value))
+                                }
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Chọn thứ" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {DAY_LABELS.map((item) => (
+                                    <SelectItem
+                                      key={item.value}
+                                      value={String(item.value)}
+                                    >
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`days_of_week.${index}.start_time`}
+                          render={({ field }) => (
+                            <FormItem className="w-full md:w-1/3">
+                              <FormLabel className="md:hidden">
+                                Giờ bắt đầu
+                              </FormLabel>
+                              <FormControl>
+                                <Input type="time" step={300} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`days_of_week.${index}.end_time`}
+                          render={({ field }) => (
+                            <FormItem className="w-full md:w-1/3">
+                              <FormLabel className="md:hidden">
+                                Giờ kết thúc
+                              </FormLabel>
+                              <FormControl>
+                                <Input type="time" step={300} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive md:self-start"
+                          onClick={() => removeSchedule(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
