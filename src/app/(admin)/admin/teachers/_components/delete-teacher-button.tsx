@@ -22,6 +22,7 @@ import { deleteTeacher } from "@/lib/services/admin-teachers-service";
 interface DeleteTeacherButtonProps {
   teacherId: string;
   teacherName: string;
+  classNames?: string[];
   variant?: "icon" | "default";
   stopPropagationOnTrigger?: boolean;
 }
@@ -29,6 +30,7 @@ interface DeleteTeacherButtonProps {
 export function DeleteTeacherButton({
   teacherId,
   teacherName,
+  classNames = [],
   variant = "icon",
   stopPropagationOnTrigger = false,
 }: DeleteTeacherButtonProps) {
@@ -40,6 +42,15 @@ export function DeleteTeacherButton({
   const handleDelete = () => {
     startTransition(async () => {
       try {
+        // Kiểm tra ở client trước khi gọi server action
+        if (classNames && classNames.length > 0) {
+          toast.error("Không thể xóa giáo viên", {
+            description: `Giáo viên đang dạy lớp: ${classNames.join(", ")}. Vui lòng gỡ phân công lớp trước.`,
+          });
+          setOpen(false);
+          return;
+        }
+
         await deleteTeacher(teacherId, path);
         toast.success("Đã xóa giáo viên", {
           description: teacherName,
@@ -65,7 +76,7 @@ export function DeleteTeacherButton({
           className={
             variant === "icon"
               ? "text-destructive hover:text-destructive"
-              : undefined
+              : "w-full sm:w-auto"
           }
           onClickCapture={
             stopPropagationOnTrigger

@@ -173,7 +173,8 @@ export function UpdateTeacherForm({
               )}
             />
 
-            <div className="space-y-2 rounded-md border p-3">
+            {/* Mobile only: Action buttons inside dialog */}
+            <div className="space-y-2 rounded-md border p-3 md:hidden">
               <p className="text-sm font-medium text-muted-foreground">
                 Hành động nhanh
               </p>
@@ -191,6 +192,9 @@ export function UpdateTeacherForm({
                 <DeleteTeacherButton
                   teacherId={teacher.id}
                   teacherName={teacher.full_name}
+                  classNames={
+                    "class_names" in teacher ? (teacher.class_names ?? []) : []
+                  }
                   variant="default"
                 />
               </div>

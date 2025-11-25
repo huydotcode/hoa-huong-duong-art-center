@@ -34,7 +34,7 @@ interface AssignTeacherToClassDialogProps {
   teacherName: string;
   currentClasses?: string[];
   buttonVariant?: "outline" | "ghost" | "default" | "secondary";
-  buttonSize?: "sm" | "default";
+  buttonSize?: "sm" | "default" | "icon";
   buttonLabel?: string;
   hideLabel?: boolean;
   showIcon?: boolean;
@@ -114,7 +114,7 @@ export function AssignTeacherToClassDialog({
         <Button
           variant={buttonVariant}
           size={buttonSize}
-          className="gap-1"
+          className="gap-1 w-full sm:w-auto"
           onClickCapture={
             stopPropagationOnTrigger
               ? (event) => {
@@ -201,6 +201,7 @@ export function AssignTeacherToClassDialog({
             Hủy
           </Button>
           <Button
+            className="w-full sm:w-auto"
             onClick={handleAssign}
             disabled={!selectedClassId || isAssigning}
           >

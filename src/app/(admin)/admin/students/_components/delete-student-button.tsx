@@ -14,13 +14,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Trash2, Loader2 } from "lucide-react";
-import type { Student } from "@/types";
+import type { Student, StudentWithClassSummary } from "@/types";
 import { deleteStudent } from "@/lib/services/admin-students-service";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 
 interface DeleteStudentButtonProps {
-  student: Student;
+  student: Student | StudentWithClassSummary;
   className?: string;
 }
 
@@ -35,6 +35,28 @@ export function DeleteStudentButton({
   async function handleDelete() {
     setIsDeleting(true);
     try {
+      // Kiểm tra ở client trước khi gọi server action
+      const studentWithClasses = student as StudentWithClassSummary;
+      const hasActiveClasses =
+        studentWithClasses.class_summary?.some(
+          (cls) => cls.status === "active" || cls.status === "trial"
+        ) ?? false;
+
+      if (hasActiveClasses) {
+        const activeClassNames =
+          studentWithClasses.class_summary
+            ?.filter((cls) => cls.status === "active" || cls.status === "trial")
+            .map((cls) => cls.className)
+            .join(", ") || "các lớp đang học";
+
+        toast.error("Không thể xóa học sinh", {
+          description: `Học sinh đang học lớp: ${activeClassNames}. Vui lòng chuyển hoặc xóa phân công lớp trước.`,
+        });
+        setOpen(false);
+        setIsDeleting(false);
+        return;
+      }
+
       await deleteStudent(student.id, path);
       toast.success("Đã xóa học sinh thành công");
       setOpen(false);

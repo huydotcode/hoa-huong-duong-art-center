@@ -16,7 +16,11 @@ import {
   type TeacherWithClasses,
 } from "@/lib/services/admin-teachers-service";
 import { Pencil } from "lucide-react";
-import { TeachersSearchBar } from "./_components";
+import {
+  TeachersSearchBar,
+  AssignTeacherToClassDialog,
+  DeleteTeacherButton,
+} from "./_components";
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;
@@ -164,7 +168,22 @@ export default async function TeachersPage(props: SearchProps) {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </UpdateTeacherForm>
-                      {/* Desktop actions remain outside dialog */}
+                      <AssignTeacherToClassDialog
+                        teacherId={teacher.id}
+                        teacherName={teacher.full_name}
+                        currentClasses={teacher.class_names ?? []}
+                        buttonVariant="ghost"
+                        buttonSize="icon"
+                        hideLabel={true}
+                        showIcon={true}
+                        ariaLabel="Thêm vào lớp"
+                      />
+                      <DeleteTeacherButton
+                        teacherId={teacher.id}
+                        teacherName={teacher.full_name}
+                        classNames={teacher.class_names ?? []}
+                        variant="icon"
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
