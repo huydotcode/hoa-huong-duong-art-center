@@ -73,7 +73,6 @@ export default async function StudentsPage(props: SearchProps) {
       recentOnly={recent}
       tuitionStatus={tuitionStatus}
       totalCount={totalCount}
-      pageSize={STUDENTS_PAGE_SIZE}
       learningStats={learningStats}
     />
   );
