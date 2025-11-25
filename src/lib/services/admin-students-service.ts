@@ -1353,6 +1353,43 @@ export async function updateStudent(
 export async function deleteStudent(id: string, path?: string) {
   const supabase = await createClient();
 
+  const { data: activeEnrollments, error: enrollmentError } = await supabase
+    .from("student_class_enrollments")
+    .select(
+      `
+      id,
+      status,
+      classes ( name )
+    `
+    )
+    .eq("student_id", id)
+    .in("status", ["active", "trial"])
+    .is("leave_date", null);
+
+  if (enrollmentError) {
+    throw new Error(
+      `Không kiểm tra được tình trạng lớp của học sinh: ${enrollmentError.message}`
+    );
+  }
+
+  if (activeEnrollments && activeEnrollments.length > 0) {
+    const classNames = activeEnrollments
+      .map((enrollment) => {
+        const cls = Array.isArray(enrollment.classes)
+          ? enrollment.classes[0]
+          : enrollment.classes;
+        return cls?.name;
+      })
+      .filter(Boolean)
+      .join(", ");
+
+    throw new Error(
+      classNames && classNames.length > 0
+        ? `Không thể xóa học sinh đang học lớp: ${classNames}`
+        : "Không thể xóa học sinh đang được xếp lớp. Vui lòng cho học sinh nghỉ lớp trước."
+    );
+  }
+
   const { error } = await supabase.from("students").delete().eq("id", id);
   if (error) throw new Error(`Lỗi khi xóa học sinh: ${error.message}`);
   if (path) revalidatePath(path);
