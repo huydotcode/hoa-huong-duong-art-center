@@ -124,7 +124,19 @@ function StudentTableRowComponent({
 
   return (
     <>
-      <TableRow>
+      <TableRow
+        onClick={() => {
+          // Toggle selection when clicking on the row (but not on buttons/checkbox)
+          if (onSelectChange) {
+            onSelectChange(!selected);
+          }
+        }}
+        className={
+          onSelectChange
+            ? `cursor-pointer ${selected ? "bg-muted/50" : "hover:bg-muted/30"}`
+            : ""
+        }
+      >
         <TableCell>
           {onSelectChange && (
             <Checkbox
@@ -244,11 +256,17 @@ function StudentTableRowComponent({
           </Badge>
         </TableCell>
         <TableCell className="text-right">
-          <div className="flex items-center justify-end gap-2">
+          <div
+            className="flex items-center justify-end gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setManageClassesDialogOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setManageClassesDialogOpen(true);
+              }}
               title="Quản lý lớp học"
             >
               <Book className="h-4 w-4" />
@@ -256,7 +274,10 @@ function StudentTableRowComponent({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setScheduleDialogOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setScheduleDialogOpen(true);
+              }}
               title="Xem lịch học"
             >
               <Calendar className="h-4 w-4" />
@@ -264,7 +285,10 @@ function StudentTableRowComponent({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setQrDialogOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setQrDialogOpen(true);
+              }}
               title="Tạo QR code"
             >
               <QrCode className="h-4 w-4" />
@@ -273,7 +297,12 @@ function StudentTableRowComponent({
               key={`${student.id}-${student.updated_at}`}
               student={student}
             >
-              <Button variant="ghost" size="icon" title="Chỉnh sửa">
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Chỉnh sửa"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <Pencil className="h-4 w-4" />
               </Button>
             </UpdateStudentForm>

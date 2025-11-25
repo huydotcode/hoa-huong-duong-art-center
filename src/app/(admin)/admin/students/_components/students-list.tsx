@@ -18,7 +18,7 @@ import {
   type StudentLearningStatsSummary,
 } from "@/lib/services/admin-students-service";
 import type { StudentWithClassSummary } from "@/types";
-import { Copy, Loader2, Scissors } from "lucide-react";
+import { Copy, Loader2, Plus, Scissors } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -27,6 +27,7 @@ import {
   useTransition,
 } from "react";
 import { BulkCopyCutDialog } from "./bulk-copy-cut-dialog";
+import { BulkEnrollDialog } from "./bulk-enroll-dialog";
 import { StudentTableRow } from "./student-table-row";
 
 interface StudentsListProps {
@@ -60,6 +61,7 @@ export default function StudentsList({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState<"copy" | "cut">("copy");
+  const [bulkEnrollDialogOpen, setBulkEnrollDialogOpen] = useState(false);
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
   const hasSubjectFilter = useMemo(
     () => subject.trim().length > 0 && subject.toLowerCase() !== "all",
@@ -413,6 +415,15 @@ export default function StudentsList({
             </Button>
             <Button
               size="sm"
+              variant="default"
+              onClick={() => {
+                setBulkEnrollDialogOpen(true);
+              }}
+            >
+              <Plus className="size-4 mr-1" /> Thêm vào lớp
+            </Button>
+            <Button
+              size="sm"
               variant="outline"
               onClick={() => setSelectedStudentIds([])}
             >
@@ -495,6 +506,13 @@ export default function StudentsList({
         onOpenChange={setBulkDialogOpen}
         selectedStudents={selectedStudents}
         action={bulkAction}
+      />
+
+      {/* Bulk Enroll Dialog */}
+      <BulkEnrollDialog
+        open={bulkEnrollDialogOpen}
+        onOpenChange={setBulkEnrollDialogOpen}
+        selectedStudents={selectedStudents}
       />
     </>
   );
