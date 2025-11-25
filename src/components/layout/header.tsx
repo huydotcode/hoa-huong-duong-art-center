@@ -84,7 +84,28 @@ export function Header({
                       const isExactMatch = currentPath === itemHref;
                       const isSubRoute =
                         !isRoot && currentPath.startsWith(`${itemHref}/`);
-                      const isActive = isExactMatch || isSubRoute;
+
+                      const hasMoreSpecificMatch = navItems.some(
+                        (otherItem) => {
+                          if (otherItem.href === item.href) return false;
+
+                          const otherHref = normalize(otherItem.href);
+                          const otherIsRoot = rootLikePaths.includes(otherHref);
+                          const otherExact = currentPath === otherHref;
+                          const otherSubRoute =
+                            !otherIsRoot &&
+                            currentPath.startsWith(`${otherHref}/`);
+
+                          const otherActive = otherExact || otherSubRoute;
+
+                          return (
+                            otherActive && otherHref.length > itemHref.length
+                          );
+                        }
+                      );
+
+                      const isActive =
+                        (isExactMatch || isSubRoute) && !hasMoreSpecificMatch;
 
                       return (
                         <Button
