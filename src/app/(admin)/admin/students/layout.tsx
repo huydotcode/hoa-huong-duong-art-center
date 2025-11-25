@@ -1,4 +1,4 @@
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Suspense } from "react";
 import { RefreshButton } from "@/components/shared";
 import StudentsSearchBar from "./_components/students-search-bar";
@@ -35,10 +35,7 @@ export default function StudentsLayout({
       </div>
       <Card>
         <CardHeader className="px-3 space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Danh sách học sinh</CardTitle>
-            <StudentsSearchBar />
-          </div>
+          <StudentsSearchBar />
           <StudentsSubjectTabs />
         </CardHeader>
         <Suspense fallback={<StudentsListSkeleton />}>{children}</Suspense>
