@@ -16,11 +16,7 @@ import {
   type TeacherWithClasses,
 } from "@/lib/services/admin-teachers-service";
 import { Pencil } from "lucide-react";
-import {
-  AssignTeacherToClassDialog,
-  DeleteTeacherButton,
-  TeachersSearchBar,
-} from "./_components";
+import { TeachersSearchBar } from "./_components";
 
 interface SearchProps {
   searchParams?: Promise<{ q?: string }>;
@@ -34,6 +30,13 @@ export default async function TeachersPage(props: SearchProps) {
   })) as TeacherWithClasses[];
   return (
     <>
+      <CardHeader className="px-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>Danh sách giáo viên</CardTitle>
+          <TeachersSearchBar />
+        </div>
+      </CardHeader>
+
       {q && (
         <p className="px-3 pb-2 text-sm text-muted-foreground">
           Đang tìm danh sách giáo viên theo:{" "}
@@ -58,18 +61,11 @@ export default async function TeachersPage(props: SearchProps) {
                         {teacher.phone}
                       </p>
                     </div>
-                    <div className="flex gap-2 items-center">
-                      <Badge
-                        variant={teacher.is_active ? "default" : "destructive"}
-                      >
-                        {teacher.is_active ? "Hoạt động" : "Ngừng hoạt động"}
-                      </Badge>
-                      <DeleteTeacherButton
-                        teacherId={teacher.id}
-                        teacherName={teacher.full_name}
-                        stopPropagationOnTrigger
-                      />
-                    </div>
+                    <Badge
+                      variant={teacher.is_active ? "default" : "destructive"}
+                    >
+                      {teacher.is_active ? "Hoạt động" : "Ngừng hoạt động"}
+                    </Badge>
                   </div>
                   <div className="space-y-2 text-sm">
                     {teacher.notes && (
@@ -101,30 +97,12 @@ export default async function TeachersPage(props: SearchProps) {
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <AssignTeacherToClassDialog
-                      teacherId={teacher.id}
-                      teacherName={teacher.full_name}
-                      currentClasses={teacher.class_names ?? []}
-                      stopPropagationOnTrigger
-                      buttonVariant="secondary"
-                      buttonSize="sm"
-                      ariaLabel="Thêm giáo viên vào lớp"
-                    />
-                  </div>
                 </CardContent>
               </Card>
             </UpdateTeacherForm>
           ))
         )}
       </div>
-
-      <CardHeader className="px-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Danh sách giáo viên</CardTitle>
-          <TeachersSearchBar />
-        </div>
-      </CardHeader>
 
       {/* Desktop: Table view */}
       <CardContent className="hidden p-0 md:block">
@@ -186,20 +164,7 @@ export default async function TeachersPage(props: SearchProps) {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </UpdateTeacherForm>
-                      <AssignTeacherToClassDialog
-                        teacherId={teacher.id}
-                        teacherName={teacher.full_name}
-                        currentClasses={teacher.class_names ?? []}
-                        buttonVariant="ghost"
-                        buttonSize="sm"
-                        showIcon
-                        hideLabel
-                        ariaLabel="Thêm giáo viên vào lớp"
-                      />
-                      <DeleteTeacherButton
-                        teacherId={teacher.id}
-                        teacherName={teacher.full_name}
-                      />
+                      {/* Desktop actions remain outside dialog */}
                     </div>
                   </TableCell>
                 </TableRow>

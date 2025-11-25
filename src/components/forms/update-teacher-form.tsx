@@ -34,15 +34,18 @@ import {
 import {
   updateTeacher,
   type Teacher,
+  type TeacherWithClasses,
 } from "@/lib/services/admin-teachers-service";
 import {
   updateTeacherSchema,
   type UpdateTeacherSchema,
 } from "@/lib/validations/teacher";
 import { usePathname, useRouter } from "next/navigation";
+import { AssignTeacherToClassDialog } from "@/app/(admin)/admin/teachers/_components/assign-teacher-to-class-dialog";
+import { DeleteTeacherButton } from "@/app/(admin)/admin/teachers/_components/delete-teacher-button";
 
 interface UpdateTeacherFormProps {
-  teacher: Teacher;
+  teacher: Teacher | TeacherWithClasses;
   children: React.ReactNode;
 }
 
@@ -170,17 +173,45 @@ export function UpdateTeacherForm({
               )}
             />
 
-            <DialogFooter>
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-sm font-medium text-muted-foreground">
+                Hành động nhanh
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <AssignTeacherToClassDialog
+                  teacherId={teacher.id}
+                  teacherName={teacher.full_name}
+                  currentClasses={
+                    "class_names" in teacher ? (teacher.class_names ?? []) : []
+                  }
+                  buttonVariant="secondary"
+                  buttonSize="sm"
+                  buttonLabel="Thêm vào lớp"
+                />
+                <DeleteTeacherButton
+                  teacherId={teacher.id}
+                  teacherName={teacher.full_name}
+                  variant="default"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
                 disabled={isLoading}
+                className="w-full sm:w-auto"
               >
-                Hủy
+                Đóng
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Đang xử lý..." : "Cập nhật"}
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full sm:w-auto"
+              >
+                {isLoading ? "Đang xử lý..." : "Lưu thay đổi"}
               </Button>
             </DialogFooter>
           </form>
