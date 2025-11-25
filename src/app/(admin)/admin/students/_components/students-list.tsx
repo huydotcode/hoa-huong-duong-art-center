@@ -38,7 +38,6 @@ interface StudentsListProps {
   recentOnly?: boolean;
   tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created";
   totalCount: number;
-  pageSize: number;
   learningStats?: StudentLearningStatsSummary;
 }
 
@@ -50,7 +49,6 @@ export default function StudentsList({
   recentOnly = false,
   tuitionStatus,
   totalCount,
-  pageSize,
   learningStats,
 }: StudentsListProps) {
   // State is automatically reset when component remounts (via key prop in parent)
@@ -348,8 +346,10 @@ export default function StudentsList({
             <Table>
               <TableHeader>
                 <TableHeaderRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox disabled className="size-5" />
+                  <TableHead className="w-[50px] min-w-[50px] p-0">
+                    <div className="flex items-center justify-center">
+                      <Checkbox disabled className="size-5" />
+                    </div>
                   </TableHead>
                   <TableHead className="w-[60px] text-center">STT</TableHead>
                   <TableHead>Họ và tên</TableHead>
@@ -439,12 +439,15 @@ export default function StudentsList({
           <Table>
             <TableHeader>
               <TableHeaderRow>
-                <TableHead className="w-[50px]">
-                  <Checkbox
-                    className="size-5 border-yellow-500"
-                    checked={allSelected}
-                    onCheckedChange={toggleSelectAll}
-                  />
+                <TableHead className="w-[50px] min-w-[50px]">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      className="size-5 border-yellow-500"
+                      checked={allSelected}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Chọn tất cả học sinh"
+                    />
+                  </div>
                 </TableHead>
                 <TableHead className="w-[60px] text-center">STT</TableHead>
                 <TableHead>Họ và tên</TableHead>

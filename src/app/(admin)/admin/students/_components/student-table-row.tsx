@@ -137,14 +137,17 @@ function StudentTableRowComponent({
             : ""
         }
       >
-        <TableCell>
+        <TableCell className="w-[50px] min-w-[50px] p-0">
           {onSelectChange && (
-            <Checkbox
-              checked={selected}
-              onCheckedChange={onSelectChange}
-              className="size-5"
-              onClick={(e) => e.stopPropagation()}
-            />
+            <div className="flex items-center justify-center">
+              <Checkbox
+                checked={selected}
+                onCheckedChange={onSelectChange}
+                className="size-5"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Chọn học sinh ${student.full_name}`}
+              />
+            </div>
           )}
         </TableCell>
         <TableCell className="text-center">{index}</TableCell>
