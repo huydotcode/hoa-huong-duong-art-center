@@ -114,7 +114,7 @@ export function AssignTeacherToClassDialog({
         <Button
           variant={buttonVariant}
           size={buttonSize}
-          className="gap-1 w-full sm:w-auto"
+          className="gap-1 w-full sm:w-fit px-2"
           onClickCapture={
             stopPropagationOnTrigger
               ? (event) => {
