@@ -84,6 +84,7 @@ export function AssignTeacherToClassDialog({
     try {
       await assignTeacherToClass(teacherId, selectedClassId, path);
       toast.success("Đã thêm giáo viên vào lớp");
+      window.dispatchEvent(new CustomEvent("teacher-updated"));
       setOpen(false);
       setSelectedClassId("");
       router.refresh();

@@ -55,6 +55,7 @@ export function DeleteTeacherButton({
         toast.success("Đã xóa giáo viên", {
           description: teacherName,
         });
+        window.dispatchEvent(new CustomEvent("teacher-deleted"));
         setOpen(false);
         router.refresh();
       } catch (error) {

@@ -57,6 +57,7 @@ export function CreateTeacherForm({ children }: CreateTeacherFormProps) {
     try {
       await createTeacher(values, path);
       toast.success("Thêm giáo viên thành công!");
+      window.dispatchEvent(new CustomEvent("teacher-created"));
       form.reset();
       setOpen(false);
     } catch (error) {

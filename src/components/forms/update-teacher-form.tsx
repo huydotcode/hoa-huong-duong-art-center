@@ -74,6 +74,7 @@ export function UpdateTeacherForm({
     try {
       await updateTeacher(teacher.id, values, path);
       toast.success("Cập nhật giáo viên thành công!");
+      window.dispatchEvent(new CustomEvent("teacher-updated"));
       form.reset();
       setOpen(false);
 
