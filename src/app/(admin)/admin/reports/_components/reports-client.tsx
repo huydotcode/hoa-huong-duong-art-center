@@ -1,30 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import type { ClassRevenueItem, MonthlyStats } from "@/types/database";
+import { useQuery } from "@tanstack/react-query";
+import {
+  getClassRevenue,
+  getMonthlyRevenueData,
+} from "@/lib/services/admin-reports-service";
 import ReportsFilter from "./reports-filter";
 import ClassRevenueTable from "./class-revenue-table";
 import MonthlyStatsSection from "./monthly-stats-section";
 import { exportReportsToExcel } from "@/lib/utils/export-reports";
+import { Loader2 } from "lucide-react";
 
 interface ReportsClientProps {
-  initialClassRevenue: ClassRevenueItem[];
-  initialMonthlyStats: MonthlyStats[];
   initialMonth: number;
   initialYear: number;
 }
 
 export default function ReportsClient({
-  initialClassRevenue,
-  initialMonthlyStats,
   initialMonth,
   initialYear,
 }: ReportsClientProps) {
-  const [classRevenue] = useState(initialClassRevenue);
-  const [monthlyStats] = useState(initialMonthlyStats);
-
   const month = initialMonth;
   const year = initialYear;
+
+  // Data fetching
+  const { data: classRevenue = [], isLoading: isClassRevenueLoading } =
+    useQuery({
+      queryKey: ["admin-reports-class-revenue", { month, year }],
+      queryFn: async () => getClassRevenue(month, year),
+    });
+
+  const { data: monthlyStats = [], isLoading: isMonthlyStatsLoading } =
+    useQuery({
+      queryKey: ["admin-reports-monthly-stats", { month, year }],
+      queryFn: async () => getMonthlyRevenueData(month, year, month, year),
+    });
+
+  const isLoading = isClassRevenueLoading || isMonthlyStatsLoading;
 
   const handleExport = () => {
     exportReportsToExcel(classRevenue, monthlyStats, {
@@ -32,6 +44,14 @@ export default function ReportsClient({
       year,
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
