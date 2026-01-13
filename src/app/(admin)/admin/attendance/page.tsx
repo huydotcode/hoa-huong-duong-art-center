@@ -1,11 +1,5 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  getAdminClassesInSession,
-  getAdminAllClassesInDay,
-  getParticipantsForClasses,
-  getAttendanceStateForSessions,
-} from "@/lib/services/admin-attendance-service";
 import { getCurrentSessionLabel } from "@/lib/utils";
 import AdminAttendanceClient from "./_components/admin-attendance-client";
 
@@ -35,41 +29,6 @@ export default async function AdminAttendancePage({
 
   const showAllClasses = showAll === "true";
 
-  // Nếu showAll = true, lấy tất cả các lớp trong ngày
-  // Nếu không, lấy theo ca như cũ
-  const classSessions = showAllClasses
-    ? await getAdminAllClassesInDay(dateISO)
-    : await getAdminClassesInSession(dateISO, sessionLabel);
-
-  const classIds = classSessions.map((item) => item.classId);
-  // Tạo map với key là classId, nhưng lưu tất cả các ca (vì một lớp có thể có nhiều ca)
-  // Khi có nhiều ca, sẽ lấy ca đầu tiên để hiển thị default, nhưng client sẽ xử lý để hiển thị tất cả
-  const classSessionTimesMap = new Map<
-    string,
-    { sessionTime: string; endTime: string }[]
-  >();
-  classSessions.forEach((item) => {
-    const existing = classSessionTimesMap.get(item.classId) || [];
-    existing.push({ sessionTime: item.sessionTime, endTime: item.endTime });
-    classSessionTimesMap.set(item.classId, existing);
-  });
-
-  // Convert to object format expected by client
-  // For multiple sessions, we'll pass all of them and client will handle grouping
-  const classSessionTimes: Record<
-    string,
-    { sessionTime: string; endTime: string }
-  > = {};
-  classSessionTimesMap.forEach((sessions, classId) => {
-    // Use first session as default, but we'll pass all sessions in the data
-    classSessionTimes[classId] = sessions[0];
-  });
-
-  const [{ classes, rows }, attendanceState] = await Promise.all([
-    getParticipantsForClasses(classIds),
-    getAttendanceStateForSessions(dateISO, classSessions),
-  ]);
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -81,12 +40,6 @@ export default async function AdminAttendancePage({
       <AdminAttendanceClient
         dateISO={dateISO}
         sessionLabel={sessionLabel}
-        classSessionTimes={classSessionTimes}
-        classSessions={classSessions}
-        classes={classes}
-        rows={rows}
-        initialState={attendanceState.states}
-        initialNotes={attendanceState.notes}
         showAllClasses={showAllClasses}
         initialClassId={classId ?? null}
       />

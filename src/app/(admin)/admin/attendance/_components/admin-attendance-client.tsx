@@ -20,33 +20,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import AdminAttendanceMatrix from "@/components/shared/attendance/admin-attendance-matrix";
-import type {
-  AdminAttendanceClass,
-  AdminAttendanceRow,
-  AdminClassSession,
+import {
+  type AdminAttendanceClass,
+  type AdminAttendanceRow,
+  type AdminClassSession,
+  getAdminClassesInSession,
+  getAdminAllClassesInDay,
+  getParticipantsForClasses,
+  getAttendanceStateForSessions,
 } from "@/lib/services/admin-attendance-service";
 import { generateTimeSlots } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 export default function AdminAttendanceClient({
   dateISO,
   sessionLabel,
-  classSessionTimes,
-  classSessions,
-  classes,
-  rows,
-  initialState,
-  initialNotes = {},
   showAllClasses = false,
   initialClassId = null,
 }: {
   dateISO: string;
   sessionLabel: string;
-  classSessionTimes: Record<string, { sessionTime: string; endTime: string }>;
-  classSessions: AdminClassSession[];
-  classes: AdminAttendanceClass[];
-  rows: AdminAttendanceRow[];
-  initialState: Record<string, boolean>;
-  initialNotes?: Record<string, string | null>;
   showAllClasses?: boolean;
   initialClassId?: string | null;
 }) {
@@ -66,9 +60,6 @@ export default function AdminAttendanceClient({
   const [filterMode, setFilterMode] = useState<"all" | "teacher" | "student">(
     "all"
   );
-  const filteredRows = rows.filter((r) =>
-    filterMode === "all" ? true : r.kind === filterMode
-  );
 
   const [selectedClassId, setSelectedClassId] = useState<string | null>(
     initialClassId
@@ -86,6 +77,79 @@ export default function AdminAttendanceClient({
       });
     }
   }, [searchParams]);
+
+  // --- Data Fetching ---
+
+  // 1. Fetch Class Sessions
+  const { data: classSessions = [], isFetching: isSessionsLoading } = useQuery({
+    queryKey: [
+      "admin-class-sessions",
+      { dateISO, sessionLabel, showAllClasses },
+    ],
+    queryFn: async () => {
+      return showAllClasses
+        ? await getAdminAllClassesInDay(dateISO)
+        : await getAdminClassesInSession(dateISO, sessionLabel);
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  const classIds = useMemo(
+    () => classSessions.map((item) => item.classId),
+    [classSessions]
+  );
+
+  // 2. Fetch Participants (Classes & Rows) - Dependent on classSessions
+  const { data: participantsData, isFetching: isParticipantsLoading } =
+    useQuery({
+      queryKey: ["admin-participants", { classIds }],
+      queryFn: async () => {
+        return getParticipantsForClasses(classIds);
+      },
+      enabled: classIds.length > 0,
+      staleTime: 1000 * 60 * 30, // 30 minutes (less likely to change quickly)
+    });
+
+  const classes = useMemo(
+    () => participantsData?.classes || [],
+    [participantsData]
+  );
+  const rows = useMemo(() => participantsData?.rows || [], [participantsData]);
+
+  // 3. Fetch Attendance State - Dependent on classSessions
+  const { data: attendanceState, isFetching: isStateLoading } = useQuery({
+    queryKey: ["admin-attendance-state", { dateISO, classSessions }],
+    queryFn: async () => {
+      return getAttendanceStateForSessions(dateISO, classSessions);
+    },
+    enabled: classSessions.length > 0,
+  });
+
+  const isLoading =
+    isSessionsLoading || isParticipantsLoading || isStateLoading;
+
+  // --- Derived State Calculations ---
+
+  const classSessionTimes = useMemo(() => {
+    const map = new Map<string, { sessionTime: string; endTime: string }[]>();
+    classSessions.forEach((item) => {
+      const existing = map.get(item.classId) || [];
+      existing.push({ sessionTime: item.sessionTime, endTime: item.endTime });
+      map.set(item.classId, existing);
+    });
+
+    const result: Record<string, { sessionTime: string; endTime: string }> = {};
+    map.forEach((sessions, classId) => {
+      result[classId] = sessions[0];
+    });
+    return result;
+  }, [classSessions]);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) =>
+      filterMode === "all" ? true : r.kind === filterMode
+    );
+  }, [rows, filterMode]);
 
   const handleSessionChange = useCallback(
     (newSession: string) => {
@@ -193,6 +257,9 @@ export default function AdminAttendanceClient({
         initialNotes: Record<string, string | null>;
       }
     >();
+
+    const initialState = attendanceState?.states || {};
+    const initialNotes = attendanceState?.notes || {};
 
     if (showAllClasses) {
       sessionsByClass.forEach((sessions, classId) => {
@@ -361,8 +428,7 @@ export default function AdminAttendanceClient({
     classSessionTimes,
     sessionsByClass,
     sessionLabel,
-    initialState,
-    initialNotes,
+    attendanceState,
     showAllClasses,
   ]);
 
@@ -372,6 +438,9 @@ export default function AdminAttendanceClient({
   }, [grouped, selectedClassId]);
 
   const classSelectOptions = useMemo(() => {
+    // Only use classes that are in the sessions list
+    // Or should we show all classes in the dropdown even if not in session?
+    // Original logic seemed to rely on `classes` prop which was only classes with participants
     const options = classes
       .map((cls) => ({
         value: cls.id,
@@ -516,7 +585,13 @@ export default function AdminAttendanceClient({
         </div>
       </div>
 
-      {visibleGroups.length === 0 ? (
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      )}
+
+      {!isLoading && visibleGroups.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
           {selectedClassId
             ? "Không có dữ liệu điểm danh cho lớp này trong ngày/ca đã chọn."
