@@ -82,9 +82,10 @@ export default function ClassesList({
   const handleLoadMore = useCallback(() => {
     if (!hasMore || isPending) return;
     startTransition(async () => {
+      const remaining = totalCount - items.length;
       const nextItems = await getClasses(query, {
         subject: subject || undefined,
-        limit: pageSize,
+        limit: remaining, // Fetch all remaining items
         offset,
       });
       setItems((prev) => {
@@ -99,7 +100,7 @@ export default function ClassesList({
       });
       setOffset((prev) => prev + nextItems.length);
     });
-  }, [hasMore, isPending, offset, pageSize, query, subject]);
+  }, [hasMore, isPending, offset, query, subject, items.length, totalCount]);
 
   const handleViewSchedule = useCallback(
     (classId: string, e: React.MouseEvent) => {
@@ -145,7 +146,7 @@ export default function ClassesList({
           >
             {isPending
               ? "Đang tải..."
-              : `Hiển thị thêm (${Math.max(totalCount - items.length, 0)})`}
+              : `Hiển thị tất cả (${Math.max(totalCount - items.length, 0)})`}
           </Button>
         </div>
       )}
