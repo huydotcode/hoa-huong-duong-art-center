@@ -23,6 +23,7 @@ function main() {
 
   const workbook = XLSX.readFile(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = XLSX.utils.sheet_to_json<any>(sheet);
 
   console.log(`Analyzing ${rows.length} rows for duplicates...`);

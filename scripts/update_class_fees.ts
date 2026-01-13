@@ -38,7 +38,7 @@ async function main() {
       .from("classes")
       .update({ monthly_fee: fee })
       .eq("subject", subject)
-      .select("id", { count: "exact" });
+      .select("id");
 
     if (error) {
       console.error(`Error updating ${subject}:`, error.message);
