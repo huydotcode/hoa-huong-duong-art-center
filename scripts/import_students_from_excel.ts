@@ -20,7 +20,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // --- Types ---
 interface RawStudentRow {
-  STT: any;
+  STT: string;
   "Họ Tên": string;
   SĐT: string;
   Môn: string;
@@ -241,8 +241,8 @@ async function main() {
       studentId = newSt.id;
 
       // Update Maps
-      if (normPhone) phoneMap.set(normPhone, studentId);
-      nameMap.set(normName, studentId);
+      if (normPhone && studentId) phoneMap.set(normPhone, studentId);
+      // nameMap.set(normName, studentId);
       newStudentsCount++;
     }
 
