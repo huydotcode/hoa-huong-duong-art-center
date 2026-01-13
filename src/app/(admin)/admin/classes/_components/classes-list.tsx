@@ -126,7 +126,7 @@ export default function ClassesList({
         </div>
       )}
       {/* Cards - responsive grid */}
-      <div className="grid gap-3 px-3 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid gap-4 px-3 2xl:grid-cols-2">
         {items.map((c) => (
           <ClassCard
             key={c.id}

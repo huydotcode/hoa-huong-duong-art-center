@@ -5,7 +5,7 @@ import { UpdateClassForm } from "@/components/forms/update-class-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatCurrencyVN, formatDateRange } from "@/lib/utils";
+import { formatCurrencyVN } from "@/lib/utils";
 import { type ClassListItem } from "@/types";
 import { Calendar, ClipboardCheck, Pencil, Info } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -113,116 +113,110 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
     c.current_student_count >= c.max_student_count;
 
   return (
-    <Card className="border p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-lg flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Lớp học
-          </p>
-          <h3 className="text-lg font-semibold leading-tight line-clamp-2">
-            {c.name}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {formatDateRange(c.start_date, c.end_date)}
-          </p>
+    <Card className="flex flex-col sm:flex-row border shadow-sm transition-all hover:border-primary/40 hover:shadow-md overflow-hidden group">
+      {/* Left Content Section */}
+      <div className="flex-1 p-3 flex flex-col gap-2 min-w-0 justify-center">
+        {/* Header: Name + Badge */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-base font-bold leading-tight truncate text-primary/90">
+              {c.name}
+            </h3>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {scheduleCount} ca
+              </span>
+              <span className="text-muted-foreground/40">•</span>
+              <span>{formatCurrencyVN(c.monthly_fee)}</span>
+            </div>
+          </div>
+          <Badge
+            variant={c.is_active ? "outline" : "secondary"}
+            className={`text-[10px] px-1.5 py-0 h-5 ${c.is_active ? "border-green-500 text-green-600 bg-green-50" : ""}`}
+          >
+            {c.is_active ? "Hoạt động" : "Ngừng"}
+          </Badge>
         </div>
-        <Badge variant={c.is_active ? "default" : "secondary"}>
-          {c.is_active ? "Hoạt động" : "Ngừng"}
-        </Badge>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-lg border p-3 bg-muted/20">
-          <p className="text-xs text-muted-foreground">Lịch học</p>
-          <p className="text-base font-semibold">{scheduleCount} ca / tuần</p>
-        </div>
-        <div className="rounded-lg border p-3 bg-muted/20">
-          <p className="text-xs text-muted-foreground">Học phí</p>
-          <p className="text-base font-semibold">
-            {formatCurrencyVN(c.monthly_fee)}
-          </p>
-        </div>
-        <div className="rounded-lg border p-3 bg-muted/20">
-          <p className="text-xs text-muted-foreground">Lương / buổi</p>
-          <p className="text-base font-semibold">
-            {formatCurrencyVN(c.salary_per_session)}
-          </p>
-        </div>
-        <div className="rounded-lg border p-3 bg-muted/20">
-          <p className="text-xs text-muted-foreground">Giáo viên</p>
-          <p className="text-base font-semibold">{c.teachers_count} người</p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="space-y-1">
-          <span className="block text-muted-foreground">Sĩ số</span>
-          <span className="text-sm font-semibold text-foreground">
-            {capacityLabel}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>Doanh thu dự kiến:</span>
-          <span className="font-semibold text-foreground">
-            {formatCurrencyVN((c.current_student_count ?? 0) * c.monthly_fee)}
-          </span>
-          {isFull && <Badge variant="destructive">Đã đầy</Badge>}
+        {/* Stats Row */}
+        <div className="flex items-center gap-3 text-xs pt-1 border-t border-dashed w-fit">
+          <div className="flex items-center gap-1" title="Sĩ số">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${isFull ? "bg-red-500" : "bg-green-500"}`}
+            />
+            <span className="font-medium text-foreground">{capacityLabel}</span>
+          </div>
+          <div className="h-3 w-px bg-border" />
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <span>GV:</span>
+            <span className="font-medium text-foreground">
+              {c.teachers_count}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+      {/* Right Actions Section - Horizontal buttons */}
+      <div className="flex items-center justify-end p-2 gap-1 border-t sm:border-t-0 sm:border-l bg-muted/10">
         <Button
-          variant="secondary"
-          size="sm"
-          className="h-9"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-primary"
           onClick={handleAttendance}
+          title="Điểm danh"
         >
-          <ClipboardCheck className="mr-2 h-4 w-4" />
-          Điểm danh
+          <ClipboardCheck className="h-3.5 w-3.5" />
         </Button>
+
         <Button
-          variant="outline"
-          size="sm"
-          className="h-9"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-primary"
           onClick={(e) => onViewSchedule(c.id, e)}
+          title="Xem lịch học"
         >
-          <Calendar className="mr-2 h-4 w-4" />
-          Xem lịch
+          <Calendar className="h-3.5 w-3.5" />
         </Button>
+
         <Button
-          variant="outline"
-          size="sm"
-          className="h-9"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-primary"
           onClick={() => router.push(`/admin/classes/${c.id}`)}
+          title="Chi tiết lớp học"
         >
-          <Info className="mr-2 h-4 w-4" />
-          Chi tiết
+          <Info className="h-3.5 w-3.5" />
         </Button>
+
         <UpdateClassForm classData={c}>
           <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-primary"
+            title="Chỉnh sửa"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
-            <Pencil className="h-4 w-4" />
-            Chỉnh sửa
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
         </UpdateClassForm>
+
+        <div className="w-px h-4 bg-border mx-1 hidden sm:block" />
+
         <Button
-          variant="destructive"
-          size="sm"
-          className="h-9"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={handleDeleteClick}
           disabled={isPending}
+          title="Xóa lớp học"
         >
-          <Trash2 className="h-4 w-4" />
-          Xóa
+          {isPending ? (
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
         </Button>
       </div>
 
