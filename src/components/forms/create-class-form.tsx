@@ -194,6 +194,9 @@ export function CreateClassForm({ children }: Props) {
       };
       await createClass(classData, { path });
       toast.success("Tạo lớp học thành công!");
+      try {
+        window.dispatchEvent(new CustomEvent("class-created"));
+      } catch {}
       setOpen(false);
       form.reset();
       router.refresh();

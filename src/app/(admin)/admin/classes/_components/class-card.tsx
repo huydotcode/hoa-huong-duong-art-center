@@ -97,6 +97,11 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
       try {
         await deleteClass(c.id, "/admin/classes");
         toast.success("Xóa lớp học thành công");
+        try {
+          window.dispatchEvent(
+            new CustomEvent("class-deleted", { detail: { id: c.id } })
+          );
+        } catch {}
       } catch (error) {
         toast.error("Không thể xóa lớp học");
         console.error(error);
@@ -251,12 +256,14 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
             <AlertDialogTitle className="text-destructive">
               Cảnh báo: Dữ liệu liên quan
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>{warningMessage}</p>
-              <p className="font-medium text-foreground">
-                Nếu bạn tiếp tục, tất cả dữ liệu này sẽ bị xóa vĩnh viễn cùng
-                với lớp học. Bạn có chắc chắn muốn tiếp tục không?
-              </p>
+            <AlertDialogDescription className="space-y-2" asChild>
+              <div>
+                <p>{warningMessage}</p>
+                <p className="font-medium text-foreground">
+                  Nếu bạn tiếp tục, tất cả dữ liệu này sẽ bị xóa vĩnh viễn cùng
+                  với lớp học. Bạn có chắc chắn muốn tiếp tục không?
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -7,12 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getClasses } from "@/lib/services/admin-classes-service";
-import { type ClassListItem } from "@/types";
+import {
+  getClasses,
+  getClassesCount,
+} from "@/lib/services/admin-classes-service";
 import { Loader2 } from "lucide-react";
 import {
   useState,
-  useTransition,
   useMemo,
   useCallback,
   useEffect,
@@ -20,6 +21,7 @@ import {
   Suspense,
 } from "react";
 import { ClassCard } from "./class-card";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Lazy load heavy calendar component
 const WeeklyScheduleCalendar = lazy(() =>
@@ -28,79 +30,82 @@ const WeeklyScheduleCalendar = lazy(() =>
   }))
 );
 
-export default function ClassesList({
-  initialData,
-  query,
-  subject,
-  totalCount,
-  pageSize,
-}: {
-  initialData: ClassListItem[];
+interface ClassesListProps {
   query: string;
   subject: string;
-  totalCount: number;
-  pageSize: number;
-}) {
+  defaultLimit?: number;
+}
+
+export default function ClassesList({
+  query,
+  subject,
+  defaultLimit = 12,
+}: ClassesListProps) {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [items, setItems] = useState<ClassListItem[]>(initialData);
-  const [offset, setOffset] = useState(initialData.length);
-  const [isPending, startTransition] = useTransition();
+  const [isShowingAll, setIsShowingAll] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    startTransition(() => {
-      setItems(initialData);
-      setOffset(initialData.length);
-    });
-  }, [initialData, startTransition]);
+  // 1. Fetch Total Count
+  const { data: totalCount = 0 } = useQuery({
+    queryKey: ["admin-classes-count", { query, subject }],
+    queryFn: () => getClassesCount(query, { subject: subject || undefined }),
+  });
 
+  // Sync estimated total for smooth UI
+  const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
   useEffect(() => {
-    startTransition(() => {
-      setSelectedClassId(null);
-    });
-  }, [query, subject]);
+    setEstimatedTotal(totalCount);
+  }, [totalCount]);
 
-  useEffect(() => {
-    startTransition(() => {
-      setSelectedClassId((prev) => {
-        if (!prev) return prev;
-        const exists = items.some((cls) => cls.id === prev);
-        return exists ? prev : null;
+  // 2. Fetch Classes
+  const { data: items, isFetching: isPending } = useQuery({
+    queryKey: [
+      "admin-classes",
+      {
+        query,
+        subject,
+        limit: isShowingAll ? totalCount : defaultLimit,
+      },
+    ],
+    queryFn: async () => {
+      const currentLimit = isShowingAll
+        ? totalCount || defaultLimit
+        : defaultLimit;
+      return getClasses(query, {
+        subject: subject || undefined,
+        limit: currentLimit,
+        offset: 0,
       });
-    });
-  }, [items]);
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  // Handle Real-time Updates
+  useEffect(() => {
+    const handleInvalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-classes-count"] });
+    };
+
+    window.addEventListener("class-created", handleInvalidate);
+    window.addEventListener("class-updated", handleInvalidate);
+    window.addEventListener("class-deleted", handleInvalidate);
+
+    return () => {
+      window.removeEventListener("class-created", handleInvalidate);
+      window.removeEventListener("class-updated", handleInvalidate);
+      window.removeEventListener("class-deleted", handleInvalidate);
+    };
+  }, [queryClient]);
 
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
-  const hasMore = useMemo(
-    () => totalCount > items.length,
-    [items.length, totalCount]
-  );
+  const displayedCount = items?.length ?? 0;
+  const hasMore = estimatedTotal > displayedCount;
+
   const selectedClass = useMemo(
-    () => items.find((c) => c.id === selectedClassId) ?? null,
+    () => items?.find((c) => c.id === selectedClassId) ?? null,
     [items, selectedClassId]
   );
-
-  const handleLoadMore = useCallback(() => {
-    if (!hasMore || isPending) return;
-    startTransition(async () => {
-      const remaining = totalCount - items.length;
-      const nextItems = await getClasses(query, {
-        subject: subject || undefined,
-        limit: remaining, // Fetch all remaining items
-        offset,
-      });
-      setItems((prev) => {
-        const existingIds = new Set(prev.map((cls) => cls.id));
-        const merged = [...prev];
-        for (const item of nextItems) {
-          if (!existingIds.has(item.id)) {
-            merged.push(item);
-          }
-        }
-        return merged;
-      });
-      setOffset((prev) => prev + nextItems.length);
-    });
-  }, [hasMore, isPending, offset, query, subject, items.length, totalCount]);
 
   const handleViewSchedule = useCallback(
     (classId: string, e: React.MouseEvent) => {
@@ -110,6 +115,15 @@ export default function ClassesList({
     },
     []
   );
+
+  // Loading State
+  if (isPending && (!items || items.length === 0)) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!items || items.length === 0) {
     return (
@@ -141,12 +155,17 @@ export default function ClassesList({
         <div className="px-3 pt-3 flex justify-center">
           <Button
             variant="outline"
-            onClick={handleLoadMore}
+            onClick={() => setIsShowingAll(true)}
             disabled={isPending}
           >
-            {isPending
-              ? "Đang tải..."
-              : `Hiển thị tất cả (${Math.max(totalCount - items.length, 0)})`}
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Đang tải...
+              </>
+            ) : (
+              `Hiển thị tất cả (${Math.max(totalCount - items.length, 0)} lớp còn lại)`
+            )}
           </Button>
         </div>
       )}

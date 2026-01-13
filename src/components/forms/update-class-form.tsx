@@ -190,6 +190,11 @@ export function UpdateClassForm({ classData, children }: Props) {
     try {
       await updateClass(classData.id, values, path);
       toast.success("Cập nhật lớp học thành công!");
+      try {
+        window.dispatchEvent(
+          new CustomEvent("class-updated", { detail: { id: classData.id } })
+        );
+      } catch {}
       setOpen(false);
       router.refresh();
     } catch (error) {
