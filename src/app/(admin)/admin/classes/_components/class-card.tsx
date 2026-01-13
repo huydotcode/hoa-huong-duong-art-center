@@ -15,8 +15,30 @@ interface ClassCardProps {
   onViewSchedule: (classId: string, e: React.MouseEvent) => void;
 }
 
+import {
+  checkClassDependencies,
+  deleteClass,
+} from "@/lib/services/admin-classes-service";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
+
 function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [showWarningAlert, setShowWarningAlert] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Memoize schedule count calculation
   const scheduleCount = useMemo(() => {
@@ -48,6 +70,41 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
     params.set("classId", c.id);
     params.set("showAll", "true");
     router.push(`/admin/attendance?${params.toString()}`);
+  };
+
+  const handleDeleteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (isPending) return;
+
+      const result = await checkClassDependencies(c.id);
+      if (result.hasData) {
+        setWarningMessage(
+          result.message || "Lớp học đang có dữ liệu liên quan."
+        );
+        setShowWarningAlert(true);
+      } else {
+        setShowDeleteAlert(true);
+      }
+    } catch (error) {
+      toast.error("Có lỗi khi kiểm tra dữ liệu lớp học");
+      console.error(error);
+    }
+  };
+
+  const confirmDelete = () => {
+    startTransition(async () => {
+      try {
+        await deleteClass(c.id, "/admin/classes");
+        toast.success("Xóa lớp học thành công");
+      } catch (error) {
+        toast.error("Không thể xóa lớp học");
+        console.error(error);
+      } finally {
+        setShowDeleteAlert(false);
+        setShowWarningAlert(false);
+      }
+    });
   };
 
   const isFull =
@@ -157,7 +214,72 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
             Chỉnh sửa
           </Button>
         </UpdateClassForm>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="h-9"
+          onClick={handleDeleteClick}
+          disabled={isPending}
+        >
+          <Trash2 className="h-4 w-4" />
+          Xóa
+        </Button>
       </div>
+
+      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa lớp học?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa lớp <strong>{c.name}</strong> không?
+              Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+              disabled={isPending}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {isPending ? "Đang xóa..." : "Xóa"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showWarningAlert} onOpenChange={setShowWarningAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Cảnh báo: Dữ liệu liên quan
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>{warningMessage}</p>
+              <p className="font-medium text-foreground">
+                Nếu bạn tiếp tục, tất cả dữ liệu này sẽ bị xóa vĩnh viễn cùng
+                với lớp học. Bạn có chắc chắn muốn tiếp tục không?
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+              disabled={isPending}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {isPending ? "Đang xóa..." : "Vẫn xóa"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

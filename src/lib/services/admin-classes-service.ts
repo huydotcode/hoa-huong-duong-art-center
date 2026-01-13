@@ -1277,3 +1277,79 @@ export async function getClassesBySubject(
 
   return filtered;
 }
+
+export async function checkClassDependencies(classId: string): Promise<{
+  hasData: boolean;
+  message?: string;
+  details?: {
+    enrollmentCount: number;
+    attendanceCount: number;
+    paymentCount: number;
+  };
+}> {
+  const supabase = await createClient();
+
+  // Check enrollments
+  const { count: enrollmentCount, error: enrollError } = await supabase
+    .from("student_class_enrollments")
+    .select("id", { count: "exact", head: true })
+    .eq("class_id", classId);
+
+  if (enrollError) throw enrollError;
+
+  // Check attendance
+  const { count: attendanceCount, error: attError } = await supabase
+    .from("attendance")
+    .select("id", { count: "exact", head: true })
+    .eq("class_id", classId);
+
+  if (attError) throw attError;
+
+  // Check payment_status
+  const { count: paymentCount, error: payError } = await supabase
+    .from("payment_status")
+    .select("id", { count: "exact", head: true })
+    .eq("class_id", classId);
+
+  if (payError) throw payError;
+
+  const total =
+    (enrollmentCount || 0) + (attendanceCount || 0) + (paymentCount || 0);
+
+  if (total > 0) {
+    const details = [];
+    if (enrollmentCount && enrollmentCount > 0)
+      details.push(`${enrollmentCount} học sinh`);
+    if (attendanceCount && attendanceCount > 0)
+      details.push(`${attendanceCount} lượt điểm danh`);
+    if (paymentCount && paymentCount > 0)
+      details.push(`${paymentCount} lượt đóng phí`);
+
+    return {
+      hasData: true,
+      message: `Lớp học đang có dữ liệu liên quan: ${details.join(", ")}.`,
+      details: {
+        enrollmentCount: enrollmentCount || 0,
+        attendanceCount: attendanceCount || 0,
+        paymentCount: paymentCount || 0,
+      },
+    };
+  }
+
+  return { hasData: false };
+}
+
+export async function deleteClass(
+  classId: string,
+  path?: string
+): Promise<void> {
+  const supabase = await createClient();
+
+  // Perform delete - ON DELETE CASCADE handles related data if enforced
+  // However, we did a pre-check in UI. If we are here, user confirmed.
+  const { error } = await supabase.from("classes").delete().eq("id", classId);
+
+  if (error) throw error;
+
+  if (path) revalidatePath(path);
+}
