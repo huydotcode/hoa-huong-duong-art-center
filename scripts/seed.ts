@@ -10,8 +10,8 @@ if (!supabaseUrl || !serviceKey) {
   );
 }
 
-const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "ngonhuthuy@gmail.com";
-const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "123456";
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
 
 const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 

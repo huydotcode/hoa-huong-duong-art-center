@@ -135,24 +135,48 @@ export async function upsertStudentAttendance(params: {
         : null
       : undefined;
 
-  const payload: Record<string, unknown> = {
-    class_id: params.classId,
-    student_id: params.studentId,
-    attendance_date: params.date,
-    session_time: params.session_time,
-    is_present: params.is_present,
-    marked_by: params.marked_by,
-  };
+  // Check if record exists
+  const { data: existing, error: checkError } = await supabase
+    .from("attendance")
+    .select("id")
+    .eq("class_id", params.classId)
+    .eq("student_id", params.studentId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time)
+    .maybeSingle();
 
-  if (normalizedNotes !== undefined) {
-    payload.notes = normalizedNotes;
+  if (checkError) throw checkError;
+
+  if (existing) {
+    // Update existing record
+    const updatePayload: Record<string, unknown> = {
+      is_present: params.is_present,
+      marked_by: params.marked_by,
+    };
+    if (normalizedNotes !== undefined) {
+      updatePayload.notes = normalizedNotes;
+    }
+    const { error } = await supabase
+      .from("attendance")
+      .update(updatePayload)
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    // Insert new record
+    const insertPayload: Record<string, unknown> = {
+      class_id: params.classId,
+      student_id: params.studentId,
+      attendance_date: params.date,
+      session_time: params.session_time,
+      is_present: params.is_present,
+      marked_by: params.marked_by,
+    };
+    if (normalizedNotes !== undefined) {
+      insertPayload.notes = normalizedNotes;
+    }
+    const { error } = await supabase.from("attendance").insert(insertPayload);
+    if (error) throw error;
   }
-
-  const { error } = await supabase.from("attendance").upsert(payload, {
-    onConflict: "class_id,student_id,attendance_date,session_time",
-    ignoreDuplicates: false,
-  });
-  if (error) throw error;
 }
 
 export async function removeStudentAttendance(params: {
@@ -307,6 +331,21 @@ export async function bulkUpsertStudentAttendance(params: {
   const supabase = await createClient();
   if (params.entries.length === 0) return;
 
+  const studentIds = params.entries.map((e) => e.studentId);
+
+  // Delete existing records for these students in this session
+  const { error: deleteError } = await supabase
+    .from("attendance")
+    .delete()
+    .eq("class_id", params.classId)
+    .eq("attendance_date", params.date)
+    .eq("session_time", params.session_time)
+    .in("student_id", studentIds)
+    .not("student_id", "is", null);
+
+  if (deleteError) throw deleteError;
+
+  // Insert new records
   const records = params.entries.map((entry) => ({
     class_id: params.classId,
     student_id: entry.studentId,
@@ -316,12 +355,11 @@ export async function bulkUpsertStudentAttendance(params: {
     marked_by: params.marked_by,
   }));
 
-  const { error } = await supabase.from("attendance").upsert(records, {
-    onConflict: "class_id,student_id,attendance_date,session_time",
-    ignoreDuplicates: false,
-  });
+  const { error: insertError } = await supabase
+    .from("attendance")
+    .insert(records);
 
-  if (error) throw error;
+  if (insertError) throw insertError;
 }
 
 /**
