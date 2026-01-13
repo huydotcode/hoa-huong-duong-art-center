@@ -15,57 +15,134 @@ import {
 import { STUDENT_LEARNING_STATUS_FILTERS } from "@/lib/constants/student-learning-status";
 import {
   getStudents,
-  type StudentLearningStatsSummary,
+  getStudentsCount,
+  getStudentLearningStats,
 } from "@/lib/services/admin-students-service";
-import type { StudentWithClassSummary } from "@/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2, Plus, Scissors } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BulkCopyCutDialog } from "./bulk-copy-cut-dialog";
 import { BulkEnrollDialog } from "./bulk-enroll-dialog";
 import { StudentTableRow } from "./student-table-row";
 
 interface StudentsListProps {
-  initialData: StudentWithClassSummary[];
   query: string;
   subject?: string;
   learningStatus?: string;
   recentOnly?: boolean;
   tuitionStatus?: "paid_or_partial" | "unpaid_or_not_created";
-  totalCount: number;
-  learningStats?: StudentLearningStatsSummary;
+  sortBy?: "name" | "created_at" | "enrollment_date" | "phone";
+  sortOrder?: "asc" | "desc";
+  defaultLimit?: number;
 }
 
 export default function StudentsList({
-  initialData,
   query,
   subject = "",
   learningStatus = "",
   recentOnly = false,
   tuitionStatus,
-  totalCount,
-  learningStats,
+  sortBy = "name",
+  sortOrder = "asc",
+  defaultLimit = 30,
 }: StudentsListProps) {
-  // State is automatically reset when component remounts (via key prop in parent)
-  const [allData, setAllData] =
-    useState<StudentWithClassSummary[]>(initialData);
+  // State for "Show All" functionality
+  const [isShowingAll, setIsShowingAll] = useState(false);
+
+  const normalizedLearningStatus = learningStatus.trim().toLowerCase();
+
+  // 1. Fetch Total Count
+  const { data: totalCount = 0 } = useQuery({
+    queryKey: [
+      "admin-students-count",
+      {
+        query,
+        subject,
+        learningStatus: normalizedLearningStatus,
+        recentOnly,
+        tuitionStatus,
+      },
+    ],
+    queryFn: () =>
+      getStudentsCount(query, {
+        subject,
+        learningStatus: normalizedLearningStatus,
+        recentOnly,
+        tuitionStatus,
+      }),
+  });
+
+  // 2. Fetch Learning Stats
+  const { data: learningStats } = useQuery({
+    queryKey: [
+      "admin-students-stats",
+      {
+        query,
+        subject,
+        learningStatus: normalizedLearningStatus,
+        recentOnly,
+        tuitionStatus,
+      },
+    ],
+    queryFn: () =>
+      getStudentLearningStats(query, {
+        subject,
+        learningStatus: normalizedLearningStatus,
+        recentOnly,
+        tuitionStatus,
+      }),
+  });
+
+  // 3. Fetch Students List
+  const { data: allData, isFetching: isPending } = useQuery({
+    queryKey: [
+      "admin-students",
+      {
+        query,
+        subject,
+        learningStatus: normalizedLearningStatus,
+        recentOnly,
+        tuitionStatus,
+        sortBy,
+        sortOrder,
+        limit: isShowingAll ? totalCount : defaultLimit,
+      },
+    ],
+    queryFn: async () => {
+      // If we are showing all, we fetch everything
+      // Otherwise we use the default limit (e.g. 30)
+      // Note: If totalCount is not yet loaded, use defaultLimit.
+      // React Query handles deps, but totalCount defaults to 0 initially.
+      const currentLimit = isShowingAll
+        ? totalCount || defaultLimit
+        : defaultLimit;
+
+      return getStudents(query, {
+        limit: currentLimit,
+        offset: 0,
+        subject,
+        learningStatus: normalizedLearningStatus,
+        recentOnly,
+        tuitionStatus,
+        sortBy,
+        sortOrder,
+      });
+    },
+    placeholderData: (prev) => prev,
+  });
+
   const [estimatedTotal, setEstimatedTotal] = useState(totalCount);
-  const [isPending, startTransition] = useTransition();
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState<"copy" | "cut">("copy");
   const [bulkEnrollDialogOpen, setBulkEnrollDialogOpen] = useState(false);
+
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
   const hasSubjectFilter = useMemo(
     () => subject.trim().length > 0 && subject.toLowerCase() !== "all",
     [subject]
   );
-  const normalizedLearningStatus = learningStatus.trim().toLowerCase();
+
   const hasLearningStatusFilter = useMemo(
     () => normalizedLearningStatus.length > 0,
     [normalizedLearningStatus]
@@ -89,114 +166,38 @@ export default function StudentsList({
       ? "Đã đóng (gồm một phần)"
       : "Chưa đóng";
   }, [hasTuitionStatusFilter, tuitionStatus]);
-  const displayedCount = allData.length;
+
+  const displayedCount = allData?.length ?? 0;
+  // If we haven't loaded everything yet, and total > displayed, show button
+  // Note: We keep showing the button even if isShowingAll is true but we are still pending (loading)
+  // this prevents the button from disappearing immediately when clicked.
   const hasMore = estimatedTotal > displayedCount;
 
   useEffect(() => {
     setEstimatedTotal(totalCount);
   }, [totalCount]);
 
-  // Remove deleted student optimistically when receiving global event
-  const handleDeleted = useCallback((e: Event) => {
-    const custom = e as CustomEvent<{ id?: string }>;
-    const id = custom.detail?.id;
-    if (!id) return;
-    setAllData((prev) => prev.filter((s) => s.id !== id));
-    setEstimatedTotal((prev) => Math.max(prev - 1, 0));
-  }, []);
-
-  const handleCreated = useCallback(
-    (e: Event) => {
-      const shouldSkipOptimistic =
-        hasSubjectFilter ||
-        (hasLearningStatusFilter && normalizedLearningStatus !== "no_class") ||
-        hasRecentFilter ||
-        hasTuitionStatusFilter;
-      if (shouldSkipOptimistic) {
-        return;
-      }
-      const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
-      const created = custom.detail?.student;
-      if (!created) return;
-      let existed = false;
-      setAllData((prev) => {
-        existed = prev.some((s) => s.id === created.id);
-        const filtered = existed
-          ? prev.filter((s) => s.id !== created.id)
-          : prev;
-        return [created, ...filtered];
-      });
-      if (!existed) {
-        setEstimatedTotal((prev) => prev + 1);
-      }
-    },
-    [
-      hasSubjectFilter,
-      hasLearningStatusFilter,
-      normalizedLearningStatus,
-      hasRecentFilter,
-      hasTuitionStatusFilter,
-    ]
-  );
-
-  const handleUpdated = useCallback((e: Event) => {
-    const custom = e as CustomEvent<{ student?: StudentWithClassSummary }>;
-    const updated = custom.detail?.student;
-    if (!updated) return;
-    setAllData((prev) =>
-      prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
-    );
-  }, []);
+  // Handle optimistic updates by invalidating queries
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    window.addEventListener("student-created", handleCreated as EventListener);
-    window.addEventListener("student-deleted", handleDeleted as EventListener);
-    window.addEventListener("student-updated", handleUpdated as EventListener);
-    return () => {
-      window.removeEventListener(
-        "student-created",
-        handleCreated as EventListener
-      );
-      window.removeEventListener(
-        "student-deleted",
-        handleDeleted as EventListener
-      );
-      window.removeEventListener(
-        "student-updated",
-        handleUpdated as EventListener
-      );
+    const handleInvalidate = () => {
+      // Invalidate all related queries to force a refetch
+      queryClient.invalidateQueries({ queryKey: ["admin-students"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-students-count"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-students-stats"] });
     };
-  }, [handleCreated, handleDeleted, handleUpdated]);
 
-  const handleShowAll = useCallback(() => {
-    if (isPending || !hasMore) return;
+    window.addEventListener("student-created", handleInvalidate);
+    window.addEventListener("student-updated", handleInvalidate);
+    window.addEventListener("student-deleted", handleInvalidate);
 
-    startTransition(async () => {
-      try {
-        const allStudents = (await getStudents(query, {
-          limit: estimatedTotal,
-          offset: 0,
-          subject,
-          learningStatus: normalizedLearningStatus,
-          recentOnly,
-          tuitionStatus,
-        })) as StudentWithClassSummary[];
-        setAllData(allStudents);
-        setEstimatedTotal(allStudents.length);
-      } catch (error) {
-        console.error("Error loading all students:", error);
-      }
-    });
-  }, [
-    isPending,
-    hasMore,
-    estimatedTotal,
-    query,
-    subject,
-    normalizedLearningStatus,
-    recentOnly,
-    tuitionStatus,
-  ]);
+    return () => {
+      window.removeEventListener("student-created", handleInvalidate);
+      window.removeEventListener("student-updated", handleInvalidate);
+      window.removeEventListener("student-deleted", handleInvalidate);
+    };
+  }, [queryClient]);
 
   const filterSummary =
     hasQuery ||
@@ -262,7 +263,7 @@ export default function StudentsList({
 
   const toggleSelectAll = useCallback(
     (checked: boolean) => {
-      if (checked) {
+      if (checked && allData) {
         setSelectedStudentIds(allData.map((s) => s.id));
       } else {
         setSelectedStudentIds([]);
@@ -272,12 +273,15 @@ export default function StudentsList({
   );
 
   const allSelected = useMemo(
-    () => allData.length > 0 && selectedStudentIds.length === allData.length,
-    [allData.length, selectedStudentIds.length]
+    () =>
+      allData &&
+      allData.length > 0 &&
+      selectedStudentIds.length === allData.length,
+    [allData, selectedStudentIds.length]
   );
 
   const selectedStudents = useMemo(
-    () => allData.filter((s) => selectedStudentIds.includes(s.id)),
+    () => (allData ?? []).filter((s) => selectedStudentIds.includes(s.id)),
     [allData, selectedStudentIds]
   );
 
@@ -336,7 +340,18 @@ export default function StudentsList({
     </div>
   );
 
-  if (initialData.length === 0) {
+  if (isPending && (!allData || allData.length === 0)) {
+    return (
+      <div className="px-3 py-10 flex flex-col items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-2 text-sm text-muted-foreground">
+          Đang tải danh sách học sinh...
+        </p>
+      </div>
+    );
+  }
+
+  if (!allData || allData.length === 0) {
     return (
       <>
         {filterSummary}
@@ -488,7 +503,7 @@ export default function StudentsList({
         <div className="px-3 pb-3 pt-2 flex justify-center">
           <Button
             variant="outline"
-            onClick={handleShowAll}
+            onClick={() => setIsShowingAll(true)}
             disabled={isPending}
           >
             {isPending ? (

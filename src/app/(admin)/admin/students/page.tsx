@@ -1,8 +1,3 @@
-import {
-  getStudentLearningStats,
-  getStudents,
-  getStudentsCount,
-} from "@/lib/services/admin-students-service";
 import StudentsList from "./_components/students-list";
 
 export const STUDENTS_PAGE_SIZE = 15; // Reduced initial load for better TBT
@@ -38,42 +33,20 @@ export default async function StudentsPage(props: SearchProps) {
       | "phone") || "name";
   const sortOrder = (searchParams?.sortOrder as "asc" | "desc") || "asc";
 
-  const [initialData, totalCount, learningStats] = await Promise.all([
-    getStudents(q, {
-      limit: STUDENTS_PAGE_SIZE,
-      offset: 0,
-      subject,
-      learningStatus,
-      recentOnly: recent,
-      tuitionStatus,
-      sortBy,
-      sortOrder,
-    }),
-    getStudentsCount(q, {
-      subject,
-      learningStatus,
-      recentOnly: recent,
-      tuitionStatus,
-    }),
-    getStudentLearningStats(q, {
-      subject,
-      learningStatus,
-      recentOnly: recent,
-      tuitionStatus,
-    }),
-  ]);
+  // Note: All data fetching has been moved to client-side (StudentsList)
+  // via React Query to improve interactivity and simplify state management.
 
   return (
     <StudentsList
       key={`${q}-${subject}-${learningStatus}-${recent}-${tuitionStatus || ""}-${sortBy}-${sortOrder}`}
-      initialData={initialData}
       query={q}
       subject={subject}
       learningStatus={learningStatus}
       recentOnly={recent}
       tuitionStatus={tuitionStatus}
-      totalCount={totalCount}
-      learningStats={learningStats}
+      sortBy={sortBy}
+      sortOrder={sortOrder}
+      defaultLimit={STUDENTS_PAGE_SIZE}
     />
   );
 }
