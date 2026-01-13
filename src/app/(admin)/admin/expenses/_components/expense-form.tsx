@@ -119,9 +119,11 @@ export function ExpenseForm({ expense, children }: Props) {
 
         await updateExpense(expense.id, updateData, path);
         toast.success("Cập nhật chi phí thành công!");
+        window.dispatchEvent(new CustomEvent("expense-updated"));
       } else {
         await createExpense(values as CreateExpenseSchema, path);
         toast.success("Thêm chi phí thành công!");
+        window.dispatchEvent(new CustomEvent("expense-created"));
       }
       form.reset();
       setOpen(false);

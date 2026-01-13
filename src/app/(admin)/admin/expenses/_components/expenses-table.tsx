@@ -50,6 +50,7 @@ export default function ExpensesTable({
     try {
       await deleteExpense(id, pathname);
       toast.success("Xóa chi phí thành công!");
+      window.dispatchEvent(new CustomEvent("expense-deleted"));
       router.refresh();
     } catch (error) {
       console.error("Error deleting expense:", error);
