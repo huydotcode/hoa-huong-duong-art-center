@@ -1,11 +1,5 @@
-import {
-  getTuitionData,
-  getTuitionSummary,
-  getTuitionDataForYear,
-} from "@/lib/services/admin-payment-service";
 import { getClasses } from "@/lib/services/admin-classes-service";
 import TuitionClient from "./_components/tuition-client";
-import { calculateTuitionSummary } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -48,34 +42,9 @@ export default async function TuitionPage(props: SearchProps) {
   const year = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
 
   // Validate month and year
+  // Validate month and year
   const validMonth = month >= 1 && month <= 12 ? month : now.getMonth() + 1;
   const validYear = year >= 2020 && year <= 2100 ? year : now.getFullYear();
-
-  let tuitionData;
-  let summary;
-
-  if (viewMode === "year") {
-    tuitionData = await getTuitionDataForYear(
-      validYear,
-      classId,
-      query,
-      status,
-      subject,
-      learningStatus
-    );
-    summary = calculateTuitionSummary(tuitionData);
-  } else {
-    tuitionData = await getTuitionData(
-      validMonth,
-      validYear,
-      classId,
-      query,
-      status,
-      subject,
-      learningStatus
-    );
-    summary = await getTuitionSummary(validMonth, validYear);
-  }
 
   const classes = await getClasses();
 
@@ -89,7 +58,6 @@ export default async function TuitionPage(props: SearchProps) {
         </h1>
       </div>
       <TuitionClient
-        initialTuitionData={tuitionData}
         initialMonth={validMonth}
         initialYear={validYear}
         initialClassId={classId}
@@ -97,7 +65,6 @@ export default async function TuitionPage(props: SearchProps) {
         initialStatus={status}
         initialSubject={subject}
         initialLearningStatus={learningStatus}
-        initialSummary={summary}
         classes={classes.map((c) => ({ id: c.id, name: c.name }))}
         viewMode={viewMode}
       />

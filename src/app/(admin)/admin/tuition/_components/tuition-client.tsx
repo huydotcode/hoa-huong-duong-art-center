@@ -1,22 +1,21 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import type {
-  TuitionItem,
-  TuitionSummary,
-} from "@/lib/services/admin-payment-service";
+import type { TuitionItem } from "@/lib/services/admin-payment-service";
 import {
   togglePaymentStatus,
   activateTrialStudent,
+  getTuitionData,
+  getTuitionDataForYear,
 } from "@/lib/services/admin-payment-service";
-import { formatDateRange } from "@/lib/utils";
+import { formatDateRange, calculateTuitionSummary } from "@/lib/utils";
 import TuitionFilter from "./tuition-filter";
 import TuitionTable from "./tuition-table";
 import TuitionCards from "./tuition-cards";
 import { PaymentForm } from "./payment-form";
 import { Loader2 } from "lucide-react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -28,9 +27,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface TuitionClientProps {
-  initialTuitionData: TuitionItem[];
   initialMonth: number;
   initialYear: number;
   initialClassId?: string;
@@ -38,13 +37,11 @@ interface TuitionClientProps {
   initialStatus: "all" | "paid" | "unpaid" | "not_created";
   initialSubject?: string;
   initialLearningStatus?: "all" | "enrolled" | "active" | "trial" | "inactive";
-  initialSummary: TuitionSummary;
   classes: Array<{ id: string; name: string }>;
   viewMode: "month" | "year";
 }
 
 export default function TuitionClient({
-  initialTuitionData,
   initialMonth,
   initialYear,
   initialClassId,
@@ -52,7 +49,6 @@ export default function TuitionClient({
   initialStatus,
   initialSubject,
   initialLearningStatus,
-  initialSummary,
   classes,
   viewMode,
 }: TuitionClientProps) {
@@ -60,24 +56,65 @@ export default function TuitionClient({
     null
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [tuitionData, setTuitionData] =
-    useState<TuitionItem[]>(initialTuitionData);
   const [cancelPaymentDialog, setCancelPaymentDialog] = useState<{
     open: boolean;
     item: TuitionItem | null;
   }>({ open: false, item: null });
   const [isCancelingPayment, setIsCancelingPayment] = useState(false);
-  const router = useRouter();
   const pathname = usePathname();
   const isYearView = viewMode === "year";
+  const queryClient = useQueryClient();
 
-  // Sync local state với initialTuitionData khi props thay đổi (sau khi refresh)
-  useEffect(() => {
-    setTuitionData(initialTuitionData);
-  }, [initialTuitionData]);
+  const queryKey = [
+    "admin-tuition",
+    {
+      month: initialMonth,
+      year: initialYear,
+      classId: initialClassId,
+      query: initialQuery,
+      status: initialStatus,
+      subject: initialSubject,
+      learningStatus: initialLearningStatus,
+      viewMode,
+    },
+  ];
 
-  // Nhóm dữ liệu theo lớp (sử dụng local state)
+  const {
+    data: tuitionData = [],
+    isLoading,
+    isRefetching,
+  } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (viewMode === "year") {
+        return getTuitionDataForYear(
+          initialYear,
+          initialClassId,
+          initialQuery,
+          initialStatus,
+          initialSubject,
+          initialLearningStatus
+        );
+      } else {
+        return getTuitionData(
+          initialMonth,
+          initialYear,
+          initialClassId,
+          initialQuery,
+          initialStatus,
+          initialSubject,
+          initialLearningStatus
+        );
+      }
+    },
+  });
+
+  const summary = useMemo(
+    () => calculateTuitionSummary(tuitionData),
+    [tuitionData]
+  );
+
+  // Nhóm dữ liệu theo lớp
   const groupedByClass = useMemo(() => {
     const groups = new Map<string, TuitionItem[]>();
 
@@ -127,56 +164,19 @@ export default function TuitionClient({
     setSelectedPayment(null);
   };
 
-  // Optimistic update: cập nhật local state ngay lập tức
-  const handlePaymentUpdate = (updatedItem: TuitionItem) => {
-    setTuitionData((prev) => {
-      const index = prev.findIndex(
-        (item) =>
-          item.studentId === updatedItem.studentId &&
-          item.classId === updatedItem.classId &&
-          item.enrollmentId === updatedItem.enrollmentId
-      );
-
-      if (index >= 0) {
-        // Update existing item
-        const newData = [...prev];
-        newData[index] = updatedItem;
-        return newData;
-      } else {
-        // Add new item
-        return [...prev, updatedItem].sort((a, b) =>
-          a.studentName.localeCompare(b.studentName)
-        );
-      }
-    });
-
-    // Refresh data ở background
-    setIsRefreshing(true);
-    router.refresh();
-
-    // Tắt spinner sau một khoảng thời gian
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
+  const handlePaymentUpdate = () => {
+    // Invalidate queries to refresh data
+    queryClient.invalidateQueries({ queryKey: ["admin-tuition"] });
   };
 
-  // Toggle payment status (đóng/hủy đóng) nhanh
   const handleTogglePayment = async (item: TuitionItem) => {
-    // Nếu đang đóng (chưa đóng → đã đóng), toggle ngay
     if (!item.isPaid) {
       try {
         const targetMonth = isYearView ? item.month : initialMonth;
-        const updatedItem = await togglePaymentStatus(
-          item,
-          targetMonth,
-          initialYear,
-          pathname
-        );
-
-        // Optimistic update
-        handlePaymentUpdate(updatedItem);
+        await togglePaymentStatus(item, targetMonth, initialYear, pathname);
 
         toast.success("Đã đánh dấu đóng học phí");
+        queryClient.invalidateQueries({ queryKey: ["admin-tuition"] });
       } catch (error) {
         console.error("Error toggling payment:", error);
         toast.error("Lỗi khi cập nhật trạng thái", {
@@ -185,12 +185,10 @@ export default function TuitionClient({
         });
       }
     } else {
-      // Nếu đang hủy đóng (đã đóng → chưa đóng), hiển thị confirmation
       setCancelPaymentDialog({ open: true, item });
     }
   };
 
-  // Handler xác nhận hủy đóng
   const handleConfirmCancelPayment = async () => {
     if (!cancelPaymentDialog.item) return;
 
@@ -199,17 +197,15 @@ export default function TuitionClient({
       const targetMonth = isYearView
         ? cancelPaymentDialog.item.month
         : initialMonth;
-      const updatedItem = await togglePaymentStatus(
+      await togglePaymentStatus(
         cancelPaymentDialog.item,
         targetMonth,
         initialYear,
         pathname
       );
 
-      // Optimistic update
-      handlePaymentUpdate(updatedItem);
-
       toast.success("Đã hủy đánh dấu đóng học phí");
+      queryClient.invalidateQueries({ queryKey: ["admin-tuition"] });
       setCancelPaymentDialog({ open: false, item: null });
     } catch (error) {
       console.error("Error canceling payment:", error);
@@ -222,36 +218,12 @@ export default function TuitionClient({
     }
   };
 
-  // Handler chuyển học sinh từ trial sang active
   const handleActivateTrial = async (item: TuitionItem) => {
     try {
       await activateTrialStudent(item.enrollmentId, pathname);
 
-      // Update local state: chuyển enrollmentStatus từ "trial" sang "active"
-      setTuitionData((prev) => {
-        return prev.map((i) => {
-          if (
-            i.studentId === item.studentId &&
-            i.classId === item.classId &&
-            i.enrollmentId === item.enrollmentId
-          ) {
-            return {
-              ...i,
-              enrollmentStatus: "active" as const,
-            };
-          }
-          return i;
-        });
-      });
-
       toast.success("Đã chuyển học sinh sang chính thức");
-
-      // Refresh data ở background
-      setIsRefreshing(true);
-      router.refresh();
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 1000);
+      queryClient.invalidateQueries({ queryKey: ["admin-tuition"] });
     } catch (error) {
       console.error("Error activating trial student:", error);
       toast.error("Lỗi khi chuyển học sinh sang chính thức", {
@@ -261,18 +233,32 @@ export default function TuitionClient({
     }
   };
 
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-tuition"] });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 relative">
       {/* Floating loading spinner */}
-      {isRefreshing && (
+      {isRefetching && (
         <div className="fixed bottom-4 right-4 z-50 bg-background border rounded-lg shadow-lg p-3 flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Đang tải lại...</span>
+          <span className="text-sm text-muted-foreground">
+            Đang cập nhật...
+          </span>
         </div>
       )}
 
       <TuitionFilter
-        summary={initialSummary}
+        summary={summary}
         month={initialMonth}
         year={initialYear}
         classId={initialClassId}
@@ -281,10 +267,8 @@ export default function TuitionClient({
         subject={initialSubject}
         learningStatus={initialLearningStatus || "enrolled"}
         classes={classes}
-        onRefreshStart={() => setIsRefreshing(true)}
-        onRefreshEnd={() => {
-          setTimeout(() => setIsRefreshing(false), 1000);
-        }}
+        onRefreshStart={handleRefresh}
+        onRefreshEnd={() => {}}
         viewMode={viewMode}
       />
 
@@ -298,7 +282,6 @@ export default function TuitionClient({
         onPaymentUpdate={handlePaymentUpdate}
       />
 
-      {/* Confirmation dialog khi hủy đóng học phí */}
       <AlertDialog
         open={cancelPaymentDialog.open}
         onOpenChange={(open) => {
@@ -341,7 +324,6 @@ export default function TuitionClient({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Hiển thị mỗi lớp là một Card riêng */}
       {groupedByClass.length === 0 ? (
         <Card>
           <div className="p-8 text-center text-sm text-muted-foreground">
@@ -350,7 +332,6 @@ export default function TuitionClient({
         </Card>
       ) : (
         <div className="space-y-6">
-          {/* Desktop view - mỗi lớp một Card với Table */}
           <div className="hidden md:block space-y-2">
             {groupedByClass.map((group) => (
               <Card className="md:py-0" key={group.classId}>
@@ -368,7 +349,6 @@ export default function TuitionClient({
             ))}
           </div>
 
-          {/* Mobile view - mỗi lớp một Card với Cards */}
           <div className="md:hidden space-y-2">
             {groupedByClass.map((group) => (
               <Card className="py-0 md:py-0" key={group.classId}>
