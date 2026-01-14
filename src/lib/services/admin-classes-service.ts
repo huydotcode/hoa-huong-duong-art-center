@@ -771,12 +771,12 @@ export async function enrollStudent(
   }
 
   // Check if student already has enrollment in another class of the same subject
-  const conflict = await checkSubjectConflict(supabase, studentId, classId);
-  if (conflict.hasConflict) {
-    throw new Error(
-      `Học sinh đã học lớp ${conflict.conflictingClassName} cùng môn. Mỗi học sinh chỉ được học 1 lớp của 1 môn.`
-    );
-  }
+  // const conflict = await checkSubjectConflict(supabase, studentId, classId);
+  // if (conflict.hasConflict) {
+  //   throw new Error(
+  //     `Học sinh đã học lớp ${conflict.conflictingClassName} cùng môn. Mỗi học sinh chỉ được học 1 lớp của 1 môn.`
+  //   );
+  // }
 
   const enrollmentDate =
     data?.enrollment_date || new Date().toISOString().split("T")[0];
