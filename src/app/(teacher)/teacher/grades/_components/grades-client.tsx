@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import {
   Select,
   SelectTrigger,
@@ -18,78 +18,81 @@ import {
   getAllEnrollmentsForTeacher,
   updateEnrollmentScores,
   bulkUpdateScores,
+  getTeacherClassesForGrades,
   type GradeRow,
 } from "@/lib/services/teacher-grades-service";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import {
+  useForm,
+  useFieldArray,
+  Controller,
+  Control,
+  useWatch,
+} from "react-hook-form";
 
-interface ClassItem {
-  id: string;
-  name: string;
+interface FormValues {
+  students: GradeRow[];
 }
 
-export default function GradesClient({ classes }: { classes: ClassItem[] }) {
+export default function GradesClient() {
   const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [rows, setRows] = useState<GradeRow[]>([]);
-  const [isPending, startTransition] = useTransition();
   const [savingAll, setSavingAll] = useState(false);
   const [showAllClasses, setShowAllClasses] = useState(true);
+  const queryClient = useQueryClient();
 
-  // Tự động tải tất cả học sinh từ tất cả các lớp khi vào trang lần đầu
-  useEffect(() => {
-    if (showAllClasses && classes.length > 0) {
-      startTransition(async () => {
-        const data = await getAllEnrollmentsForTeacher();
-        setRows(data);
-      });
-    }
-  }, [showAllClasses, classes.length]);
+  // Initialize form
+  const { control, handleSubmit, getValues } = useForm<FormValues>({
+    defaultValues: {
+      students: [],
+    },
+  });
 
-  // Khi chọn lớp cụ thể, tải dữ liệu của lớp đó
-  useEffect(() => {
-    if (!selectedClassId) {
-      if (!showAllClasses) {
-        setRows([]);
+  const { fields, replace } = useFieldArray({
+    control,
+    name: "students",
+    keyName: "fieldId", // Add keyName to avoid conflict with id property in GradeRow if any
+  });
+
+  // Fetch classes
+  const { data: classes = [], isLoading: isLoadingClasses } = useQuery({
+    queryKey: ["teacher-grades-classes"],
+    queryFn: () => getTeacherClassesForGrades(),
+  });
+
+  // Fetch enrollments
+  const { data: serverRows, isLoading: isLoadingRows } = useQuery({
+    queryKey: ["teacher-grades-rows", showAllClasses ? "all" : selectedClassId],
+    queryFn: async () => {
+      if (showAllClasses) {
+        return getAllEnrollmentsForTeacher();
+      } else if (selectedClassId) {
+        return getEnrollmentsByClassForGrades(selectedClassId);
       }
-      return;
+      return [];
+    },
+    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  useEffect(() => {
+    if (serverRows) {
+      replace(serverRows);
     }
+  }, [serverRows, replace]);
 
-    setShowAllClasses(false);
-    startTransition(async () => {
-      const data = await getEnrollmentsByClassForGrades(selectedClassId);
-      setRows(data);
-    });
-  }, [selectedClassId, showAllClasses]);
-
-  const handleScoreChange = (
-    enrollmentId: string,
-    key: "score_1" | "score_2" | "score_3",
-    value: string
-  ) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.enrollment_id !== enrollmentId) return row;
-        if (value.trim() === "") {
-          return { ...row, [key]: null };
-        }
-        const parsed = Number(value);
-        if (Number.isNaN(parsed)) return row;
-        // Clamp to [0, 10]
-        const bounded = Math.max(0, Math.min(10, parsed));
-        return { ...row, [key]: bounded };
-      })
-    );
+  const handleScoreChange = (value: string): number | null => {
+    if (value.trim() === "") return null;
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) return null;
+    // Clamp to [0, 10]
+    return Math.max(0, Math.min(10, parsed));
   };
 
-  const handleCommentChange = (enrollmentId: string, value: string) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.enrollment_id !== enrollmentId) return row;
-        // Giữ nguyên giá trị khi đang gõ, chỉ trim khi lưu
-        return { ...row, teacher_notes: value || null };
-      })
-    );
-  };
+  const handleSaveRow = async (index: number) => {
+    const row = getValues(`students.${index}`);
+    if (!row) return;
 
-  const handleSaveRow = async (row: GradeRow) => {
     try {
       // Trim nhận xét khi lưu
       const trimmedNotes = row.teacher_notes?.trim() || null;
@@ -100,16 +103,18 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
         teacher_notes: trimmedNotes,
       });
       toast.success(`Đã lưu điểm và nhận xét cho ${row.student_name}`);
+      queryClient.invalidateQueries({ queryKey: ["teacher-grades-rows"] });
     } catch (error) {
       console.error("handleSaveRow error:", error);
       toast.error(`Lưu điểm thất bại cho ${row.student_name}`);
     }
   };
 
-  const handleSaveAll = async () => {
-    if (rows.length === 0) return;
+  const onSubmit = async (data: FormValues) => {
+    if (data.students.length === 0) return;
     setSavingAll(true);
     try {
+      const rows = data.students;
       if (showAllClasses) {
         // Lưu từng lớp riêng biệt
         const rowsByClass = new Map<string, GradeRow[]>();
@@ -146,6 +151,7 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
         );
         toast.success("Đã lưu tất cả điểm và nhận xét của lớp.");
       }
+      queryClient.invalidateQueries({ queryKey: ["teacher-grades-rows"] });
     } catch (error) {
       console.error("handleSaveAll error:", error);
       toast.error("Lưu tất cả điểm thất bại.");
@@ -155,6 +161,7 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
   };
 
   const handleExportExcel = async () => {
+    const rows = getValues("students");
     if (rows.length === 0) {
       toast.error("Chưa có dữ liệu để xuất.");
       return;
@@ -277,10 +284,16 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
             }}
           >
             <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Chọn lớp" />
+              <SelectValue
+                placeholder={isLoadingClasses ? "Đang tải..." : "Chọn lớp"}
+              />
             </SelectTrigger>
             <SelectContent>
-              {classes.length === 0 ? (
+              {isLoadingClasses ? (
+                <div className="flex items-center justify-center p-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : classes.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">
                   Bạn chưa được phân công lớp.
                 </div>
@@ -300,15 +313,15 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
 
         <Button
           variant="default"
-          onClick={handleSaveAll}
-          disabled={rows.length === 0 || savingAll}
+          onClick={() => handleSubmit(onSubmit)()}
+          disabled={fields.length === 0 || savingAll}
         >
           {savingAll ? "Đang lưu..." : "Lưu tất cả"}
         </Button>
         <Button
           variant="outline"
           onClick={handleExportExcel}
-          disabled={rows.length === 0}
+          disabled={fields.length === 0}
         >
           Xuất Excel
         </Button>
@@ -319,9 +332,11 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
           <CardTitle className="text-lg">Danh sách học sinh</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {isPending ? (
-            <div className="p-4 text-sm text-muted-foreground">Đang tải...</div>
-          ) : rows.length === 0 ? (
+          {isLoadingRows ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : fields.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
               Chưa có học sinh trong lớp này.
             </div>
@@ -348,106 +363,111 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.enrollment_id} className="border-t">
+                  {fields.map((field, index) => (
+                    <tr key={field.fieldId} className="border-t">
                       {showAllClasses && (
                         <td className="px-3 py-2">
                           <div className="font-medium text-muted-foreground">
-                            {row.class_name}
+                            {field.class_name}
                           </div>
                         </td>
                       )}
                       <td className="px-3 py-2">
-                        <div className="font-medium">{row.student_name}</div>
+                        <div className="font-medium">{field.student_name}</div>
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {row.phone || "-"}
+                        {field.phone || "-"}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <Input
-                          inputMode="decimal"
-                          min={0}
-                          max={10}
-                          step="0.1"
-                          className="h-8 text-center"
-                          value={row.score_1 ?? ""}
-                          onChange={(event) =>
-                            handleScoreChange(
-                              row.enrollment_id,
-                              "score_1",
-                              event.target.value
-                            )
-                          }
-                          placeholder="-"
+                        <Controller
+                          control={control}
+                          name={`students.${index}.score_1`}
+                          render={({ field: { value, onChange, ...rest } }) => (
+                            <Input
+                              {...rest}
+                              value={value ?? ""}
+                              onChange={(e) => {
+                                const val = handleScoreChange(e.target.value);
+                                // If input is empty string, we set null to state but show empty string in input via value prop
+                                // handleScoreChange returns null for empty string
+                                onChange(e.target.value === "" ? null : val);
+                              }}
+                              inputMode="decimal"
+                              min={0}
+                              max={10}
+                              step="0.1"
+                              className="h-8 text-center"
+                              placeholder="-"
+                            />
+                          )}
                         />
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <Input
-                          inputMode="decimal"
-                          min={0}
-                          max={10}
-                          step="0.1"
-                          className="h-8 text-center"
-                          value={row.score_2 ?? ""}
-                          onChange={(event) =>
-                            handleScoreChange(
-                              row.enrollment_id,
-                              "score_2",
-                              event.target.value
-                            )
-                          }
-                          placeholder="-"
+                        <Controller
+                          control={control}
+                          name={`students.${index}.score_2`}
+                          render={({ field: { value, onChange, ...rest } }) => (
+                            <Input
+                              {...rest}
+                              value={value ?? ""}
+                              onChange={(e) => {
+                                const val = handleScoreChange(e.target.value);
+                                onChange(e.target.value === "" ? null : val);
+                              }}
+                              inputMode="decimal"
+                              min={0}
+                              max={10}
+                              step="0.1"
+                              className="h-8 text-center"
+                              placeholder="-"
+                            />
+                          )}
                         />
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <Input
-                          inputMode="decimal"
-                          min={0}
-                          max={10}
-                          step="0.1"
-                          className="h-8 text-center"
-                          value={row.score_3 ?? ""}
-                          onChange={(event) =>
-                            handleScoreChange(
-                              row.enrollment_id,
-                              "score_3",
-                              event.target.value
-                            )
-                          }
-                          placeholder="-"
+                        <Controller
+                          control={control}
+                          name={`students.${index}.score_3`}
+                          render={({ field: { value, onChange, ...rest } }) => (
+                            <Input
+                              {...rest}
+                              value={value ?? ""}
+                              onChange={(e) => {
+                                const val = handleScoreChange(e.target.value);
+                                onChange(e.target.value === "" ? null : val);
+                              }}
+                              inputMode="decimal"
+                              min={0}
+                              max={10}
+                              step="0.1"
+                              className="h-8 text-center"
+                              placeholder="-"
+                            />
+                          )}
                         />
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {(() => {
-                          const scores = [
-                            row.score_1,
-                            row.score_2,
-                            row.score_3,
-                          ].filter((s): s is number => typeof s === "number");
-                          if (scores.length === 0) return "-";
-                          const avg =
-                            scores.reduce((sum, s) => sum + s, 0) /
-                            scores.length;
-                          return avg.toFixed(1);
-                        })()}
+                        <RowAverage control={control} index={index} />
                       </td>
                       <td className="px-3 py-2">
-                        <Textarea
-                          className="min-h-[60px] text-sm resize-none"
-                          value={row.teacher_notes || ""}
-                          onChange={(event) =>
-                            handleCommentChange(
-                              row.enrollment_id,
-                              event.target.value
-                            )
-                          }
-                          placeholder="Nhập nhận xét..."
+                        <Controller
+                          control={control}
+                          name={`students.${index}.teacher_notes`}
+                          render={({ field: { value, onChange, ...rest } }) => (
+                            <Textarea
+                              {...rest}
+                              value={value ?? ""}
+                              onChange={onChange}
+                              className="min-h-[60px] text-sm resize-none"
+                              placeholder="Nhập nhận xét..."
+                            />
+                          )}
                         />
                       </td>
                       <td className="px-3 py-2 text-right">
                         <Button
                           size="sm"
-                          onClick={() => void handleSaveRow(row)}
+                          onClick={() => void handleSaveRow(index)}
                         >
                           Lưu
                         </Button>
@@ -462,4 +482,26 @@ export default function GradesClient({ classes }: { classes: ClassItem[] }) {
       </Card>
     </div>
   );
+}
+
+function RowAverage({
+  control,
+  index,
+}: {
+  control: Control<FormValues>;
+  index: number;
+}) {
+  const scores = useWatch({
+    control,
+    name: [
+      `students.${index}.score_1`,
+      `students.${index}.score_2`,
+      `students.${index}.score_3`,
+    ],
+  });
+
+  const validScores = scores.filter((s): s is number => typeof s === "number");
+  if (validScores.length === 0) return <span>-</span>;
+  const avg = validScores.reduce((sum, s) => sum + s, 0) / validScores.length;
+  return <span>{avg.toFixed(1)}</span>;
 }

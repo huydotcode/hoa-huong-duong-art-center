@@ -1,9 +1,6 @@
-import { getTeacherClassesForGrades } from "@/lib/services/teacher-grades-service";
 import GradesClient from "./_components/grades-client";
 
-export default async function TeacherGradesPage() {
-  const classes = await getTeacherClassesForGrades();
-
+export default function TeacherGradesPage() {
   return (
     <div className="space-y-6">
       <div>
@@ -13,8 +10,7 @@ export default async function TeacherGradesPage() {
         </p>
       </div>
 
-      <GradesClient classes={classes} />
+      <GradesClient />
     </div>
   );
 }
-
