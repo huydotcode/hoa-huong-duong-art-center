@@ -286,9 +286,7 @@ export async function getTeacherClassesInSessionWithTimes(
       const startMinutes = (startHour || 0) * 60 + (startMin || 0);
       let endMinutes: number;
       if (slot.end_time) {
-        const [endHour, endMin] = String(slot.end_time)
-          .split(":")
-          .map(Number);
+        const [endHour, endMin] = String(slot.end_time).split(":").map(Number);
         endMinutes = (endHour || 0) * 60 + (endMin || 0);
       } else {
         endMinutes = startMinutes + Number(c.duration_minutes || 60);
@@ -308,17 +306,15 @@ export async function getTeacherClassesInSessionWithTimes(
     if (showAllSessions) {
       slotsForDay.forEach((slot) => pushSession(slot, String(c.id)));
     } else {
-      const matchedSlot = slotsForDay.find(
-        (s: { start_time: string }) => {
-          const [startHour, startMin] = String(s.start_time || "00:00")
-            .split(":")
-            .map(Number);
-          const startMinutes = (startHour || 0) * 60 + (startMin || 0);
+      const matchedSlot = slotsForDay.find((s: { start_time: string }) => {
+        const [startHour, startMin] = String(s.start_time || "00:00")
+          .split(":")
+          .map(Number);
+        const startMinutes = (startHour || 0) * 60 + (startMin || 0);
 
-          // Match nếu lớp bắt đầu trong khoảng từ giờ được chọn đến trước 3 giờ tiếp theo
-          return startMinutes >= currentMinutes && startMinutes < windowMinutes;
-        }
-      );
+        // Match nếu lớp bắt đầu trong khoảng từ giờ được chọn đến trước 3 giờ tiếp theo
+        return startMinutes >= currentMinutes && startMinutes < windowMinutes;
+      });
 
       if (matchedSlot) {
         pushSession(matchedSlot, String(c.id));
@@ -471,4 +467,55 @@ export async function getClassesAndStudentsForTeacher(
   });
 
   return { classes, rows };
+}
+
+export type TeacherAttendanceViewData = {
+  classSessionTimes: Record<string, { sessionTime: string; endTime: string }>;
+  classSessions: TeacherClassSession[];
+  classes: TeacherAttendanceClass[];
+  rows: TeacherAttendanceRow[];
+  initialState: Record<string, boolean>;
+  initialNotes: Record<string, string | null>;
+};
+
+export async function getTeacherAttendanceViewData(
+  dateISO: string,
+  sessionLabel: string,
+  showAllClasses: boolean
+): Promise<TeacherAttendanceViewData | null> {
+  const teacherId = await getTeacherIdFromSession();
+  if (!teacherId) return null;
+
+  const classSessions = await getTeacherClassesInSessionWithTimes(
+    teacherId,
+    dateISO,
+    sessionLabel,
+    { showAll: showAllClasses }
+  );
+
+  const classIds = Array.from(
+    new Set(classSessions.map((item) => item.classId))
+  );
+
+  const classSessionTimes = Object.fromEntries(
+    classSessions.map((item) => [
+      item.classId,
+      { sessionTime: item.sessionTime, endTime: item.endTime },
+    ])
+  );
+
+  const { classes, rows } = await getClassesAndStudentsForTeacher(classIds);
+  const attendanceState = await getAttendanceStateForTeacherSessions(
+    dateISO,
+    classSessions
+  );
+
+  return {
+    classSessionTimes,
+    classSessions,
+    classes,
+    rows,
+    initialState: attendanceState.states,
+    initialNotes: attendanceState.notes,
+  };
 }

@@ -15,39 +15,62 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import AdminAttendanceMatrix from "@/components/shared/attendance/admin-attendance-matrix";
 import type {
-  TeacherAttendanceClass,
   TeacherAttendanceRow,
   TeacherClassSession,
 } from "@/lib/services/teacher-attendance-service";
-import { generateTimeSlots } from "@/lib/utils";
+import { getTeacherAttendanceViewData } from "@/lib/services/teacher-attendance-service";
+import { generateTimeSlots, getCurrentSessionLabel } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
-export default function TeacherAttendanceClient({
-  dateISO,
-  sessionLabel,
-  classSessionTimes,
-  classSessions,
-  classes,
-  rows,
-  initialState,
-  initialNotes = {},
-  showAllClasses = false,
-}: {
-  dateISO: string;
-  sessionLabel: string;
-  classSessionTimes: Record<string, { sessionTime: string; endTime: string }>;
-  classSessions: TeacherClassSession[];
-  classes: TeacherAttendanceClass[];
-  rows: TeacherAttendanceRow[];
-  initialState: Record<string, boolean>;
-  initialNotes?: Record<string, string | null>;
-  showAllClasses?: boolean;
-}) {
+function normalizeToHourSlot(time: string): string {
+  const [hour] = time.split(":").map(Number);
+  const roundedHour = Math.max(6, Math.min(22, hour));
+  return `${String(roundedHour).padStart(2, "0")}:00`;
+}
+
+export default function TeacherAttendanceClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Parsing params
+  const dateParam = searchParams?.get("date");
+  const sessionParam = searchParams?.get("session");
+  const showAllParam = searchParams?.get("showAll");
+
+  const dateISO = (dateParam ? new Date(dateParam) : new Date())
+    .toISOString()
+    .slice(0, 10);
+
+  const sessionLabel = sessionParam
+    ? sessionParam
+    : normalizeToHourSlot(getCurrentSessionLabel());
+
+  const showAllClasses = showAllParam === "true";
+
+  // Data fetching
+  const { data: viewData, isLoading } = useQuery({
+    queryKey: ["teacher-attendance", { dateISO, sessionLabel, showAllClasses }],
+    queryFn: async () =>
+      getTeacherAttendanceViewData(dateISO, sessionLabel, showAllClasses),
+  });
+
+  // Extract data from viewData or defaults with memoization to satisfy linter
+  const classSessionTimes = useMemo(
+    () => viewData?.classSessionTimes || {},
+    [viewData]
+  );
+  const classSessions = useMemo(
+    () => viewData?.classSessions || [],
+    [viewData]
+  );
+  const classes = useMemo(() => viewData?.classes || [], [viewData]);
+  const rows = useMemo(() => viewData?.rows || [], [viewData]);
+  const initialState = useMemo(() => viewData?.initialState || {}, [viewData]);
+  const initialNotes = useMemo(() => viewData?.initialNotes || {}, [viewData]);
+
   const timeSlots = useMemo(() => generateTimeSlots(), []);
 
-  // Use sessionLabel directly since server already normalizes it
-  // Ensure it's in the timeSlots list, otherwise fallback to first slot
   const displaySession = useMemo(() => {
     if (timeSlots.includes(sessionLabel)) {
       return sessionLabel;
@@ -65,7 +88,6 @@ export default function TeacherAttendanceClient({
     (newSession: string) => {
       if (showAllClasses) return;
       const currentSessionParam = searchParams?.get("session");
-      // Only update if the value actually changed from what's in URL or current sessionLabel
       if (newSession === currentSessionParam || newSession === sessionLabel) {
         return;
       }
@@ -296,7 +318,6 @@ export default function TeacherAttendanceClient({
       }
     ) => {
       setBulkActionsMap((prev) => {
-        // Chỉ update nếu actions thực sự thay đổi
         const prevActions = prev[mapKey];
         if (
           prevActions &&
@@ -313,6 +334,23 @@ export default function TeacherAttendanceClient({
     },
     []
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Handle case where teacherId is invalid (viewData is null)
+  if (viewData === null && !isLoading) {
+    return (
+      <div className="rounded-md border border-dashed p-6 text-center text-sm text-destructive">
+        Không tìm thấy thông tin giáo viên.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
