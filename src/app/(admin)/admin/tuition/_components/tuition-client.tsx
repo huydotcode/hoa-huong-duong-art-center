@@ -309,7 +309,6 @@ export default function TuitionClient({
             <AlertDialogAction
               onClick={handleConfirmCancelPayment}
               disabled={isCancelingPayment}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isCancelingPayment ? (
                 <>

@@ -135,7 +135,6 @@ export default function ExpensesCards({
                           <AlertDialogCancel>Hủy</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={() => handleDelete(expense.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
                             Xóa
                           </AlertDialogAction>

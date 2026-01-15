@@ -242,7 +242,6 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
                 confirmDelete();
               }}
               disabled={isPending}
-              className="bg-destructive text-white hover:bg-destructive/90"
             >
               {isPending ? "Đang xóa..." : "Xóa"}
             </AlertDialogAction>
@@ -274,7 +273,6 @@ function ClassCardComponent({ classItem: c, onViewSchedule }: ClassCardProps) {
                 confirmDelete();
               }}
               disabled={isPending}
-              className="bg-destructive text-white hover:bg-destructive/90"
             >
               {isPending ? "Đang xóa..." : "Vẫn xóa"}
             </AlertDialogAction>

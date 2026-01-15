@@ -221,7 +221,6 @@ export default function TeachersSection({
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={isDeleting}
-              className="bg-destructive text-white hover:bg-destructive/90"
             >
               {isDeleting ? "Đang xóa..." : "Xóa"}
             </AlertDialogAction>
