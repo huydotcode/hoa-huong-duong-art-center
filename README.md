@@ -30,7 +30,7 @@ Dự án sử dụng các công nghệ hiện đại nhất để đảm bảo h
 - **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
 - **UI Components:** [Shadcn/UI](https://ui.shadcn.com/) (Radix UI)
 - **Backend & Auth:** [Supabase](https://supabase.com/)
-- **State Management:** React Query (Server) & Zustand (Client)
+- **State Management:** React Query (Server)
 - **Sử lý Forms:** React Hook Form & Zod
 
 ## 🚀 Cài đặt và Chạy dự án
